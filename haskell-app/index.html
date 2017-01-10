@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>Hello World!</title>
+  </head>
+  <body>
+    <h1>User list:</h1>
+    <div id="status"></div>
+    <div id="userList"></div>
+  </body>
+
+  <script>
+    // You can also require other files to run in this process
+    window.nodeRequire = require;
+    delete window.require;
+    delete window.exports;
+    delete window.module;
+
+    window.$ = window.jQuery = nodeRequire('./resources/jQuery-2.2.3.min.js')
+    
+    
+    nodeRequire('./renderer.js')
+  </script>
+</html>
