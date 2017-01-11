@@ -1,0 +1,30 @@
+{
+  "name": "electron-quick-start",
+  "description": "A minimal Electron application",
+  "main": "main.js",
+  "authors": [
+    "GitHub"
+  ],
+  "license": "CC0-1.0",
+  "keywords": [
+    "Electron",
+    "quick",
+    "start",
+    "tutorial",
+    "demo"
+  ],
+  "homepage": "",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ],
+  "dependencies": {
+    "purescript-console": "^2.0.0",
+    "purescript-thermite": "^3.2.1",
+    "purescript-node-fs": "^3.0.0",
+    "purescript-exceptions": "^2.0.0"
+  }
+}

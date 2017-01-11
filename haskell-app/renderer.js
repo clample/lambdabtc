@@ -1,7 +1,9 @@
 // This file is required by the index.html file and will
 // be executed in the renderer process for that window.
 // All of the Node.js APIs are available in this process.
+require('./output/Main').main()
 
+/*
 const host = 'http://127.0.0.1:8080'
 const endpoint = '/users'
 
@@ -34,5 +36,6 @@ let fetchUserList = function(waitTimeBetweenAttempt, maxNoOfAttempts) {
 }
 
 fetchUserList(waitTimeBetweenAttempt, maxNoOfAttempts)
+*/
 
 

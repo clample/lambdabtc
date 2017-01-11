@@ -1,3 +1,8 @@
 .stack-work
 node_modules
 resources
+.DS_STORE
+.psc-ide-port
+output/
+npm-debug.log
+bower_components/
