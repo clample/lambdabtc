@@ -78,14 +78,14 @@ encodeBase58Check prefix payload = fromBytes $ concat [withPrefix, base58CheckSu
 
 base58CheckSum :: ByteString -> ByteString
 base58CheckSum payload =
-  take 4 $ pack $ show $ hashWith SHA256 $ pack $ show $ hashWith SHA256 payload
+  take 4 $ stringToHexByteString $ show $ hashWith SHA256 $ stringToHexByteString $ show $ hashWith SHA256 payload
   -- TODO: Is there a cleaner way to compose these hashes
 
 decodeBase58Check :: Base58String -> (CheckSum, Payload, Prefix)
 decodeBase58Check = undefined
   
 addressPrefix :: Prefix
-addressPrefix = stringToHexByteString $ showHex 0x00 ""
+addressPrefix = stringToHexByteString "00"
 
 stringToHexByteString :: String -> ByteString
 stringToHexByteString = fst . decode . pack 
