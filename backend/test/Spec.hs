@@ -74,8 +74,8 @@ addressTest pubKeyRep = assertEqual
 
 addressLengthTest :: PublicKeyRep -> Assertion
 addressLengthTest pubKeyRep = assertEqual
-  "Address should have x bytes"
-  0 -- not sure the actual number of bytes
+  "Address should have 25 bytes"
+  25
   addressLength
   where
     Address b58 = getAddress pubKeyRep
