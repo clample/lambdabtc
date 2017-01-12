@@ -12,10 +12,13 @@ import Crypto.Hash (Digest, digestFromByteString, hashWith)
 import Numeric (showHex, readHex)
 import Data.Base58String.Bitcoin (Base58String, fromBytes, toBytes)
 import Data.Word8 (Word8(..))
-import Data.ByteString.Base16 (decode)
+import Data.ByteString.Base16 (decode, encode)
+import Data.Char (toUpper)
 
 data PublicKeyRep = Compressed ByteString | Uncompressed ByteString
+  deriving (Eq)
 data Address = Address Base58String
+  deriving (Eq, Show)
 type CheckSum = ByteString
 type Payload = ByteString
 type Prefix = ByteString
@@ -33,20 +36,25 @@ genKeys = generate btcCurve
 -- Then Base58 encoding the resulting hash
 -- https://github.com/bitcoinbook/bitcoinbook/blob/first_edition/ch04.asciidoc#bitcoin-addresses
 getAddress :: PublicKeyRep  -> Address 
-getAddress pubKeyRep = Address $ encodeBase58Check addressPrefix pubKeyHash
+getAddress pubKeyRep = Address $ encodeBase58Check addressPrefix $ pubKeyHash pubKeyRep
+
+
+pubKeyHash :: PublicKeyRep -> ByteString
+pubKeyHash pubKeyRep =
+  stringToHexByteString $ show $ hashWith RIPEMD160 $ stringToHexByteString $ show $ hashWith SHA256 pubKey
+  -- TODO: Is there a cleaner way to compose these hashes
   where
     pubKey = case pubKeyRep of
                Compressed bs -> bs
                Uncompressed bs -> bs
-    pubKeyHash = pack $ show $ hashWith RIPEMD160 $ pack $ show $ hashWith SHA256 pubKey
-                 -- TODO: Is there a cleaner way to compose these hashes
+
 
 -- The prefix 04 is prepended to uncompressed public keys.
 -- The x and y coordinates of the point are represented in hexidecimal and concatenated
 -- https://github.com/bitcoinbook/bitcoinbook/blob/first_edition/ch04.asciidoc#public-key-formats
 uncompressed :: PublicKey -> PublicKeyRep
 uncompressed pubKey =
-  Uncompressed $ fst . decode . pack $ "04" ++ showHex x "" ++ showHex y ""
+  Uncompressed $ stringToHexByteString $ "04" ++ showHex x "" ++ showHex y ""
   where
     Point x y = public_q pubKey
 
@@ -54,7 +62,7 @@ uncompressed pubKey =
 -- https://github.com/bitcoinbook/bitcoinbook/blob/first_edition/ch04.asciidoc#compressed-public-keys
 compressed :: PublicKey -> PublicKeyRep
 compressed pubKey =
-  Compressed $ pack $ prefix ++ showHex x ""
+  Compressed $ stringToHexByteString $ prefix ++ showHex x ""
   where
     Point x y = public_q pubKey
     prefix = case isEven y of
@@ -77,6 +85,7 @@ decodeBase58Check :: Base58String -> (CheckSum, Payload, Prefix)
 decodeBase58Check = undefined
   
 addressPrefix :: Prefix
-addressPrefix = pack $ showHex 0x00 ""
+addressPrefix = stringToHexByteString $ showHex 0x00 ""
 
-
+stringToHexByteString :: String -> ByteString
+stringToHexByteString = fst . decode . pack 
