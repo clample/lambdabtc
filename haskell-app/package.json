@@ -1,3 +1,5 @@
+// TODO: Make the dependency on purescript and bower explicit
+//       in package.json
 {
   "name": "electron-quick-start",
   "version": "1.0.0",
