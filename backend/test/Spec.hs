@@ -7,7 +7,7 @@ import Test.Framework.Providers.HUnit (testCase)
 import Test.HUnit
 
 import Keys
-import Crypto.PubKey.ECC.ECDSA (PublicKey(..))
+import Crypto.PubKey.ECC.ECDSA (PublicKey(..), PrivateKey(..))
 import Crypto.PubKey.ECC.Types (Curve, getCurveByName, Point(..), CurveName(SEC_p256k1))
 import Data.ByteString (length)
 import Data.Base58String.Bitcoin (Base58String, fromBytes, toBytes, b58String)
@@ -30,7 +30,9 @@ tests =
       testCase "Hash public key correctly"
         $ pubKeyHashTest testPublicKeyRep,
       testCase "base58check address"
-        $ addressTest testPublicKeyRep
+        $ addressTest testPublicKeyRep,
+      testCase "WIF Private key"
+        $ testWIFPrivateKey privateKeyExample
       ]
   ]
 
@@ -80,3 +82,19 @@ addressLengthTest pubKeyRep = assertEqual
   where
     Address b58 = getAddress pubKeyRep
     addressLength = length . toBytes $ b58
+
+testWIFPrivateKey :: PrivateKeyRep -> Assertion
+testWIFPrivateKey privateKey = assertEqual
+  "Private key should be correctly converted to WIF"
+  (WIF $ b58String "5HueCGU8rMjxEXxiPuD5BDku4MkFqeZyd4dZ1jvhTVqvbTLvyTJ")
+  (getWIFPrivateKey privateKey)
+
+privateKeyExample :: PrivateKeyRep
+privateKeyExample = Hex $ stringToHexByteString "0C28FCA386C7A227600B2FE50B7CAE11EC86D3BF1FBE471BE89827E19D72AA1D"
+
+{--
+privateKeyExample :: PrivateKey
+privateKeyExample = PrivateKey
+  (getCurveByName SEC_p256k1)
+  (5500171714335001507730457227127633683517613019341760098818554179534751705629)
+--}

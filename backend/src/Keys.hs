@@ -7,7 +7,7 @@ import Data.ByteString.Char8 (pack)
 import Crypto.PubKey.ECC.Types (Curve, getCurveByName, Point(..), CurveName(SEC_p256k1))
 import Crypto.PubKey.ECC.Generate (generate)
 import Crypto.Hash.Algorithms (SHA256(..), RIPEMD160(..))
-import Crypto.PubKey.ECC.ECDSA (PublicKey, public_q, PrivateKey)
+import Crypto.PubKey.ECC.ECDSA (PublicKey, public_q, PrivateKey, private_d)
 import Crypto.Hash (Digest, digestFromByteString, hashWith)
 import Numeric (showHex, readHex)
 import Data.Base58String.Bitcoin (Base58String, fromBytes, toBytes)
@@ -17,6 +17,8 @@ import Data.Char (toUpper)
 
 data PublicKeyRep = Compressed ByteString | Uncompressed ByteString
   deriving (Eq)
+data PrivateKeyRep = WIF Base58String | Hex ByteString
+  deriving (Eq, Show)
 data Address = Address Base58String
   deriving (Eq, Show)
 type CheckSum = ByteString
@@ -38,6 +40,9 @@ genKeys = generate btcCurve
 getAddress :: PublicKeyRep  -> Address 
 getAddress pubKeyRep = Address $ encodeBase58Check addressPrefix $ pubKeyHash pubKeyRep
 
+getWIFPrivateKey :: PrivateKeyRep -> PrivateKeyRep
+getWIFPrivateKey (Hex privateKey) =
+  WIF $ encodeBase58Check privateKeyPrefix privateKey
 
 pubKeyHash :: PublicKeyRep -> ByteString
 pubKeyHash pubKeyRep =
@@ -86,6 +91,11 @@ decodeBase58Check = undefined
   
 addressPrefix :: Prefix
 addressPrefix = stringToHexByteString "00"
+
+privateKeyPrefix :: Prefix
+privateKeyPrefix = stringToHexByteString "80"
+
+
 
 stringToHexByteString :: String -> ByteString
 stringToHexByteString = fst . decode . pack 
