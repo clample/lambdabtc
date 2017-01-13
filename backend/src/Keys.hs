@@ -59,15 +59,22 @@ pubKeyHash pubKeyRep =
 -- https://github.com/bitcoinbook/bitcoinbook/blob/first_edition/ch04.asciidoc#public-key-formats
 uncompressed :: PublicKey -> PublicKeyRep
 uncompressed pubKey =
-  Uncompressed $ stringToHexByteString $ "04" ++ showHex x "" ++ showHex y ""
+  Uncompressed $ stringToHexByteString $ "04" ++ hexify x 32 ++ hexify y 32
   where
     Point x y = public_q pubKey
+
+-- Make sure that we include leading zeroes when converting an int to its string representatin in hexidecimal
+hexify :: Integer -> Int -> String
+hexify n desiredLength = leadingZeroes ++ base
+  where
+    base = showHex n ""
+    leadingZeroes = replicate (desiredLength - length base) ' '
 
 -- public keys can be represented using just the x value and the sign of y
 -- https://github.com/bitcoinbook/bitcoinbook/blob/first_edition/ch04.asciidoc#compressed-public-keys
 compressed :: PublicKey -> PublicKeyRep
 compressed pubKey =
-  Compressed $ stringToHexByteString $ prefix ++ showHex x ""
+  Compressed $ stringToHexByteString $ prefix ++ hexify x 32
   where
     Point x y = public_q pubKey
     prefix = case isEven y of

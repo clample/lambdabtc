@@ -32,7 +32,7 @@ tests =
       testCase "base58check address"
         $ addressTest testPublicKeyRep,
       testCase "WIF Private key"
-        $ testWIFPrivateKey privateKeyExample
+        $ testWIFPrivateKey testDataWIFPrivateKey
       ]
   ]
 
@@ -42,6 +42,7 @@ testPublicKeyRep :: PublicKeyRep
 testPublicKeyRep =
   Uncompressed $ stringToHexByteString
   "0450863AD64A87AE8A2FE83C1AF1A8403CB53F53E486D8511DAD8A04887E5B23522CD470243453A299FA9E77237716103ABC11A1DF38855ED6F2EE187E9C582BA6"
+
 
 testKey :: PublicKey
 testKey = PublicKey
@@ -83,18 +84,14 @@ addressLengthTest pubKeyRep = assertEqual
     Address b58 = getAddress pubKeyRep
     addressLength = length . toBytes $ b58
 
-testWIFPrivateKey :: PrivateKeyRep -> Assertion
-testWIFPrivateKey privateKey = assertEqual
+testWIFPrivateKey :: (PrivateKeyRep, PrivateKeyRep) -> Assertion
+testWIFPrivateKey (input, expected) = assertEqual
   "Private key should be correctly converted to WIF"
-  (WIF $ b58String "5HueCGU8rMjxEXxiPuD5BDku4MkFqeZyd4dZ1jvhTVqvbTLvyTJ")
-  (getWIFPrivateKey privateKey)
+  expected
+  (getWIFPrivateKey input)
+ 
+testDataWIFPrivateKey =
+  ( Hex $ stringToHexByteString "0C28FCA386C7A227600B2FE50B7CAE11EC86D3BF1FBE471BE89827E19D72AA1D" -- INPUT DATA
+  , WIF $ b58String "5HueCGU8rMjxEXxiPuD5BDku4MkFqeZyd4dZ1jvhTVqvbTLvyTJ" -- EXPECTED OUTPUT
+  ) 
 
-privateKeyExample :: PrivateKeyRep
-privateKeyExample = Hex $ stringToHexByteString "0C28FCA386C7A227600B2FE50B7CAE11EC86D3BF1FBE471BE89827E19D72AA1D"
-
-{--
-privateKeyExample :: PrivateKey
-privateKeyExample = PrivateKey
-  (getCurveByName SEC_p256k1)
-  (5500171714335001507730457227127633683517613019341760098818554179534751705629)
---}
