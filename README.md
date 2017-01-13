@@ -1,4 +1,6 @@
-# LamdaDoge
+# LamdaBtc
+
+A bitcoin wallet. This tool is currently not suitable for use.
 
 in backend:
 
