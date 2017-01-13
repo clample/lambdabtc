@@ -10,10 +10,11 @@ import Crypto.Hash.Algorithms (SHA256(..), RIPEMD160(..))
 import Crypto.PubKey.ECC.ECDSA (PublicKey, public_q, PrivateKey, private_d)
 import Crypto.Hash (Digest, digestFromByteString, hashWith)
 import Numeric (showHex, readHex)
-import Data.Base58String.Bitcoin (Base58String, fromBytes, toBytes)
+import Data.Base58String.Bitcoin (Base58String, fromBytes, toBytes, toText)
 import Data.Word8 (Word8(..))
 import Data.ByteString.Base16 (decode, encode)
 import Data.Char (toUpper)
+import qualified Data.Text as T
 
 data PublicKeyRep = Compressed ByteString | Uncompressed ByteString
   deriving (Eq)
@@ -33,12 +34,18 @@ btcCurve = getCurveByName SEC_p256k1
 genKeys :: IO (PublicKey, PrivateKey)
 genKeys = generate btcCurve
 
+showB58 :: Base58String -> String
+showB58 = T.unpack . toText
+
 -- Addresses are generated from public key by
 -- SHA256, then RIPEMD160 hashing of the public key
 -- Then Base58 encoding the resulting hash
 -- https://github.com/bitcoinbook/bitcoinbook/blob/first_edition/ch04.asciidoc#bitcoin-addresses
 getAddress :: PublicKeyRep  -> Address 
 getAddress pubKeyRep = Address $ encodeBase58Check addressPrefix $ pubKeyHash pubKeyRep
+
+getHexPrivateKey :: PrivateKey -> PrivateKeyRep
+getHexPrivateKey privateKey = Hex $ stringToHexByteString $ hexify (private_d privateKey) 32
 
 getWIFPrivateKey :: PrivateKeyRep -> PrivateKeyRep
 getWIFPrivateKey (Hex privateKey) =
