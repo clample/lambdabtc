@@ -25,6 +25,7 @@
     "purescript-console": "^2.0.0",
     "purescript-thermite": "^3.2.1",
     "purescript-node-fs": "^3.0.0",
-    "purescript-exceptions": "^2.0.0"
+    "purescript-exceptions": "^2.0.0",
+    "purescript-halogen": "^0.12.0"
   }
 }

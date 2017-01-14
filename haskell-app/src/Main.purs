@@ -1,5 +1,58 @@
 module Main where
 
+
+import Prelude
+import Halogen
+import Halogen.HTML.Events.Indexed as E
+import Halogen.HTML.Indexed as H
+import Control.Monad.Eff (Eff)
+import Halogen.Util (awaitBody, runHalogenAff)
+
+type State =
+  { context :: Context }
+
+data Context =
+  Overview |
+  RecieveFunds
+
+data Query a =
+  ToggleContext a |
+  GetContext (Context -> a)
+
+initialState :: State
+initialState = { context: Overview }
+
+mainComponent :: forall g. Component State Query g
+mainComponent = component { render, eval }
+  where
+    render :: State -> ComponentHTML Query
+    render state =
+      H.div_
+        [ H.h1_
+            [ H.text "LamdaBTC" ]
+        , H.button
+            [ E.onClick (E.input_ ToggleContext) ]
+            [ H.text (case state.context of
+                        Overview -> "Great"
+                        RecieveFunds -> "Also Great") ]
+        ]
+
+    eval :: Query ~> ComponentDSL State Query g
+    eval (ToggleContext next) = do
+      modify (\state -> { context: case state.context of
+                          Overview -> RecieveFunds
+                          RecieveFunds -> Overview })
+      pure next
+    eval (GetContext continue) = do
+      context <- gets _.context
+      pure (continue context)
+
+main :: Eff (HalogenEffects ()) Unit
+main = runHalogenAff do
+  body <- awaitBody
+  runUI mainComponent initialState body
+
+{--
 import Prelude
 import React as R
 import React.DOM as R
@@ -94,3 +147,4 @@ spec :: T.Spec _ State _ Action
 spec = T.simpleSpec performAction render
 
 main = T.defaultMain spec initialState unit
+--}
