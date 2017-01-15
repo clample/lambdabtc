@@ -1,6 +1,7 @@
 .stack-work
 node_modules
-resources
+/resources/*
+!.gitkeep
 .DS_STORE
 .psc-ide-port
 output/

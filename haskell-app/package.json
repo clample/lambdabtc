@@ -1,4 +1,5 @@
 {
+"main": "main.js",
   "scripts": {
     "build": "pulp build",
     "start": "electron ."

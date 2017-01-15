@@ -6,11 +6,13 @@ in backend:
 
 ```
 stack build
+stack install
 ```
 
 in haskell-app:
 
 ```
-pulp build
+npm install
+npm run build
 npm start
 ```
