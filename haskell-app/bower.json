@@ -1,6 +1,6 @@
 {
-    "name": "lamdabtc",
-    "ignore": [
+  "name": "lamdabtc",
+  "ignore": [
     "**/.*",
     "node_modules",
     "bower_components",
@@ -8,6 +8,6 @@
     "tests"
   ],
   "dependencies": {
-    "purescript-halogen": "*"
+    "purescript-halogen": "git://github.com/slamdata/purescript-halogen.git#master"
   }
 }
