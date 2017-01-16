@@ -1,4 +1,4 @@
-module ComponentC where
+module SendFunds where
 
 import Prelude
 

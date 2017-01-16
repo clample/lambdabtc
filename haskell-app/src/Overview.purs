@@ -1,4 +1,4 @@
-module ComponentA where
+module Overview where
 
 import Prelude
 

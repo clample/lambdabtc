@@ -1,4 +1,4 @@
-module ComponentB where
+module RequestFunds where
 
 import Prelude
 
