@@ -8,6 +8,8 @@
     "tests"
   ],
   "dependencies": {
-    "purescript-halogen": "git://github.com/slamdata/purescript-halogen.git#master"
+    "purescript-halogen": "git://github.com/slamdata/purescript-halogen.git#master",
+    "bootstrap": "^3.3.7",
+    "jquery-2.2.3.min": "http://code.jquery.com/jquery-2.2.3.min.js"
   }
 }

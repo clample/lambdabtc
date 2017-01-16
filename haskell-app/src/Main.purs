@@ -6,6 +6,7 @@ import Halogen as H
 import Halogen.Component.ChildPath as CP
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
+import Halogen.HTML.Properties as HP
 import Overview (QueryA(..), SlotA(..), componentA)
 import RequestFunds (QueryB(..), SlotB(..), componentB)
 import SendFunds (QueryC(..), SlotC(..), componentC)
@@ -43,18 +44,23 @@ data Query a =
 type ChildQuery = QueryA <\/> QueryB <\/> QueryC <\/> Const Void
 type ChildSlot = SlotA \/ SlotB \/ SlotC \/ Void
 
+nav :: forall m. H.ParentHTML Query ChildQuery ChildSlot m
+nav = HH.nav [HP.classes [HH.ClassName "navbar", HH.ClassName "navbar-default"]]
+        [ HH.div [HP.classes [HH.ClassName "navbar-header"]]
+            [HH.p [HP.classes [HH.ClassName "navbar-brand"]] [HH.text "LamdaBTC"]]
+        , HH.div [HP.classes [HH.ClassName "btn-group"]]
+          [ HH.button [ HE.onClick (HE.input_ (ToggleContext OverviewContext)), HP.classes [HH.ClassName "navbar-btn", HH.ClassName "btn", HH.ClassName "btn-default" ] ] [ HH.text "Overview" ]
+          , HH.button [ HE.onClick (HE.input_ (ToggleContext SendFundsContext)), HP.classes [HH.ClassName "navbar-btn", HH.ClassName "btn", HH.ClassName "btn-default" ] ] [ HH.text "Send Funds" ]
+          , HH.button [ HE.onClick (HE.input_ (ToggleContext RequestFundsContext)), HP.classes [HH.ClassName "navbar-btn", HH.ClassName "btn", HH.ClassName "btn-default"] ] [ HH.text "Request Funds" ]]
+        ]
+
 ui :: forall m. Applicative m => H.Component HH.HTML Query Void m
 ui = H.parentComponent { render, eval, initialState }
   where
 
   render :: State -> H.ParentHTML Query ChildQuery ChildSlot m
   render state = HH.div_
-    [ HH.h1_ [ HH.text "LamdaBTC" ]
-    , HH.div_
-      [ HH.button [ HE.onClick (HE.input_ (ToggleContext OverviewContext)) ] [ HH.text "Overview" ]
-      , HH.button [ HE.onClick (HE.input_ (ToggleContext SendFundsContext)) ] [ HH.text "Send Funds" ]
-      , HH.button [ HE.onClick (HE.input_ (ToggleContext RequestFundsContext)) ] [ HH.text "Request Funds" ]
-      ]
+    [ nav
     , HH.div_
       [ case state.context of
           OverviewContext -> HH.slot' CP.cp1 SlotA (defer \_ -> componentA) absurd
