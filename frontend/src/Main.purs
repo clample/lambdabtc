@@ -7,17 +7,16 @@ import Halogen.Component.ChildPath as CP
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
-import Overview (QueryA(..), SlotA(..), componentA)
-import RequestFunds (QueryB(..), SlotB(..), componentB)
-import SendFunds (QueryC(..), SlotC(..), componentC)
 import Control.Monad.Eff (Eff)
-import DOM.HTML.HTMLElement (offsetHeight)
 import Data.Const (Const)
 import Data.Lazy (defer)
 import Data.Maybe (Maybe(..))
 import Halogen.Aff.Util (runHalogenAff, awaitBody)
 import Halogen.Component.ChildPath (type (\/), type (<\/>))
 import Halogen.VDom.Driver (runUI)
+import Overview (OverviewQuery(..), OverviewSlot(..), overviewComponent)
+import RequestFunds (RequestFundsQuery(..), RequestFundsSlot(..), requestFundsComponent)
+import SendFunds (SendFundsQuery(..), SendFundsSlot(..), sendFundsComponent)
 
 type State =
   { overviewState :: Maybe Boolean
@@ -41,8 +40,8 @@ data Query a =
   ReadStates a |
   ToggleContext Context a
 
-type ChildQuery = QueryA <\/> QueryB <\/> QueryC <\/> Const Void
-type ChildSlot = SlotA \/ SlotB \/ SlotC \/ Void
+type ChildQuery = OverviewQuery <\/> RequestFundsQuery <\/> SendFundsQuery <\/> Const Void
+type ChildSlot = OverviewSlot \/ RequestFundsSlot \/ SendFundsSlot \/ Void
 
 nav :: forall m. H.ParentHTML Query ChildQuery ChildSlot m
 nav = HH.nav [HP.classes [HH.ClassName "navbar", HH.ClassName "navbar-default"]]
@@ -63,9 +62,9 @@ ui = H.parentComponent { render, eval, initialState }
     [ nav
     , HH.div_
       [ case state.context of
-          OverviewContext -> HH.slot' CP.cp1 SlotA (defer \_ -> componentA) absurd
-          SendFundsContext -> HH.slot' CP.cp2 SlotB (defer \_ -> componentB) absurd
-          RequestFundsContext -> HH.slot' CP.cp3 SlotC (defer \_ -> componentC) absurd ]
+          OverviewContext -> HH.slot' CP.cp1 OverviewSlot (defer \_ -> overviewComponent) absurd
+          RequestFundsContext -> HH.slot' CP.cp2 RequestFundsSlot (defer \_ -> requestFundsComponent) absurd
+          SendFundsContext -> HH.slot' CP.cp3 SendFundsSlot (defer \_ -> sendFundsComponent) absurd ]
     , HH.div_ [ HH.text $ "Current states: "
       <> show state.overviewState
       <> " / " <> show state.requestFundsState
@@ -80,9 +79,9 @@ ui = H.parentComponent { render, eval, initialState }
 
   eval :: Query ~> H.ParentDSL State Query ChildQuery ChildSlot Void m
   eval (ReadStates next) = do
-    a <- H.query' CP.cp1 SlotA (H.request GetStateA)
-    b <- H.query' CP.cp2 SlotB (H.request GetStateB)
-    c <- H.query' CP.cp3 SlotC (H.request GetStateC)
+    a <- H.query' CP.cp1 OverviewSlot (H.request GetOverviewState)
+    b <- H.query' CP.cp2 RequestFundsSlot (H.request GetRequestFundsState)
+    c <- H.query' CP.cp3 SendFundsSlot (H.request GetSendFundsState)
     H.modify (\state -> state { overviewState = a, requestFundsState = b, sendFundsState = c})
     pure next
   eval (ToggleContext context next) = do

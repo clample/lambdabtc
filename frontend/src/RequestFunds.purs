@@ -5,36 +5,77 @@ import Prelude
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
+import Halogen.HTML.Properties as HP
 
-newtype StateB = StateB { on :: Boolean }
 
-initialState :: StateB
-initialState = StateB { on: false }
+type RequestFundsState = { on :: Boolean, label :: String, amount :: String, message :: String }
 
-data QueryB a
-  = ToggleStateB a
-  | GetStateB (Boolean -> a)
+initialState :: RequestFundsState
+initialState = { on: false, label: "", amount: "", message: "" }
 
-data SlotB = SlotB
-derive instance eqSlotB :: Eq SlotB
-derive instance ordSlotB :: Ord SlotB
+data RequestFundsQuery a
+  = UpdateLabel String a
+  | UpdateAmount String a
+  | UpdateMessage String a
+  | GetRequestFundsState (Boolean -> a)
 
-componentB :: forall m. H.Component HH.HTML QueryB Void m
-componentB = H.component { render, eval, initialState }
+data RequestFundsSlot = RequestFundsSlot
+derive instance eqRequestFundsSlot :: Eq RequestFundsSlot
+derive instance ordRequestFundsSlot :: Ord RequestFundsSlot
+
+requestFundsComponent :: forall m. H.Component HH.HTML RequestFundsQuery Void m
+requestFundsComponent = H.component { render, eval, initialState }
   where
 
-  render :: StateB -> H.ComponentHTML QueryB
-  render (StateB state) = HH.div_
-    [ HH.h1_ [ HH.text "Toggle Button B" ]
-    , HH.button
-        [ HE.onClick (HE.input_ ToggleStateB) ]
-        [ HH.text (if state.on then "On" else "Off") ]
-    ]
+  render :: RequestFundsState -> H.ComponentHTML RequestFundsQuery
+  render state = HH.div_
+    [ HH.h1_ [ HH.text "Request Funds" ]
+    , HH.form_
+      [ HH.div [ HP.classes [HH.ClassName "form-group"]]
+        [ HH.label [HP.for "labelInput"] [HH.text "Label:"]
+        , HH.input
+          [ HP.inputType HP.InputText
+          , HP.value state.label
+          , HE.onValueChange (HE.input UpdateLabel)
+          , HP.classes [HH.ClassName "form-control"]
+          , HP.id_ "labelInput"]
+        ]
 
-  eval :: QueryB ~> H.ComponentDSL StateB QueryB Void m
-  eval (ToggleStateB next) = do
-    H.modify (\(StateB state) -> StateB { on: not state.on })
+      , HH.div [ HP.classes [HH.ClassName "form-group"]]
+        [ HH.label [HP.for "amountInput"] [HH.text "Amount:"]
+        , HH.input
+          [ HP.inputType HP.InputText
+          , HP.value state.amount
+          , HE.onValueChange (HE.input UpdateAmount)
+          , HP.classes [HH.ClassName "form-control"]
+          , HP.id_ "amountInput" ]
+
+          ]
+        ]
+
+      , HH.div [ HP.classes [HH.ClassName "form-group"]]
+        [ HH.label [HP.for "messageInput"] [HH.text "Message:"]
+        , HH.input
+          [ HP.inputType HP.InputText
+          , HP.value state.message
+          , HE.onValueChange (HE.input UpdateMessage)
+          , HP.classes [HH.ClassName "form-control"]
+          , HP.id_ "messageInput" ]
+        ]
+      ]
+    
+
+
+  eval :: RequestFundsQuery ~> H.ComponentDSL RequestFundsState RequestFundsQuery Void m
+  eval (UpdateLabel label next) = do
+    H.modify (\state -> state { label = label })
     pure next
-  eval (GetStateB reply) = do
-    b <- H.gets (\(StateB state) -> state.on)
+  eval (UpdateAmount amount next) = do
+    H.modify (\state -> state { amount = amount })
+    pure next
+  eval (UpdateMessage message next) = do
+    H.modify (\state -> state { message = message })
+    pure next
+  eval (GetRequestFundsState reply) = do
+    b <- H.gets (\state -> state.on)
     pure (reply b)
