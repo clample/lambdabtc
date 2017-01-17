@@ -37,17 +37,10 @@ KeySet
     deriving Show
 |]
 
-dumpTable = rawQuery "select * from key_set" [] $$ CL.mapM_ (liftIO . print)
-
 migrateSchema :: Config -> IO ()
 migrateSchema c =
   liftIO $ flip runSqlPersistMPool (pool c) $ runMigration migrateTables
 
-runExample :: IO()
-runExample = runSqlite ":memory:" $ do
-  runMigration migrateTables
-  insert $ KeySet "address123" "privateKey123" "publicKey123"
-  dumpTable
 
 runDB :: (MonadTrans t, MonadIO (t ConfigM)) =>
          SqlPersistT IO a -> t ConfigM a
