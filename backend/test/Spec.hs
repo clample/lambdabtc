@@ -10,7 +10,8 @@ import Keys
 import Crypto.PubKey.ECC.ECDSA (PublicKey(..), PrivateKey(..))
 import Crypto.PubKey.ECC.Types (Curve, getCurveByName, Point(..), CurveName(SEC_p256k1))
 import Data.ByteString (length)
-import Data.Base58String.Bitcoin (Base58String, fromBytes, toBytes, b58String)
+import Data.Base58String.Bitcoin (Base58String, toText, fromBytes, toBytes, b58String, fromText)
+import qualified Data.Text as T
 
 main :: IO ()
 main = defaultMain tests
@@ -72,7 +73,7 @@ compressedPubKeyLength (Compressed key) = assertEqual
 addressTest :: PublicKeyRep -> Assertion
 addressTest pubKeyRep = assertEqual
   "We should derive the correct address from a given public key"
-  (Address $ b58String "16UwLL9Risc3QfPqBUvKofHmBQ7wMtjvM")
+  (Address $ toText $ b58String "16UwLL9Risc3QfPqBUvKofHmBQ7wMtjvM")
   (getAddress pubKeyRep)
 
 addressLengthTest :: PublicKeyRep -> Assertion
@@ -82,7 +83,7 @@ addressLengthTest pubKeyRep = assertEqual
   addressLength
   where
     Address b58 = getAddress pubKeyRep
-    addressLength = length . toBytes $ b58
+    addressLength = length $ toBytes . fromText $ b58
 
 testWIFPrivateKey :: (PrivateKeyRep, PrivateKeyRep) -> Assertion
 testWIFPrivateKey (input, expected) = assertEqual
@@ -92,6 +93,6 @@ testWIFPrivateKey (input, expected) = assertEqual
  
 testDataWIFPrivateKey =
   ( Hex $ stringToHexByteString "0C28FCA386C7A227600B2FE50B7CAE11EC86D3BF1FBE471BE89827E19D72AA1D" -- INPUT DATA
-  , WIF $ b58String "5HueCGU8rMjxEXxiPuD5BDku4MkFqeZyd4dZ1jvhTVqvbTLvyTJ" -- EXPECTED OUTPUT
+  , WIF $ "5HueCGU8rMjxEXxiPuD5BDku4MkFqeZyd4dZ1jvhTVqvbTLvyTJ" -- EXPECTED OUTPUT
   ) 
 

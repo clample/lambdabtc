@@ -18,19 +18,18 @@ import qualified Data.Text as T
 
 data PublicKeyRep = Compressed ByteString | Uncompressed ByteString
   deriving (Eq)
-data PrivateKeyRep = WIF Base58String | Hex ByteString
-  deriving (Eq, Show)
-data Address = Address Base58String
-  deriving (Eq, Show)
-type CheckSum = ByteString
-type Payload = ByteString
-type Prefix = ByteString
 
-createAndShowKey :: IO ()
-createAndShowKey = do
-  (pubKey, privKey) <- genKeys
-  let WIF b58wifPrivKey = getWIFPrivateKey $ getHexPrivateKey privKey
-  putStrLn $ T.unpack  . toText $ b58wifPrivKey
+data PrivateKeyRep = WIF T.Text | Hex ByteString
+  deriving (Eq, Show)
+
+data Address = Address T.Text
+  deriving (Eq, Show)
+
+type CheckSum = ByteString
+
+type Payload = ByteString
+
+type Prefix = ByteString
 
 -- Bitcoin uses a specefic eliptic curve, secp256k1,
 -- to generate public private key pairs
@@ -48,7 +47,9 @@ showB58 = T.unpack . toText
 -- Then Base58 encoding the resulting hash
 -- https://github.com/bitcoinbook/bitcoinbook/blob/first_edition/ch04.asciidoc#bitcoin-addresses
 getAddress :: PublicKeyRep  -> Address 
-getAddress pubKeyRep = Address $ encodeBase58Check addressPrefix $ pubKeyHash pubKeyRep
+getAddress pubKeyRep =
+  Address $ encodeBase58Check addressPrefix payload
+  where payload = pubKeyHash pubKeyRep
 
 getHexPrivateKey :: PrivateKey -> PrivateKeyRep
 getHexPrivateKey privateKey = Hex $ stringToHexByteString $ hexify (private_d privateKey) 32
@@ -59,7 +60,7 @@ getWIFPrivateKey (Hex privateKey) =
 
 pubKeyHash :: PublicKeyRep -> ByteString
 pubKeyHash pubKeyRep =
-  stringToHexByteString $ show $ hashWith RIPEMD160 $ stringToHexByteString $ show $ hashWith SHA256 pubKey
+  stringToHexByteString . show . hashWith RIPEMD160 . hashWith SHA256 $ pubKey
   -- TODO: Is there a cleaner way to compose these hashes
   where
     pubKey = case pubKeyRep of
@@ -96,26 +97,20 @@ compressed pubKey =
     isEven n = n `mod` 2 == 0
 
 --https://github.com/bitcoinbook/bitcoinbook/blob/first_edition/ch04.asciidoc#base58-and-base58check-encoding
-encodeBase58Check :: Prefix -> Payload -> Base58String
-encodeBase58Check prefix payload = fromBytes $ concat [withPrefix, base58CheckSum withPrefix]
+encodeBase58Check :: Prefix -> Payload -> T.Text -- Base58String
+encodeBase58Check prefix payload = toText $ fromBytes $ concat [withPrefix, base58CheckSum withPrefix]
   where
    withPrefix = prefix `append` payload
 
 base58CheckSum :: ByteString -> ByteString
-base58CheckSum payload =
-  take 4 $ stringToHexByteString $ show $ hashWith SHA256 $ stringToHexByteString $ show $ hashWith SHA256 payload
-  -- TODO: Is there a cleaner way to compose these hashes
-
-decodeBase58Check :: Base58String -> (CheckSum, Payload, Prefix)
-decodeBase58Check = undefined
+base58CheckSum =
+  take 4 . stringToHexByteString . show . hashWith SHA256 . hashWith SHA256 
   
 addressPrefix :: Prefix
 addressPrefix = stringToHexByteString "00"
 
 privateKeyPrefix :: Prefix
 privateKeyPrefix = stringToHexByteString "80"
-
-
 
 stringToHexByteString :: String -> ByteString
 stringToHexByteString = fst . decode . pack 
