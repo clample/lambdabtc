@@ -3,14 +3,22 @@
 
 module Server.Handlers where
 
-import Network.HTTP.Types.Status (internalServerError500, ok200)
-import Data.Aeson (object, (.=), Value (Null), FromJSON)
+import Network.HTTP.Types.Status (internalServerError500, ok200, badRequest400)
+import Data.Aeson ( object
+                  , (.=)
+                  , Value (Null)
+                  , FromJSON
+                  , ToJSON
+                  , toEncoding
+                  , genericToEncoding
+                  , defaultOptions)
 import Server.Config
 import Web.Scotty.Trans (status, showError, json, jsonData)
 import GHC.Generics
 import Util (maybeRead)
 import Keys
 import Control.Monad.IO.Class (liftIO)
+import Data.Text (unpack)
 
 defaultH :: Environment -> Error -> Action
 defaultH e x = do
@@ -28,7 +36,13 @@ postFundRequestsH = do
   let address = getAddress $ compressed pubKey
   fundRequestRaw <- jsonData
   let either = validateFundRequest address fundRequestRaw
-  status ok200
+  case either of
+    Left error -> do
+      status badRequest400
+      json $ object ["error" .= showError error]
+    Right fundRequest -> do
+      json fundRequest
+      status ok200
   
 -- Documented in BIP 0021
 -- All elements should be UTF-8
@@ -37,8 +51,12 @@ data FundRequest = FundRequest
   { label :: String
   , message :: String
   , amount :: Double
-  , address :: Address
+  , address :: String
   , requestURI :: String }
+  deriving (Generic, Show)
+
+instance ToJSON FundRequest where
+  toEncoding = genericToEncoding defaultOptions
 
 data FundRequestRaw = FundRequestRaw
   { labelRaw :: String
@@ -49,7 +67,7 @@ data FundRequestRaw = FundRequestRaw
 instance FromJSON FundRequestRaw
 
 validateFundRequest :: Address -> FundRequestRaw -> Either Error FundRequest
-validateFundRequest address fundRequestRaw@(FundRequestRaw labelR messageR amountR) =
+validateFundRequest (Address address) fundRequestRaw@(FundRequestRaw labelR messageR amountR) =
   let
     ma :: Maybe Double
     ma = maybeRead (amountR)
@@ -58,4 +76,4 @@ validateFundRequest address fundRequestRaw@(FundRequestRaw labelR messageR amoun
     case ma of
       Nothing -> Left "Unable to parse amount"
       Just a -> Right $
-        FundRequest labelR messageR a address uri
+        FundRequest labelR messageR a (unpack address) uri
