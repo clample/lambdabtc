@@ -41,15 +41,13 @@ getFundRequestsH = do
 
 postFundRequestsH :: Action
 postFundRequestsH = do
-  -- TODO: The keys should be persisted after / when we generate them
   (pubKey, privKey) <- liftIO genKeys
-  let address = getAddress $ compressed pubKey
+  let compressedPub@(Compressed pubKeyText) = compressed pubKey
+      Hex privKeyText = getHexPrivateKey privKey
+      address@(Address addressText) = getAddress $ compressedPub
   fundRequestRaw <- jsonData
   let either = validateFundRequest address fundRequestRaw
-      Address addressText = address
-      privateKeyText = "123"
-      publicKeyText = "123"
-      keyset = KeySet addressText privateKeyText publicKeyText
+      keyset = KeySet addressText privKeyText pubKeyText
   case either of
     Left error -> do
       status badRequest400

@@ -10,6 +10,7 @@ module Keys
   , stringToHexByteString
   , pubKeyHash
   , getWIFPrivateKey
+  , getHexPrivateKey
   , textToHexByteString) where
 
 import Prelude hiding (take, concat)
@@ -40,7 +41,7 @@ data PublicKeyRep =
 
 data PrivateKeyRep =
   WIF T.Text
-  | Hex T.Text -- ByteString
+  | Hex T.Text 
   deriving (Eq, Show)
 
 data Address = Address T.Text
