@@ -1,5 +1,15 @@
 {-# Language OverloadedStrings #-}
-module Keys where
+module Keys
+  ( PublicKeyRep(..)
+  , PrivateKeyRep(..)
+  , Address(..)
+  , genKeys
+  , getAddress
+  , uncompressed
+  , compressed
+  , stringToHexByteString
+  , pubKeyHash
+  , getWIFPrivateKey) where
 
 import Prelude hiding (take, concat)
 import Data.ByteString (ByteString, append, take, concat)
@@ -38,9 +48,6 @@ btcCurve = getCurveByName SEC_p256k1
 
 genKeys :: IO (PublicKey, PrivateKey)
 genKeys = generate btcCurve
-
-showB58 :: Base58String -> String
-showB58 = T.unpack . toText
 
 -- Addresses are generated from public key by
 -- SHA256, then RIPEMD160 hashing of the public key
@@ -98,7 +105,8 @@ compressed pubKey =
 
 --https://github.com/bitcoinbook/bitcoinbook/blob/first_edition/ch04.asciidoc#base58-and-base58check-encoding
 encodeBase58Check :: Prefix -> Payload -> T.Text -- Base58String
-encodeBase58Check prefix payload = toText $ fromBytes $ concat [withPrefix, base58CheckSum withPrefix]
+encodeBase58Check prefix payload =
+  toText . fromBytes . concat $ [withPrefix, base58CheckSum withPrefix]
   where
    withPrefix = prefix `append` payload
 
