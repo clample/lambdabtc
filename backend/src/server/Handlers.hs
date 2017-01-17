@@ -20,7 +20,8 @@ import Keys
 import Control.Monad.IO.Class (liftIO)
 import qualified Data.Text as T 
 import Persistence
-import Database.Persist.Sql (insert_)
+import Database.Persist.Sql (insert_, selectList)
+import Database.Persist (Entity)
 
 defaultH :: Environment -> Error -> Action
 defaultH e x = do
@@ -32,6 +33,12 @@ defaultH e x = do
   json o
 
 
+getFundRequestsH :: Action
+getFundRequestsH = do
+  fundRequests <- runDB (selectList [] [])
+  status ok200
+  json (fundRequests :: [Entity FundRequest])
+
 postFundRequestsH :: Action
 postFundRequestsH = do
   -- TODO: The keys should be persisted after / when we generate them
@@ -39,11 +46,16 @@ postFundRequestsH = do
   let address = getAddress $ compressed pubKey
   fundRequestRaw <- jsonData
   let either = validateFundRequest address fundRequestRaw
+      Address addressText = address
+      privateKeyText = "123"
+      publicKeyText = "123"
+      keyset = KeySet addressText privateKeyText publicKeyText
   case either of
     Left error -> do
       status badRequest400
       json $ object ["error" .= showError error]
     Right fundRequest -> do
+      runDB (insert_ keyset)
       runDB (insert_ fundRequest)
       json fundRequest
       status ok200
