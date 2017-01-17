@@ -9,7 +9,8 @@ module Keys
   , compressed
   , stringToHexByteString
   , pubKeyHash
-  , getWIFPrivateKey) where
+  , getWIFPrivateKey
+  , textToHexByteString) where
 
 import Prelude hiding (take, concat)
 import Data.ByteString (ByteString, append, take, concat)
@@ -33,19 +34,17 @@ import Data.Char (toUpper)
 import qualified Data.Text as T
 
 data PublicKeyRep =
-  Compressed ByteString
-  | Uncompressed ByteString
+  Compressed T.Text
+  | Uncompressed T.Text
   deriving (Eq)
 
 data PrivateKeyRep =
   WIF T.Text
-  | Hex ByteString
+  | Hex T.Text -- ByteString
   deriving (Eq, Show)
 
 data Address = Address T.Text
   deriving (Eq, Show)
-
-type CheckSum = ByteString
 
 type Payload = ByteString
 
@@ -70,18 +69,18 @@ getAddress pubKeyRep =
 
 getHexPrivateKey :: PrivateKey -> PrivateKeyRep
 getHexPrivateKey privateKey =
-  Hex $ stringToHexByteString $ hexify (private_d privateKey) 32
+  Hex $ hexify (private_d privateKey) 32
 
 getWIFPrivateKey :: PrivateKeyRep -> PrivateKeyRep
 getWIFPrivateKey (Hex privateKey) =
-  WIF $ encodeBase58Check privateKeyPrefix privateKey
+  WIF $ encodeBase58Check privateKeyPrefix (textToHexByteString privateKey)
 
 pubKeyHash :: PublicKeyRep -> ByteString
 pubKeyHash pubKeyRep =
   stringToHexByteString . show . hashWith RIPEMD160 . hashWith SHA256 $ pubKey
   -- TODO: Is there a cleaner way to compose these hashes
   where
-    pubKey = case pubKeyRep of
+    pubKey = textToHexByteString $ case pubKeyRep of
                Compressed bs -> bs
                Uncompressed bs -> bs
 
@@ -91,13 +90,13 @@ pubKeyHash pubKeyRep =
 -- https://github.com/bitcoinbook/bitcoinbook/blob/first_edition/ch04.asciidoc#public-key-formats
 uncompressed :: PublicKey -> PublicKeyRep
 uncompressed pubKey =
-  Uncompressed $ stringToHexByteString $ "04" ++ hexify x 32 ++ hexify y 32
+  Uncompressed $  "04" `T.append` hexify x 32 `T.append` hexify y 32
   where
     Point x y = public_q pubKey
 
 -- Make sure that we include leading zeroes when converting an int to its string representatin in hexidecimal
-hexify :: Integer -> Int -> String
-hexify n desiredLength = leadingZeroes ++ base
+hexify :: Integer -> Int -> T.Text
+hexify n desiredLength = T.pack $ leadingZeroes ++ base
   where
     base = showHex n ""
     leadingZeroes = replicate (desiredLength - length base) ' '
@@ -106,7 +105,7 @@ hexify n desiredLength = leadingZeroes ++ base
 -- https://github.com/bitcoinbook/bitcoinbook/blob/first_edition/ch04.asciidoc#compressed-public-keys
 compressed :: PublicKey -> PublicKeyRep
 compressed pubKey =
-  Compressed $ stringToHexByteString $ prefix ++ hexify x 32
+  Compressed $  prefix `T.append` hexify x 32
   where
     Point x y = public_q pubKey
     prefix = case isEven y of
@@ -115,7 +114,7 @@ compressed pubKey =
     isEven n = n `mod` 2 == 0
 
 --https://github.com/bitcoinbook/bitcoinbook/blob/first_edition/ch04.asciidoc#base58-and-base58check-encoding
-encodeBase58Check :: Prefix -> Payload -> T.Text -- Base58String
+encodeBase58Check :: Prefix -> Payload -> T.Text
 encodeBase58Check prefix payload =
   toText . fromBytes . concat $ [withPrefix, base58CheckSum withPrefix]
   where
@@ -133,3 +132,6 @@ privateKeyPrefix = stringToHexByteString "80"
 
 stringToHexByteString :: String -> ByteString
 stringToHexByteString = fst . decode . pack 
+
+textToHexByteString :: T.Text -> ByteString
+textToHexByteString = stringToHexByteString . T.unpack

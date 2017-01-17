@@ -41,7 +41,7 @@ tests =
 -- It is not the key rep for testKey
 testPublicKeyRep :: PublicKeyRep
 testPublicKeyRep =
-  Uncompressed $ stringToHexByteString
+  Uncompressed 
   "0450863AD64A87AE8A2FE83C1AF1A8403CB53F53E486D8511DAD8A04887E5B23522CD470243453A299FA9E77237716103ABC11A1DF38855ED6F2EE187E9C582BA6"
 
 
@@ -62,13 +62,13 @@ uncompressedPubKeyLength :: PublicKeyRep -> Assertion
 uncompressedPubKeyLength (Uncompressed key) = assertEqual
   "Uncompressed key should have 65 bytes"
   65
-  $ length key
+  $ length (textToHexByteString key)
 
 compressedPubKeyLength :: PublicKeyRep -> Assertion
 compressedPubKeyLength (Compressed key) = assertEqual
   "Compressed key should have 33 bytes"
   33
-  $ length key
+  $ length (textToHexByteString key)
 
 addressTest :: PublicKeyRep -> Assertion
 addressTest pubKeyRep = assertEqual
@@ -92,7 +92,7 @@ testWIFPrivateKey (input, expected) = assertEqual
   (getWIFPrivateKey input)
  
 testDataWIFPrivateKey =
-  ( Hex $ stringToHexByteString "0C28FCA386C7A227600B2FE50B7CAE11EC86D3BF1FBE471BE89827E19D72AA1D" -- INPUT DATA
+  ( Hex "0C28FCA386C7A227600B2FE50B7CAE11EC86D3BF1FBE471BE89827E19D72AA1D" -- INPUT DATA
   , WIF $ "5HueCGU8rMjxEXxiPuD5BDku4MkFqeZyd4dZ1jvhTVqvbTLvyTJ" -- EXPECTED OUTPUT
   ) 
 
