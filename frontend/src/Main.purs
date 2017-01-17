@@ -8,6 +8,7 @@ import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Control.Monad.Eff (Eff)
+import Control.Monad.Aff (Aff)
 import Data.Const (Const)
 import Data.Lazy (defer)
 import Data.Maybe (Maybe(..))
@@ -17,6 +18,7 @@ import Halogen.VDom.Driver (runUI)
 import Overview (OverviewQuery(..), OverviewSlot(..), overviewComponent)
 import RequestFunds (RequestFundsQuery(..), RequestFundsSlot(..), requestFundsComponent)
 import SendFunds (SendFundsQuery(..), SendFundsSlot(..), sendFundsComponent)
+import Requests
 
 type State =
   { overviewState :: Maybe Boolean
@@ -43,7 +45,7 @@ data Query a =
 type ChildQuery = OverviewQuery <\/> RequestFundsQuery <\/> SendFundsQuery <\/> Const Void
 type ChildSlot = OverviewSlot \/ RequestFundsSlot \/ SendFundsSlot \/ Void
 
-nav :: forall m. H.ParentHTML Query ChildQuery ChildSlot m
+nav :: forall eff. H.ParentHTML Query ChildQuery ChildSlot (Aff (Effects eff))
 nav = HH.nav [HP.classes [HH.ClassName "navbar", HH.ClassName "navbar-default"]]
         [ HH.div [HP.classes [HH.ClassName "navbar-header"]]
             [HH.p [HP.classes [HH.ClassName "navbar-brand"]] [HH.text "LamdaBTC"]]
@@ -53,20 +55,20 @@ nav = HH.nav [HP.classes [HH.ClassName "navbar", HH.ClassName "navbar-default"]]
           , HH.button [ HE.onClick (HE.input_ (ToggleContext RequestFundsContext)), HP.classes [HH.ClassName "navbar-btn", HH.ClassName "btn", HH.ClassName "btn-default"] ] [ HH.text "Request Funds" ]]
         ]
 
-ui :: forall m. Applicative m => H.Component HH.HTML Query Void m
+ui :: forall eff. {--Applicative eff =>--} H.Component HH.HTML Query Void (Aff (Effects eff))
 ui = H.parentComponent { render, eval, initialState }
   where
 
-  render :: State -> H.ParentHTML Query ChildQuery ChildSlot m
+  render :: State -> H.ParentHTML Query ChildQuery ChildSlot (Aff (Effects eff))
   render state = HH.div_
     [ nav
     , case state.context of
           OverviewContext -> HH.slot' CP.cp1 OverviewSlot (defer \_ -> overviewComponent) absurd
           RequestFundsContext -> HH.slot' CP.cp2 RequestFundsSlot (defer \_ -> requestFundsComponent) absurd
-          SendFundsContext -> HH.slot' CP.cp3 SendFundsSlot (defer \_ -> sendFundsComponent) absurd 
+          SendFundsContext -> HH.slot' CP.cp3 SendFundsSlot (defer \_ -> sendFundsComponent) absurd
     ]
 
-  eval :: Query ~> H.ParentDSL State Query ChildQuery ChildSlot Void m
+  eval :: Query ~> H.ParentDSL State Query ChildQuery ChildSlot Void (Aff (Effects eff))
   eval (ReadStates next) = do
     a <- H.query' CP.cp1 OverviewSlot (H.request GetOverviewState)
     b <- H.query' CP.cp2 RequestFundsSlot (H.request GetRequestFundsState)
@@ -77,7 +79,7 @@ ui = H.parentComponent { render, eval, initialState }
     H.modify (\state -> state {context = context})
     pure next
 
-main :: Eff (H.HalogenEffects ()) Unit
+main :: Eff (H.HalogenEffects (Effects ())) Unit
 main = runHalogenAff do
   body <- awaitBody
   runUI ui body

@@ -6,7 +6,11 @@ import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
-
+import Requests
+import Network.HTTP.Affjax as AX
+import Control.Monad.Aff (Aff)
+import Data.Argonaut.Core as AG
+import Data.StrMap as SM
 
 type RequestFundsState = { on :: Boolean, label :: String, amount :: String, message :: String }
 
@@ -24,7 +28,7 @@ data RequestFundsSlot = RequestFundsSlot
 derive instance eqRequestFundsSlot :: Eq RequestFundsSlot
 derive instance ordRequestFundsSlot :: Ord RequestFundsSlot
 
-requestFundsComponent :: forall m. H.Component HH.HTML RequestFundsQuery Void m
+requestFundsComponent :: forall eff. H.Component HH.HTML RequestFundsQuery Void (Aff (Effects eff))
 requestFundsComponent = H.component { render, eval, initialState }
   where
 
@@ -71,7 +75,7 @@ requestFundsComponent = H.component { render, eval, initialState }
 
 
 
-  eval :: RequestFundsQuery ~> H.ComponentDSL RequestFundsState RequestFundsQuery Void m
+  eval :: RequestFundsQuery ~> H.ComponentDSL RequestFundsState RequestFundsQuery Void (Aff (Effects eff))
   eval (UpdateLabel label next) = do
     H.modify (\state -> state { label = label })
     pure next
@@ -82,7 +86,20 @@ requestFundsComponent = H.component { render, eval, initialState }
     H.modify (\state -> state { message = message })
     pure next
   eval (SubmitFundRequest next) = do
+    state <- H.get
+    response <- H.liftAff $ postFundRequest state
+    let
+      rp :: String
+      rp = response.response
     pure next
   eval (GetRequestFundsState reply) = do
     b <- H.gets (\state -> state.on)
     pure (reply b)
+
+fundRequestToJSON :: RequestFundsState -> AG.Json
+fundRequestToJSON resetFundsState = AG.fromObject
+  ((SM.insert "label" (AG.fromString resetFundsState.label)
+    <<< SM.insert "amount" (AG.fromString resetFundsState.amount)
+    <<< SM.insert "message" (AG.fromString resetFundsState.message)) SM.empty)
+
+postFundRequest state  = AX.post (server <> "/fundrequests") (fundRequestToJSON state)
