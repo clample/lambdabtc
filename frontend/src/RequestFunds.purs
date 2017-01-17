@@ -17,6 +17,7 @@ data RequestFundsQuery a
   = UpdateLabel String a
   | UpdateAmount String a
   | UpdateMessage String a
+  | SubmitFundRequest a
   | GetRequestFundsState (Boolean -> a)
 
 data RequestFundsSlot = RequestFundsSlot
@@ -41,29 +42,32 @@ requestFundsComponent = H.component { render, eval, initialState }
           , HP.id_ "labelInput"]
         ]
 
-      , HH.div [ HP.classes [HH.ClassName "form-group"]]
-        [ HH.label [HP.for "amountInput"] [HH.text "Amount:"]
-        , HH.input
-          [ HP.inputType HP.InputText
-          , HP.value state.amount
-          , HE.onValueChange (HE.input UpdateAmount)
-          , HP.classes [HH.ClassName "form-control"]
-          , HP.inputType HP.InputNumber
-          , HP.id_ "amountInput" ]
+        , HH.div [ HP.classes [HH.ClassName "form-group"]]
+          [ HH.label [HP.for "amountInput"] [HH.text "Amount:"]
+          , HH.input
+            [ HP.inputType HP.InputText
+            , HP.value state.amount
+            , HE.onValueChange (HE.input UpdateAmount)
+            , HP.classes [HH.ClassName "form-control"]
+            , HP.inputType HP.InputNumber
+            , HP.id_ "amountInput" ]
 
+            ]
+        , HH.div [ HP.classes [HH.ClassName "form-group"]]
+          [ HH.label [HP.for "messageInput"] [HH.text "Message:"]
+          , HH.input
+            [ HP.inputType HP.InputText
+            , HP.value state.message
+            , HE.onValueChange (HE.input UpdateMessage)
+            , HP.classes [HH.ClassName "form-control"]
+            , HP.id_ "messageInput" ]
           ]
-        ]
-
-      , HH.div [ HP.classes [HH.ClassName "form-group"]]
-        [ HH.label [HP.for "messageInput"] [HH.text "Message:"]
-        , HH.input
-          [ HP.inputType HP.InputText
-          , HP.value state.message
-          , HE.onValueChange (HE.input UpdateMessage)
-          , HP.classes [HH.ClassName "form-control"]
-          , HP.id_ "messageInput" ]
-        ]
       ]
+      , HH.button
+        [ HE.onClick (HE.input_ SubmitFundRequest)
+        , HP.classes [HH.ClassName "btn", HH.ClassName "btn-default"]]
+        [ HH.text "Request Funds" ]
+    ]
 
 
 
@@ -76,6 +80,8 @@ requestFundsComponent = H.component { render, eval, initialState }
     pure next
   eval (UpdateMessage message next) = do
     H.modify (\state -> state { message = message })
+    pure next
+  eval (SubmitFundRequest next) = do
     pure next
   eval (GetRequestFundsState reply) = do
     b <- H.gets (\state -> state.on)

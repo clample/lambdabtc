@@ -60,21 +60,10 @@ ui = H.parentComponent { render, eval, initialState }
   render :: State -> H.ParentHTML Query ChildQuery ChildSlot m
   render state = HH.div_
     [ nav
-    , HH.div_
-      [ case state.context of
+    , case state.context of
           OverviewContext -> HH.slot' CP.cp1 OverviewSlot (defer \_ -> overviewComponent) absurd
           RequestFundsContext -> HH.slot' CP.cp2 RequestFundsSlot (defer \_ -> requestFundsComponent) absurd
-          SendFundsContext -> HH.slot' CP.cp3 SendFundsSlot (defer \_ -> sendFundsComponent) absurd ]
-    , HH.div_ [ HH.text $ "Current states: "
-      <> show state.overviewState
-      <> " / " <> show state.requestFundsState
-      <> " / " <> show state.sendFundsState
-      <> " / " <>
-        case state.context of
-          OverviewContext -> "Overview"
-          SendFundsContext -> "Send Funds"
-          RequestFundsContext -> "Request Funds"]
-    , HH.button [ HE.onClick (HE.input_ ReadStates) ] [ HH.text "Read states" ]
+          SendFundsContext -> HH.slot' CP.cp3 SendFundsSlot (defer \_ -> sendFundsComponent) absurd 
     ]
 
   eval :: Query ~> H.ParentDSL State Query ChildQuery ChildSlot Void m
