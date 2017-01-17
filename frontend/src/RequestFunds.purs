@@ -98,8 +98,8 @@ requestFundsComponent = H.component { render, eval, initialState }
 
 fundRequestToJSON :: RequestFundsState -> AG.Json
 fundRequestToJSON resetFundsState = AG.fromObject
-  ((SM.insert "label" (AG.fromString resetFundsState.label)
-    <<< SM.insert "amount" (AG.fromString resetFundsState.amount)
-    <<< SM.insert "message" (AG.fromString resetFundsState.message)) SM.empty)
+  ((SM.insert "labelRaw" (AG.fromString resetFundsState.label)
+    <<< SM.insert "amountRaw" (AG.fromString resetFundsState.amount)
+    <<< SM.insert "messageRaw" (AG.fromString resetFundsState.message)) SM.empty)
 
 postFundRequest state  = AX.post (server <> "/fundrequests") (fundRequestToJSON state)

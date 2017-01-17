@@ -10,6 +10,7 @@ import Web.Scotty.Trans (status, showError, json, jsonData)
 import GHC.Generics
 import Util (maybeRead)
 import Keys
+import Control.Monad.IO.Class (liftIO)
 
 defaultH :: Environment -> Error -> Action
 defaultH e x = do
@@ -23,9 +24,10 @@ defaultH e x = do
 
 postFundRequestsH :: Action
 postFundRequestsH = do
---  address <- 
---  fundRequestRaw <- jsonData
---  let either = validateFundRequest fundRequestRaw
+  (pubKey, privKey) <- liftIO genKeys
+  let address = getAddress $ compressed pubKey
+  fundRequestRaw <- jsonData
+  let either = validateFundRequest address fundRequestRaw
   status ok200
   
 -- Documented in BIP 0021
