@@ -48,6 +48,7 @@ requestFundsComponent = H.component { render, eval, initialState }
           , HP.value state.amount
           , HE.onValueChange (HE.input UpdateAmount)
           , HP.classes [HH.ClassName "form-control"]
+          , HP.inputType HP.InputNumber
           , HP.id_ "amountInput" ]
 
           ]
@@ -63,7 +64,7 @@ requestFundsComponent = H.component { render, eval, initialState }
           , HP.id_ "messageInput" ]
         ]
       ]
-    
+
 
 
   eval :: RequestFundsQuery ~> H.ComponentDSL RequestFundsState RequestFundsQuery Void m
