@@ -18,7 +18,9 @@ import GHC.Generics
 import Util (maybeRead)
 import Keys
 import Control.Monad.IO.Class (liftIO)
-import Data.Text (unpack)
+import qualified Data.Text as T 
+import Persistence
+import Database.Persist.Sql (insert_)
 
 defaultH :: Environment -> Error -> Action
 defaultH e x = do
@@ -32,6 +34,7 @@ defaultH e x = do
 
 postFundRequestsH :: Action
 postFundRequestsH = do
+  -- TODO: The keys should be persisted after / when we generate them
   (pubKey, privKey) <- liftIO genKeys
   let address = getAddress $ compressed pubKey
   fundRequestRaw <- jsonData
@@ -41,26 +44,18 @@ postFundRequestsH = do
       status badRequest400
       json $ object ["error" .= showError error]
     Right fundRequest -> do
+      runDB (insert_ fundRequest)
       json fundRequest
       status ok200
-  
+
+-- FundRequest:  
 -- Documented in BIP 0021
 -- All elements should be UTF-8
 -- and Percent Encoded as in RFC 3986
-data FundRequest = FundRequest
-  { label :: String
-  , message :: String
-  , amount :: Double
-  , address :: String
-  , requestURI :: String }
-  deriving (Generic, Show)
-
-instance ToJSON FundRequest where
-  toEncoding = genericToEncoding defaultOptions
 
 data FundRequestRaw = FundRequestRaw
-  { labelRaw :: String
-  , messageRaw :: String
+  { labelRaw :: T.Text
+  , messageRaw :: T.Text
   , amountRaw :: String }
   deriving (Generic, Show)
 
@@ -76,4 +71,4 @@ validateFundRequest (Address address) fundRequestRaw@(FundRequestRaw labelR mess
     case ma of
       Nothing -> Left "Unable to parse amount"
       Just a -> Right $
-        FundRequest labelR messageR a (unpack address) uri
+        FundRequest labelR messageR a address uri

@@ -2,10 +2,12 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module Main where
 
-import Keys
-import Data.Base58String.Bitcoin (toBytes, toText)
-import Server
+import Server (developmentConfig, runApplication)
+import Persistence (migrateSchema)
 
 
 main :: IO ()
-main = runApplication developmentConfig
+main = do
+  config <- developmentConfig
+  migrateSchema config
+  runApplication config

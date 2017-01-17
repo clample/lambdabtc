@@ -1,4 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Server.Config where
 
@@ -10,14 +11,27 @@ import Network.Wai (Middleware)
 import Network.Wai.Middleware.RequestLogger (logStdout, logStdoutDev)
 import Network.Wai.Handler.Warp (Settings, setPort, defaultSettings)
 import Data.Default (def)
+import Database.Persist.Sql (ConnectionPool)
+import Database.Persist.Sqlite (createSqlitePool)
+import Control.Monad.Logger (runNoLoggingT, runStdoutLoggingT)
+
 
 data Config =
   Config { environment :: Environment
-         , port :: Int }
+         , port :: Int -- port might belong elsewhere
+         , pool :: ConnectionPool}
 
-developmentConfig :: Config
-developmentConfig =
-  Config Development 49535
+developmentConfig :: IO Config
+developmentConfig = do
+  let env = Development
+  pool <- runStdoutLoggingT $
+    createSqlitePool ":memory:" (getConnectionSize env)
+  return $ Config Development 49535 pool
+
+getConnectionSize :: Environment -> Int
+getConnectionSize Development = 1
+getConnectionSize Production = 8
+getConnectionSize Test = 1
 
 data Environment =
   Development |
