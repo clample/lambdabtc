@@ -26,6 +26,12 @@ type CheckSum = ByteString
 type Payload = ByteString
 type Prefix = ByteString
 
+createAndShowKey :: IO ()
+createAndShowKey = do
+  (pubKey, privKey) <- genKeys
+  let WIF b58wifPrivKey = getWIFPrivateKey $ getHexPrivateKey privKey
+  putStrLn $ T.unpack  . toText $ b58wifPrivKey
+
 -- Bitcoin uses a specefic eliptic curve, secp256k1,
 -- to generate public private key pairs
 btcCurve :: Curve
