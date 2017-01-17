@@ -14,10 +14,16 @@ module Keys
 import Prelude hiding (take, concat)
 import Data.ByteString (ByteString, append, take, concat)
 import Data.ByteString.Char8 (pack)
-import Crypto.PubKey.ECC.Types (Curve, getCurveByName, Point(..), CurveName(SEC_p256k1))
+import Crypto.PubKey.ECC.Types ( Curve
+                               , getCurveByName
+                               , Point(..)
+                               , CurveName(SEC_p256k1))
 import Crypto.PubKey.ECC.Generate (generate)
 import Crypto.Hash.Algorithms (SHA256(..), RIPEMD160(..))
-import Crypto.PubKey.ECC.ECDSA (PublicKey, public_q, PrivateKey, private_d)
+import Crypto.PubKey.ECC.ECDSA ( PublicKey
+                               , public_q
+                               , PrivateKey
+                               , private_d)
 import Crypto.Hash (Digest, digestFromByteString, hashWith)
 import Numeric (showHex, readHex)
 import Data.Base58String.Bitcoin (Base58String, fromBytes, toBytes, toText)
@@ -26,10 +32,14 @@ import Data.ByteString.Base16 (decode, encode)
 import Data.Char (toUpper)
 import qualified Data.Text as T
 
-data PublicKeyRep = Compressed ByteString | Uncompressed ByteString
+data PublicKeyRep =
+  Compressed ByteString
+  | Uncompressed ByteString
   deriving (Eq)
 
-data PrivateKeyRep = WIF T.Text | Hex ByteString
+data PrivateKeyRep =
+  WIF T.Text
+  | Hex ByteString
   deriving (Eq, Show)
 
 data Address = Address T.Text
@@ -59,7 +69,8 @@ getAddress pubKeyRep =
   where payload = pubKeyHash pubKeyRep
 
 getHexPrivateKey :: PrivateKey -> PrivateKeyRep
-getHexPrivateKey privateKey = Hex $ stringToHexByteString $ hexify (private_d privateKey) 32
+getHexPrivateKey privateKey =
+  Hex $ stringToHexByteString $ hexify (private_d privateKey) 32
 
 getWIFPrivateKey :: PrivateKeyRep -> PrivateKeyRep
 getWIFPrivateKey (Hex privateKey) =
