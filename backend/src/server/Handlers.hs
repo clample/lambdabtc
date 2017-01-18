@@ -48,7 +48,7 @@ postFundRequestsH = do
   (pubKey, privKey) <- liftIO genKeys
   let compressedPub@(Compressed pubKeyText) = compressed pubKey
       Hex privKeyText = getHexPrivateKey privKey
-      address@(Address addressText) = getAddress $ compressedPub
+      address@(Address addressText) = getAddress compressedPub
   fundRequestRaw <- jsonData
   let either = validateFundRequest address fundRequestRaw
       keyset = KeySet addressText privKeyText pubKeyText
@@ -79,7 +79,7 @@ validateFundRequest :: Address -> FundRequestRaw -> Either Error FundRequest
 validateFundRequest (Address address) fundRequestRaw@(FundRequestRaw labelR messageR amountR) =
   let
     ma :: Maybe Double
-    ma = maybeRead (amountR)
+    ma = maybeRead amountR
     uri = "bitcoin:"-- ++ address
   in
     case ma of

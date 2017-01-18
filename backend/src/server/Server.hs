@@ -1,11 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module Server (runApplication, developmentConfig) where
 
-import Data.Text (unpack)
+import Data.Text (unpack, Text)
 import Persistence
 import Database.Persist.Sqlite (runSqlite, runMigration)
-import Data.Text (Text)
 import Web.Scotty.Trans ( ScottyT
                         , Options(..)
                         , scottyOptsT

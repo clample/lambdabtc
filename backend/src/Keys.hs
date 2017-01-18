@@ -109,9 +109,9 @@ compressed pubKey =
   Compressed $  prefix `T.append` hexify x 32
   where
     Point x y = public_q pubKey
-    prefix = case isEven y of
-               True -> "02"
-               False -> "03"
+    prefix = if isEven y
+               then "02"
+               else "03"
     isEven n = n `mod` 2 == 0
 
 --https://github.com/bitcoinbook/bitcoinbook/blob/first_edition/ch04.asciidoc#base58-and-base58check-encoding
