@@ -18,7 +18,7 @@ import Halogen.VDom.Driver (runUI)
 import Overview (OverviewQuery(..), OverviewSlot(..), overviewComponent)
 import RequestFunds (RequestFundsQuery(..), RequestFundsSlot(..), requestFundsComponent)
 import SendFunds (SendFundsQuery(..), SendFundsSlot(..), sendFundsComponent)
-import Requests
+import Requests (Effects)
 
 type State =
   { overviewState :: Maybe Boolean

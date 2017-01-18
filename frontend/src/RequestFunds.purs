@@ -33,9 +33,6 @@ _FundRequestRaw = lens (\(FundRequestRaw rec) -> rec) (\_ -> FundRequestRaw)
 
 n :: FundRequestRawRec
 n = view ( fundRequest <<< _FundRequestRaw ) initialState
---view (fundRequest <<< _FundRequestRaw <<< labelRaw) state
---new :: RequestFundsState
--- new = set (fundRequest <<< labelRaw <<< _FundRequestRaw) "100" initialState
 
 type RequestFundsState =
   { on :: Boolean
@@ -170,20 +167,17 @@ renderRequests state = HH.div_
   [ HH.ul_ (map renderRequest state.fundRequestList) ]
 
 renderRequest :: FundRequest -> H.ComponentHTML RequestFundsQuery
-renderRequest (FundRequest fundRequest) =
-  HH.p_ [HH.text fundRequest.label ]
+renderRequest (FundRequest fundRequest') =
+  HH.p_ [HH.text fundRequest'.label ]
 
 appendFundRequestOrError :: AffjaxResponse String -> RequestFundsState -> RequestFundsState
 appendFundRequestOrError {status: StatusCode 400, headers: _, response: error } state =
   state { maybeError = Just error}
 
 appendFundRequestOrError {status: StatusCode 200, headers: _, response: fundRequestString } state =
-    case (jsonParser fundRequestString) of
-      Left error -> state { maybeError = Just "failed to parse json"}
-      Right json ->
-        case decodeJson json of
-          Left error -> state { maybeError = Just "failed to parse json"}
-          Right fundRequest -> state { fundRequestList = fundRequest:fundRequests }
+    case (jsonParser fundRequestString >>= decodeJson) of
+        Left error -> state { maybeError = Just "failed to parse json"}
+        Right fundRequest' -> state { fundRequestList = fundRequest':fundRequests }
     where fundRequests = state.fundRequestList
 
 appendFundRequestOrError response state = state
