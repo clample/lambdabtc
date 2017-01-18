@@ -1,8 +1,16 @@
 module RequestFunds where
 
 import Prelude
-import Requests (Effects, server)
-import Data.Argonaut (jsonParser, class EncodeJson, class DecodeJson, encodeJson, decodeJson, jsonEmptyObject, (~>), (:=), (.?))
+import Requests ( Effects, server)
+import Data.Argonaut ( jsonParser
+                     , class EncodeJson
+                     , class DecodeJson
+                     , encodeJson
+                     , decodeJson
+                     , jsonEmptyObject
+                     , (~>)
+                     , (:=)
+                     , (.?))
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
@@ -69,7 +77,12 @@ instance decodeJsonFundRequest :: DecodeJson FundRequest where
     amount <- obj .? "amount"
     address <- obj .? "address"
     requestURI <- obj .? "requestURI"
-    pure $ FundRequest { label: label, message: message, amount: amount, address: address, requestURI: requestURI}
+    pure $ FundRequest
+      { label: label
+      , message: message
+      , amount: amount
+      , address: address
+      , requestURI: requestURI}
 
 initialState :: RequestFundsState
 initialState =
@@ -100,47 +113,10 @@ requestFundsComponent = H.component { render, eval, initialState }
   render :: RequestFundsState -> H.ComponentHTML RequestFundsQuery
   render state =
     HH.div_
-    [ HH.h1_ [ HH.text "Request Funds" ]
-    , HH.form_
-      [ HH.div [ HP.classes [HH.ClassName "form-group"]]
-        [ HH.label [HP.for "labelInput"] [HH.text "Label:"]
-        , HH.input
-          [ HP.inputType HP.InputText
-          , HP.value (view (fundRequest <<< _FundRequestRaw <<< labelRaw) state)
-          , HE.onValueChange (HE.input UpdateLabel)
-          , HP.classes [HH.ClassName "form-control"]
-          , HP.id_ "labelInput"]
-        ]
-
-        , HH.div [ HP.classes [HH.ClassName "form-group"]]
-          [ HH.label [HP.for "amountInput"] [HH.text "Amount:"]
-          , HH.input
-            [ HP.inputType HP.InputText
-            , HP.value (view (fundRequest <<< _FundRequestRaw <<< amountRaw) state)
-            , HE.onValueChange (HE.input UpdateAmount)
-            , HP.classes [HH.ClassName "form-control"]
-            , HP.inputType HP.InputNumber
-            , HP.id_ "amountInput" ]
-
-            ]
-        , HH.div [ HP.classes [HH.ClassName "form-group"]]
-          [ HH.label [HP.for "messageInput"] [HH.text "Message:"]
-          , HH.input
-            [ HP.inputType HP.InputText
-            , HP.value (view (fundRequest <<< _FundRequestRaw <<< messageRaw) state)
-            , HE.onValueChange (HE.input UpdateMessage)
-            , HP.classes [HH.ClassName "form-control"]
-            , HP.id_ "messageInput" ]
-          ]
-      ]
-      , HH.button
-        [ HE.onClick (HE.input_ SubmitFundRequest)
-        , HP.classes [HH.ClassName "btn", HH.ClassName "btn-default"]]
-        [ HH.text "Request Funds" ]
-      , renderRequests state
+    [ renderFundRequestForm state
+    , renderRequests state
+    -- TODO: render error messages
     ]
-
-
 
   eval :: RequestFundsQuery ~> H.ComponentDSL RequestFundsState RequestFundsQuery Void (Aff (Effects eff))
   eval (UpdateLabel label next) = do
@@ -161,26 +137,85 @@ requestFundsComponent = H.component { render, eval, initialState }
     b <- H.gets (\state -> state.on)
     pure (reply b)
 
+renderFundRequestForm :: RequestFundsState -> H.ComponentHTML RequestFundsQuery
+renderFundRequestForm state =
+  HH.div_
+  [ HH.h1_ [ HH.text "Request Funds" ]
+  , HH.form_
+    [ HH.div [ HP.classes [HH.ClassName "form-group"]]
+      [ HH.label [HP.for "labelInput"] [HH.text "Label:"]
+      , HH.input
+        [ HP.inputType HP.InputText
+        , HP.value (view (fundRequest <<< _FundRequestRaw <<< labelRaw) state)
+        , HE.onValueChange (HE.input UpdateLabel)
+        , HP.classes [HH.ClassName "form-control"]
+        , HP.id_ "labelInput"]
+      ]
+
+      , HH.div [ HP.classes [HH.ClassName "form-group"]]
+        [ HH.label [HP.for "amountInput"] [HH.text "Amount:"]
+        , HH.input
+          [ HP.inputType HP.InputText
+          , HP.value (view (fundRequest <<< _FundRequestRaw <<< amountRaw) state)
+          , HE.onValueChange (HE.input UpdateAmount)
+          , HP.classes [HH.ClassName "form-control"]
+          , HP.inputType HP.InputNumber
+          , HP.id_ "amountInput" ]
+
+          ]
+      , HH.div [ HP.classes [HH.ClassName "form-group"]]
+        [ HH.label [HP.for "messageInput"] [HH.text "Message:"]
+        , HH.input
+          [ HP.inputType HP.InputText
+          , HP.value (view (fundRequest <<< _FundRequestRaw <<< messageRaw) state)
+          , HE.onValueChange (HE.input UpdateMessage)
+          , HP.classes [HH.ClassName "form-control"]
+          , HP.id_ "messageInput" ]
+        ]
+    ]
+    , HH.button
+      [ HE.onClick (HE.input_ SubmitFundRequest)
+      , HP.classes [HH.ClassName "btn", HH.ClassName "btn-default"]]
+      [ HH.text "Request Funds" ]
+  ]
 
 renderRequests :: RequestFundsState -> H.ComponentHTML RequestFundsQuery
 renderRequests state = HH.div_
-  [ HH.ul_ (map renderRequest state.fundRequestList) ]
+  [ HH.table [HP.classes [HH.ClassName "table"]]
+      [ HH.caption_ [HH.text "Requested Payments History"]
+      , HH.thead_
+        [ HH.tr_
+          [ HH.th_ [HH.text "Label"]
+          , HH.th_ [HH.text "Message"]
+          , HH.th_ [HH.text "Amount"]
+          ]
+        ]
+      , HH.tbody_ (map renderRequest state.fundRequestList)
+      ]
+    ]
 
 renderRequest :: FundRequest -> H.ComponentHTML RequestFundsQuery
-renderRequest (FundRequest fundRequest') =
-  HH.p_ [HH.text fundRequest'.label ]
+renderRequest (FundRequest fundRequest') = HH.tr_
+  [ HH.th_ [HH.text fundRequest'.label]
+  , HH.th_ [HH.text fundRequest'.message]
+  , HH.th_ [HH.text (show fundRequest'.amount)]
+  ]
 
 appendFundRequestOrError :: AffjaxResponse String -> RequestFundsState -> RequestFundsState
-appendFundRequestOrError {status: StatusCode 400, headers: _, response: error } state =
+appendFundRequestOrError {status: StatusCode 400, response: error } state =
   state { maybeError = Just error}
 
-appendFundRequestOrError {status: StatusCode 200, headers: _, response: fundRequestString } state =
+appendFundRequestOrError {status: StatusCode 200, response: fundRequestString } state =
     case (jsonParser fundRequestString >>= decodeJson) of
-        Left error -> state { maybeError = Just "failed to parse json"}
-        Right fundRequest' -> state { fundRequestList = fundRequest':fundRequests }
+        Left error ->
+          state { maybeError = Just "failed to parse json"}
+        Right fundRequest' ->
+          state { fundRequestList = fundRequest':fundRequests }
     where fundRequests = state.fundRequestList
 
-appendFundRequestOrError response state = state
+appendFundRequestOrError response state =
+  state { maybeError = Just "An unexpected error occurred"}
+  -- The server should only return 200 or 400 responses
 
 
 postFundRequest :: forall e b. (Respondable b) => RequestFundsState -> Affjax e b
