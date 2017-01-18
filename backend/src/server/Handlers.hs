@@ -1,7 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveGeneric #-}
 
-module Server.Handlers where
+module Server.Handlers
+  ( defaultH
+  , postFundRequestsH
+  , getFundRequestsH
+  ) where
 
 import Network.HTTP.Types.Status (internalServerError500, ok200, badRequest400)
 import Data.Aeson ( object

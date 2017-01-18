@@ -1,21 +1,62 @@
 module RequestFunds where
 
 import Prelude
-
+import Requests
+import Data.Argonaut.Core as AG
+import Data.Argonaut.Parser as AG
+import Data.StrMap as SM
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
-import Requests
 import Network.HTTP.Affjax as AX
+import Network.HTTP.Affjax.Request as AX
+import Network.HTTP.Affjax.Response as AX
+import Network.HTTP.StatusCode as AX
 import Control.Monad.Aff (Aff)
-import Data.Argonaut.Core as AG
-import Data.StrMap as SM
+import Data.Foreign (F)
+import Data.Foreign.Class (class IsForeign, readJSON, readProp)
+import Data.Maybe (Maybe(..))
+import Network.HTTP.Affjax.Response (ResponseType(..))
+import Data.Lens (lens)
+import Data.Lens.Zoom (Lens, Lens')
+import Data.Lens.Setter (set)
 
-type RequestFundsState = { on :: Boolean, label :: String, amount :: String, message :: String }
+fundRequest :: forall a b r. Lens { fundRequest :: a | r } { fundRequest :: b | r } a b
+fundRequest = lens _.fundRequest (_ { fundRequest = _})
+
+labelRaw :: forall a b r. Lens { labelRaw :: a | r } { labelRaw :: b | r } a b
+labelRaw = lens _.labelRaw (_ { labelRaw = _})
+
+amountRaw :: forall a b r. Lens { amountRaw :: a | r } { amountRaw :: b | r } a b
+amountRaw = lens _.amountRaw (_ { amountRaw = _})
+
+messageRaw :: forall a b r. Lens { messageRaw :: a | r} { messageRaw :: b | r} a b
+messageRaw = lens _.messageRaw (_ { messageRaw = _})
+
+new :: RequestFundsState
+new = set (fundRequest <<< labelRaw) "100" initialState
+
+--fundRequest <<< labelRaw
+
+type RequestFundsState =
+  { on :: Boolean
+  , fundRequest :: FundRequestRaw
+  , maybeError :: Maybe String}
+
+type FundRequestRaw =
+  { labelRaw :: String
+  , amountRaw :: String
+  , messageRaw :: String}
 
 initialState :: RequestFundsState
-initialState = { on: false, label: "", amount: "", message: "" }
+initialState =
+  { on: false
+  , fundRequest:
+    { labelRaw: ""
+    , amountRaw: ""
+    , messageRaw: "" }
+  , maybeError: Nothing }
 
 data RequestFundsQuery a
   = UpdateLabel String a
@@ -40,7 +81,7 @@ requestFundsComponent = H.component { render, eval, initialState }
         [ HH.label [HP.for "labelInput"] [HH.text "Label:"]
         , HH.input
           [ HP.inputType HP.InputText
-          , HP.value state.label
+          , HP.value state.fundRequest.labelRaw
           , HE.onValueChange (HE.input UpdateLabel)
           , HP.classes [HH.ClassName "form-control"]
           , HP.id_ "labelInput"]
@@ -50,7 +91,7 @@ requestFundsComponent = H.component { render, eval, initialState }
           [ HH.label [HP.for "amountInput"] [HH.text "Amount:"]
           , HH.input
             [ HP.inputType HP.InputText
-            , HP.value state.amount
+            , HP.value state.fundRequest.amountRaw
             , HE.onValueChange (HE.input UpdateAmount)
             , HP.classes [HH.ClassName "form-control"]
             , HP.inputType HP.InputNumber
@@ -61,7 +102,7 @@ requestFundsComponent = H.component { render, eval, initialState }
           [ HH.label [HP.for "messageInput"] [HH.text "Message:"]
           , HH.input
             [ HP.inputType HP.InputText
-            , HP.value state.message
+            , HP.value state.fundRequest.messageRaw
             , HE.onValueChange (HE.input UpdateMessage)
             , HP.classes [HH.ClassName "form-control"]
             , HP.id_ "messageInput" ]
@@ -77,29 +118,36 @@ requestFundsComponent = H.component { render, eval, initialState }
 
   eval :: RequestFundsQuery ~> H.ComponentDSL RequestFundsState RequestFundsQuery Void (Aff (Effects eff))
   eval (UpdateLabel label next) = do
-    H.modify (\state -> state { label = label })
+    H.modify (set (fundRequest <<< labelRaw) label)
     pure next
   eval (UpdateAmount amount next) = do
-    H.modify (\state -> state { amount = amount })
+    H.modify (set (fundRequest <<< amountRaw) amount)
     pure next
   eval (UpdateMessage message next) = do
-    H.modify (\state -> state { message = message })
+    H.modify (set (fundRequest <<< messageRaw) message)
     pure next
   eval (SubmitFundRequest next) = do
     state <- H.get
     response <- H.liftAff $ postFundRequest state
-    let
-      rp :: String
-      rp = response.response
+    H.modify (appendFundRequestOrError response)
     pure next
   eval (GetRequestFundsState reply) = do
     b <- H.gets (\state -> state.on)
     pure (reply b)
 
-fundRequestToJSON :: RequestFundsState -> AG.Json
-fundRequestToJSON resetFundsState = AG.fromObject
-  ((SM.insert "labelRaw" (AG.fromString resetFundsState.label)
-    <<< SM.insert "amountRaw" (AG.fromString resetFundsState.amount)
-    <<< SM.insert "messageRaw" (AG.fromString resetFundsState.message)) SM.empty)
+appendFundRequestOrError :: AX.AffjaxResponse String -> RequestFundsState -> RequestFundsState
+appendFundRequestOrError {status: AX.StatusCode 400, headers: _, response: error } state =
+  state { maybeError = Just error}
+appendFundRequestOrError {status: AX.StatusCode 200, headers: _, response: fundRequest } state =
+  state
+appendFundRequestOrError response state = state
 
-postFundRequest state  = AX.post (server <> "/fundrequests") (fundRequestToJSON state)
+
+fundRequestToJSON :: FundRequestRaw -> AG.Json
+fundRequestToJSON fundRequest = AG.fromObject
+  ((SM.insert "labelRaw" (AG.fromString fundRequest.labelRaw)
+    <<< SM.insert "amountRaw" (AG.fromString fundRequest.amountRaw)
+    <<< SM.insert "messageRaw" (AG.fromString fundRequest.messageRaw)) SM.empty)
+
+postFundRequest :: forall e b. (AX.Respondable b) => RequestFundsState -> AX.Affjax e b
+postFundRequest state  = AX.post (server <> "/fundrequests") (fundRequestToJSON state.fundRequest)

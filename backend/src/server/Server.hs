@@ -12,13 +12,14 @@ import Web.Scotty.Trans ( ScottyT
                         , middleware
                         , defaultHandler
                         , post
+                        , get
                         , ActionT
                         , status
                         , showError
                         , json)
 import Control.Monad.Reader (ReaderT, runReaderT, MonadReader)
 import qualified Data.Text.Lazy as LT
-import Server.Handlers (defaultH, postFundRequestsH)
+import Server.Handlers 
 import Server.Config
 
 runApplication :: Config -> IO ()
@@ -34,3 +35,4 @@ application c = do
   middleware (loggingM e)
   defaultHandler (defaultH e)
   post "/fundrequests" postFundRequestsH
+  get  "/fundrequests" getFundRequestsH

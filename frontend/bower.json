@@ -11,6 +11,10 @@
     "purescript-halogen": "git://github.com/slamdata/purescript-halogen.git#master",
     "bootstrap": "^3.3.7",
     "jquery-2.2.3.min": "http://code.jquery.com/jquery-2.2.3.min.js",
-    "purescript-affjax": "^3.0.2"
+    "purescript-affjax": "^3.0.2",
+    "purescript-profunctor-lenses": "^2.5.0"
+  },
+  "devDependencies": {
+    "purescript-psci-support": "^2.0.0"
   }
 }
