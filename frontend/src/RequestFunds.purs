@@ -1,34 +1,20 @@
 module RequestFunds where
 
 import Prelude
-import Requests
-import Data.Argonaut.Core as AG
-import Data.Argonaut.Parser as AG
-import Data.Argonaut (class EncodeJson, class DecodeJson, Json, encodeJson, fromArray, decodeJson, jsonEmptyObject, (~>), (:=), (.?))
-import Data.StrMap as SM
+import Requests (Effects, server)
+import Data.Argonaut (jsonParser, class EncodeJson, class DecodeJson, encodeJson, decodeJson, jsonEmptyObject, (~>), (:=), (.?))
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
-import Network.HTTP.Affjax as AX
-import Network.HTTP.Affjax.Request as AX
-import Network.HTTP.Affjax.Response as AX
-import Network.HTTP.StatusCode as AX
+import Network.HTTP.Affjax (Affjax, AffjaxResponse, post)
+import Network.HTTP.Affjax.Response  (class Respondable)
+import Network.HTTP.StatusCode (StatusCode(..))
 import Control.Monad.Aff (Aff)
-import DOM.HTML.HTMLElement (offsetHeight)
 import Data.Array ((:))
 import Data.Either (Either(..))
-import Data.Foreign (F)
-import Data.Foreign.Class (class IsForeign, readJSON, readProp)
-import Data.Lens (lens)
-import Data.Lens.Setter (set)
-import Data.Lens.Getter (view)
-import Data.Lens.Zoom (Lens, Lens')
+import Data.Lens (lens, set, view, Lens, Lens')
 import Data.Maybe (Maybe(..))
-import Network.HTTP.Affjax.Response (ResponseType(..))
-import Data.Foreign.Class (readJSON)
-import Data.Foreign.Class (class IsForeign)
-import Control.Monad.Except (runExcept)
 
 fundRequest :: forall a b r. Lens { fundRequest :: a | r } { fundRequest :: b | r } a b
 fundRequest = lens _.fundRequest (_ { fundRequest = _})
@@ -187,12 +173,12 @@ renderRequest :: FundRequest -> H.ComponentHTML RequestFundsQuery
 renderRequest (FundRequest fundRequest) =
   HH.p_ [HH.text fundRequest.label ]
 
-appendFundRequestOrError :: AX.AffjaxResponse String -> RequestFundsState -> RequestFundsState
-appendFundRequestOrError {status: AX.StatusCode 400, headers: _, response: error } state =
+appendFundRequestOrError :: AffjaxResponse String -> RequestFundsState -> RequestFundsState
+appendFundRequestOrError {status: StatusCode 400, headers: _, response: error } state =
   state { maybeError = Just error}
 
-appendFundRequestOrError {status: AX.StatusCode 200, headers: _, response: fundRequestString } state =
-    case (AG.jsonParser fundRequestString) of
+appendFundRequestOrError {status: StatusCode 200, headers: _, response: fundRequestString } state =
+    case (jsonParser fundRequestString) of
       Left error -> state { maybeError = Just "failed to parse json"}
       Right json ->
         case decodeJson json of
@@ -203,5 +189,5 @@ appendFundRequestOrError {status: AX.StatusCode 200, headers: _, response: fundR
 appendFundRequestOrError response state = state
 
 
-postFundRequest :: forall e b. (AX.Respondable b) => RequestFundsState -> AX.Affjax e b
-postFundRequest state  = AX.post (server <> "/fundrequests") (encodeJson state.fundRequest)
+postFundRequest :: forall e b. (Respondable b) => RequestFundsState -> Affjax e b
+postFundRequest state  = post (server <> "/fundrequests") (encodeJson state.fundRequest)
