@@ -21,6 +21,7 @@ import Network.HTTP.Affjax.Response (ResponseType(..))
 import Data.Lens (lens)
 import Data.Lens.Zoom (Lens, Lens')
 import Data.Lens.Setter (set)
+import Data.Array ( (:))
 
 fundRequest :: forall a b r. Lens { fundRequest :: a | r } { fundRequest :: b | r } a b
 fundRequest = lens _.fundRequest (_ { fundRequest = _})
@@ -42,12 +43,15 @@ new = set (fundRequest <<< labelRaw) "100" initialState
 type RequestFundsState =
   { on :: Boolean
   , fundRequest :: FundRequestRaw
-  , maybeError :: Maybe String}
+  , maybeError :: Maybe String
+  , fundRequestList :: Array FundRequest }
 
 type FundRequestRaw =
   { labelRaw :: String
   , amountRaw :: String
   , messageRaw :: String}
+
+type FundRequest = String
 
 initialState :: RequestFundsState
 initialState =
@@ -56,7 +60,8 @@ initialState =
     { labelRaw: ""
     , amountRaw: ""
     , messageRaw: "" }
-  , maybeError: Nothing }
+  , maybeError: Nothing
+  , fundRequestList: [] }
 
 data RequestFundsQuery a
   = UpdateLabel String a
@@ -112,6 +117,7 @@ requestFundsComponent = H.component { render, eval, initialState }
         [ HE.onClick (HE.input_ SubmitFundRequest)
         , HP.classes [HH.ClassName "btn", HH.ClassName "btn-default"]]
         [ HH.text "Request Funds" ]
+      , renderRequests state
     ]
 
 
@@ -135,11 +141,16 @@ requestFundsComponent = H.component { render, eval, initialState }
     b <- H.gets (\state -> state.on)
     pure (reply b)
 
+renderRequests :: RequestFundsState -> H.ComponentHTML RequestFundsQuery
+renderRequests state = HH.div_
+  [ HH.ul_ (map (\fundRequest' -> HH.li_ [ HH.text fundRequest']) state.fundRequestList) ]
+
 appendFundRequestOrError :: AX.AffjaxResponse String -> RequestFundsState -> RequestFundsState
 appendFundRequestOrError {status: AX.StatusCode 400, headers: _, response: error } state =
   state { maybeError = Just error}
 appendFundRequestOrError {status: AX.StatusCode 200, headers: _, response: fundRequest } state =
-  state
+  state { fundRequestList = fundRequest:fundRequests }
+  where fundRequests = state.fundRequestList
 appendFundRequestOrError response state = state
 
 
