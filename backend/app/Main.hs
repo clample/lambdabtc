@@ -1,17 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module Main where
 
-import Keys
-import Data.Base58String.Bitcoin (toBytes, toText)
-import Data.Text (unpack)
-import Persistence
-import Database.Persist.Sqlite (runSqlite, runMigration)
-import Data.Text (Text)
+import Server (developmentConfig, runApplication)
+import Persistence (migrateSchema)
+
 
 main :: IO ()
-main = runExample
-
-createAndShowKey = do
-  (pubKey, privKey) <- genKeys
-  let WIF b58wifPrivKey = getWIFPrivateKey $ getHexPrivateKey privKey
-  putStrLn $ unpack  . toText $ b58wifPrivKey
+main = do
+  config <- developmentConfig
+  migrateSchema config
+  runApplication config
