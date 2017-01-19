@@ -1,9 +1,11 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Script where
 
 import Util
 import Optcodes (OPCODE(..))
 import Prelude hiding (concat)
 import Data.ByteString (ByteString, concat, singleton, append)
+import Data.ByteString.Char8 (pack)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Data.ByteString.Base16 (decode, encode)
@@ -32,7 +34,9 @@ compileScriptComponent (Txt bs) =
      compiledTextComponent = fst . decode $ bs
        -- . T.encodeUtf8 $ txt
   -- It might be necessary to try different encodings
-  
+
+blockLockTime :: ByteString -- Binary rather than Hex representation
+blockLockTime = fst . decode . pack $ replicate 8 '0'
 
 
 
