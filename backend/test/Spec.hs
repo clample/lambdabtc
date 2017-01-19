@@ -13,7 +13,7 @@ import Crypto.PubKey.ECC.Types (Curve, getCurveByName, Point(..), CurveName(SEC_
 import Data.ByteString (length)
 import Data.Base58String.Bitcoin (Base58String, toText, fromBytes, toBytes, b58String, fromText)
 import qualified Data.Text as T
-import Data.ByteString.Base16 (decode)
+import Data.ByteString.Base16 (decode, encode)
 
 main :: IO ()
 main = defaultMain tests
@@ -45,7 +45,11 @@ tests =
       testCase "blockLockTime length test"
         blockLockTimeLengthTest,
       testCase "txVersion length test"
-        txVersionLengthTest
+        txVersionLengthTest,
+      testCase "txValue test"
+        txValueTest,
+      testCase "txValue length test"
+        txValueLengthTest
       ]
   ]
 
@@ -133,3 +137,16 @@ txVersionLengthTest = assertEqual
   "tx version should be 4 bytes long"
   4
   (length txVersion)
+
+txValueTest :: Assertion
+txValueTest = assertEqual
+  "txValue should be correctly rendered"
+  -- Example taken from http://www.righto.com/2014/02/bitcoins-hard-way-using-raw-bitcoin.html#ref7
+  ("6264010000000000")
+  (encode $ txValue $ Satoshis 91234)
+
+txValueLengthTest :: Assertion
+txValueLengthTest = assertEqual
+  "txValue should be 8 bytes long"
+  8
+  (length $ txValue $ Satoshis 100)
