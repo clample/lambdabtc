@@ -5,13 +5,15 @@ import Prelude hiding (length)
 import Test.Framework (defaultMain, testGroup)
 import Test.Framework.Providers.HUnit (testCase)
 import Test.HUnit
-
+import Script
+import Optcodes
 import Keys
 import Crypto.PubKey.ECC.ECDSA (PublicKey(..), PrivateKey(..))
 import Crypto.PubKey.ECC.Types (Curve, getCurveByName, Point(..), CurveName(SEC_p256k1))
 import Data.ByteString (length)
 import Data.Base58String.Bitcoin (Base58String, toText, fromBytes, toBytes, b58String, fromText)
 import qualified Data.Text as T
+import Data.ByteString.Base16 (decode)
 
 main :: IO ()
 main = defaultMain tests
@@ -34,6 +36,10 @@ tests =
         $ addressTest testPublicKeyRep,
       testCase "WIF Private key"
         $ testWIFPrivateKey testDataWIFPrivateKey
+      ],
+    testGroup "Script tests" [
+      testCase "optcode only script test"
+        optCodeScriptTest
       ]
   ]
 
@@ -96,3 +102,8 @@ testDataWIFPrivateKey =
   , WIF $ "5HueCGU8rMjxEXxiPuD5BDku4MkFqeZyd4dZ1jvhTVqvbTLvyTJ" -- EXPECTED OUTPUT
   ) 
 
+optCodeScriptTest :: Assertion
+optCodeScriptTest = assertEqual
+  "Simple script should compile correctly"
+  (CompiledScript $ fst $ decode "76A988AC")
+  (compile $ Script [OP OP_DUP, OP OP_HASH160, OP OP_EQUALVERIFY, OP OP_CHECKSIG])
