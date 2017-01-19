@@ -1,14 +1,16 @@
 module Util where
 
-import Prelude hiding (take, concat)
+import Prelude
 
 import Data.Maybe (listToMaybe)
 import Data.ByteString (ByteString)
 import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
 import Data.Base58String.Bitcoin (Base58String, fromBytes, toBytes, toText)
 import Crypto.Hash.Algorithms (SHA256(..), RIPEMD160(..))
 import Crypto.Hash (Digest, digestFromByteString, hashWith)
-import Data.ByteString (ByteString, append, take, concat)
+import qualified Data.ByteString as BS
+import Data.ByteString (ByteString)
 import Data.ByteString.Char8 (pack)
 import Data.ByteString.Base16 (decode, encode)
 import Numeric (showHex, readHex)
@@ -23,14 +25,14 @@ maybeRead = fmap fst . listToMaybe . reads
 
 base58CheckSum :: ByteString -> ByteString
 base58CheckSum =
-  take 4 . stringToHexByteString . show . hashWith SHA256 . hashWith SHA256 
+  BS.take 4 . stringToHexByteString . show . hashWith SHA256 . hashWith SHA256 
 
 --https://github.com/bitcoinbook/bitcoinbook/blob/first_edition/ch04.asciidoc#base58-and-base58check-encoding
 encodeBase58Check :: Prefix -> Payload -> T.Text
 encodeBase58Check prefix payload =
-  toText . fromBytes . concat $ [withPrefix, base58CheckSum withPrefix]
+  toText . fromBytes . BS.concat $ [withPrefix, base58CheckSum withPrefix]
   where
-   withPrefix = prefix `append` payload
+   withPrefix = prefix `BS.append` payload
 
 
 stringToHexByteString :: String -> ByteString
@@ -44,4 +46,9 @@ hexify :: Integer -> Int -> T.Text
 hexify n desiredLength = T.pack $ leadingZeroes ++ base
   where
     base = showHex n ""
-    leadingZeroes = replicate (desiredLength - length base) ' '
+    leadingZeroes = replicate (desiredLength - length base) '0'
+
+-- Take a binary encoded payload and give a bytestring with payload length
+payloadLength :: ByteString -> ByteString
+payloadLength payload =
+  fst $ decode $ T.encodeUtf8 $ hexify (toInteger $ BS.length payload) 2

@@ -39,7 +39,9 @@ tests =
       ],
     testGroup "Script tests" [
       testCase "optcode only script test"
-        optCodeScriptTest
+        optCodeScriptTest,
+      testCase "payToPubkeyHash test"
+        payToPubkeyHashTest
       ]
   ]
 
@@ -108,3 +110,10 @@ optCodeScriptTest = assertEqual
   (CompiledScript $ fst $ decode "76A988AC")
   -- expected output from https://en.bitcoin.it/wiki/Script
   (compile $ Script [OP OP_DUP, OP OP_HASH160, OP OP_EQUALVERIFY, OP OP_CHECKSIG])
+
+payToPubkeyHashTest :: Assertion
+payToPubkeyHashTest = assertEqual
+  "payToPubkeyHash should have correct output"
+  (CompiledScript $ fst $ decode "76a914010966776006953d5567439e5e39f86a0d273bee88ac")
+  (payToPubkeyHash $ Uncompressed 
+  "0450863AD64A87AE8A2FE83C1AF1A8403CB53F53E486D8511DAD8A04887E5B23522CD470243453A299FA9E77237716103ABC11A1DF38855ED6F2EE187E9C582BA6")

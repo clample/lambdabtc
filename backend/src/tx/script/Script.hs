@@ -1,8 +1,9 @@
 module Script where
 
+import Util
 import Optcodes (OPCODE(..))
 import Prelude hiding (concat)
-import Data.ByteString (ByteString, concat, singleton)
+import Data.ByteString (ByteString, concat, singleton, append)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Data.ByteString.Base16 (decode, encode)
@@ -15,20 +16,23 @@ data CompiledScript = CompiledScript ByteString
 
 data ScriptComponent
   = OP OPCODE
-  | Txt T.Text
+  | Txt ByteString -- should contain hex
 
-payToPubkeyHash :: CompiledScript
-payToPubkeyHash = compile $ Script [OP OP_DUP, OP OP_HASH160, OP OP_EQUALVERIFY, OP OP_CHECKSIG]
+payToPubkeyHash :: PublicKeyRep -> CompiledScript
+payToPubkeyHash pubKeyRep = compile $ Script [OP OP_DUP, OP OP_HASH160, Txt (encode $ pubKeyHash pubKeyRep)  , OP OP_EQUALVERIFY, OP OP_CHECKSIG]
 
 compile :: Script -> CompiledScript
 compile (Script script) = CompiledScript $ concat $ map compileScriptComponent script
 
 compileScriptComponent :: ScriptComponent -> ByteString
 compileScriptComponent (OP opcode) = singleton . fromIntegral . fromEnum $ opcode
-compileScriptComponent (Txt str) =
-  fst . decode . T.encodeUtf8 $ str
+compileScriptComponent (Txt bs) =
+   (payloadLength compiledTextComponent) `append` compiledTextComponent
+   where
+     compiledTextComponent = fst . decode $ bs
+       -- . T.encodeUtf8 $ txt
   -- It might be necessary to try different encodings
-  -- need to first include length in hex
+  
 
 
 
