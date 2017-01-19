@@ -43,7 +43,9 @@ tests =
       testCase "payToPubkeyHash test"
         payToPubkeyHashTest,
       testCase "blockLockTime length test"
-        blockLockTimeLengthTest
+        blockLockTimeLengthTest,
+      testCase "txVersion length test"
+        txVersionLengthTest
       ]
   ]
 
@@ -125,3 +127,9 @@ blockLockTimeLengthTest = assertEqual
   "block lock time should be 4 bytes long"
   4
   (length blockLockTime)
+
+txVersionLengthTest :: Assertion
+txVersionLengthTest = assertEqual
+  "tx version should be 4 bytes long"
+  4
+  (length txVersion)

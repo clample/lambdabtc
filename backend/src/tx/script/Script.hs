@@ -38,5 +38,7 @@ compileScriptComponent (Txt bs) =
 blockLockTime :: ByteString -- Binary rather than Hex representation
 blockLockTime = fst . decode . pack $ replicate 8 '0'
 
+txVersion :: ByteString               -- Binary rather than Hex representation
+txVersion = fst . decode $ "01000000" -- TODO: this should maybe be not hardcoded
 
 
