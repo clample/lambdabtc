@@ -33,6 +33,7 @@ import Data.Word8 (Word8(..))
 import Data.ByteString.Base16 (decode, encode)
 import Data.Char (toUpper)
 import qualified Data.Text as T
+import Util
 
 data PublicKeyRep =
   Compressed T.Text
@@ -46,10 +47,6 @@ data PrivateKeyRep =
 
 data Address = Address T.Text
   deriving (Eq, Show)
-
-type Payload = ByteString
-
-type Prefix = ByteString
 
 -- Bitcoin uses a specefic eliptic curve, secp256k1,
 -- to generate public private key pairs
@@ -95,13 +92,6 @@ uncompressed pubKey =
   where
     Point x y = public_q pubKey
 
--- Make sure that we include leading zeroes when converting an int to its string representatin in hexidecimal
-hexify :: Integer -> Int -> T.Text
-hexify n desiredLength = T.pack $ leadingZeroes ++ base
-  where
-    base = showHex n ""
-    leadingZeroes = replicate (desiredLength - length base) ' '
-
 -- public keys can be represented using just the x value and the sign of y
 -- https://github.com/bitcoinbook/bitcoinbook/blob/first_edition/ch04.asciidoc#compressed-public-keys
 compressed :: PublicKey -> PublicKeyRep
@@ -114,25 +104,9 @@ compressed pubKey =
                else "03"
     isEven n = n `mod` 2 == 0
 
---https://github.com/bitcoinbook/bitcoinbook/blob/first_edition/ch04.asciidoc#base58-and-base58check-encoding
-encodeBase58Check :: Prefix -> Payload -> T.Text
-encodeBase58Check prefix payload =
-  toText . fromBytes . concat $ [withPrefix, base58CheckSum withPrefix]
-  where
-   withPrefix = prefix `append` payload
-
-base58CheckSum :: ByteString -> ByteString
-base58CheckSum =
-  take 4 . stringToHexByteString . show . hashWith SHA256 . hashWith SHA256 
-  
 addressPrefix :: Prefix
 addressPrefix = stringToHexByteString "00"
 
 privateKeyPrefix :: Prefix
 privateKeyPrefix = stringToHexByteString "80"
 
-stringToHexByteString :: String -> ByteString
-stringToHexByteString = fst . decode . pack 
-
-textToHexByteString :: T.Text -> ByteString
-textToHexByteString = stringToHexByteString . T.unpack

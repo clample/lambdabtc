@@ -106,4 +106,5 @@ optCodeScriptTest :: Assertion
 optCodeScriptTest = assertEqual
   "Simple script should compile correctly"
   (CompiledScript $ fst $ decode "76A988AC")
+  -- expected output from https://en.bitcoin.it/wiki/Script
   (compile $ Script [OP OP_DUP, OP OP_HASH160, OP OP_EQUALVERIFY, OP OP_CHECKSIG])
