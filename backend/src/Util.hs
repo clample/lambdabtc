@@ -20,6 +20,7 @@ type Payload = ByteString
 type Prefix = ByteString
 
 
+
 maybeRead :: Read a => String -> Maybe a
 maybeRead = fmap fst . listToMaybe . reads
 
@@ -34,7 +35,8 @@ encodeBase58Check prefix payload =
   where
    withPrefix = prefix `BS.append` payload
 
-
+-- this function name is misleading?
+-- This is going from hex string to binary bytestring
 stringToHexByteString :: String -> ByteString
 stringToHexByteString = fst . decode . pack 
 

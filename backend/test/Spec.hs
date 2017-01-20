@@ -8,6 +8,7 @@ import Test.HUnit
 import Script
 import Optcodes
 import Keys
+import Transaction
 import Crypto.PubKey.ECC.ECDSA (PublicKey(..), PrivateKey(..))
 import Crypto.PubKey.ECC.Types (Curve, getCurveByName, Point(..), CurveName(SEC_p256k1))
 import Data.ByteString (length)

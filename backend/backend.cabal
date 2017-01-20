@@ -26,6 +26,7 @@ library
                      , Script
                      , Optcodes
                      , Util
+                     , Transaction
   build-depends:       base >= 4.7 && < 5
                      , bytestring >= 0.10 && < 0.11
                      , cryptonite == 0.19
@@ -48,6 +49,7 @@ library
                      , transformers == 0.5.*
                      , monad-logger ==0.3.*
                      , containers ==0.5.7.*
+                     , asn1-encoding ==0.9.4
   default-language:    Haskell2010
 
 executable backend-exe

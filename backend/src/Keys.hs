@@ -11,7 +11,8 @@ module Keys
   , pubKeyHash
   , getWIFPrivateKey
   , getHexPrivateKey
-  , textToHexByteString) where
+  , textToHexByteString
+  , getPrivateKeyFromHex ) where
 
 import Prelude hiding (take, concat)
 import Data.ByteString (ByteString, append, take, concat)
@@ -24,7 +25,7 @@ import Crypto.PubKey.ECC.Generate (generate)
 import Crypto.Hash.Algorithms (SHA256(..), RIPEMD160(..))
 import Crypto.PubKey.ECC.ECDSA ( PublicKey
                                , public_q
-                               , PrivateKey
+                               , PrivateKey(..)
                                , private_d)
 import Crypto.Hash (Digest, digestFromByteString, hashWith)
 import Numeric (showHex, readHex)
@@ -33,6 +34,7 @@ import Data.Word8 (Word8(..))
 import Data.ByteString.Base16 (decode, encode)
 import Data.Char (toUpper)
 import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
 import Util
 
 data PublicKeyRep =
@@ -69,6 +71,13 @@ getHexPrivateKey :: PrivateKey -> PrivateKeyRep
 getHexPrivateKey privateKey =
   Hex $ hexify (private_d privateKey) 32
 
+getPrivateKeyFromHex :: PrivateKeyRep -> PrivateKey
+getPrivateKeyFromHex (Hex privateKeyHex) = PrivateKey curve privateNumber
+  where
+    curve = getCurveByName SEC_p256k1
+    privateNumber = fst . head . readHex . show $ privateKeyHex
+      -- will throw runtime error if privateKeyHex is not readable hex
+
 getWIFPrivateKey :: PrivateKeyRep -> PrivateKeyRep
 getWIFPrivateKey (Hex privateKey) =
   WIF $ encodeBase58Check privateKeyPrefix (textToHexByteString privateKey)
@@ -76,7 +85,6 @@ getWIFPrivateKey (Hex privateKey) =
 pubKeyHash :: PublicKeyRep -> ByteString
 pubKeyHash pubKeyRep =
   stringToHexByteString . show . hashWith RIPEMD160 . hashWith SHA256 $ pubKey
-  -- TODO: Is there a cleaner way to compose these hashes
   where
     pubKey = textToHexByteString $ case pubKeyRep of
                Compressed bs -> bs
@@ -88,7 +96,10 @@ pubKeyHash pubKeyRep =
 -- https://github.com/bitcoinbook/bitcoinbook/blob/first_edition/ch04.asciidoc#public-key-formats
 uncompressed :: PublicKey -> PublicKeyRep
 uncompressed pubKey =
-  Uncompressed $  "04" `T.append` hexify x 32 `T.append` hexify y 32
+  Uncompressed $
+  "04"
+  `T.append` hexify x 32 -- Pretty sure 32 should be replaced by 64
+  `T.append` hexify y 32 -- The uncompressed key is 65 bytes -> 130 hex characters
   where
     Point x y = public_q pubKey
 
