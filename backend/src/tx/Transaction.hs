@@ -70,7 +70,7 @@ txValue (Satoshis i) =  BS.reverse . fst . decode . T.encodeUtf8 $ hexify (toInt
   -- 8 bytes
   
 sequence :: ByteString -- Binary rather than Hex representation
-sequence = fst . decode . pack $ replicate 8 'f'
+sequence = stringToHexByteString $ replicate 8 'f'
 
 -- Maybe this needs to be a hex ByteString before hashing it?
 rawTransaction :: Transaction -> ByteString
@@ -93,7 +93,24 @@ rawTransaction tx@(Transaction inputs outputs) = BS.concat
     val = value $ head outputs
     CompiledScript payToPubKeyHashBS = payToPubkeyHash (pubKeyRep $ head outputs)
     
-
+signedTransaction :: Transaction -> ByteString
+signedTransaction tx@(Transaction inputs outputs) = BS.concat
+  [ txVersion
+  , inputCount (length inputs)
+  , payloadLength scriptSigRawTx
+  , scriptSigRawTx
+  , sequence
+  , outputCount (length outputs)
+  , txValue val
+  , payloadLength payToPubKeyHashBS
+  , payToPubKeyHashBS
+  , blockLockTime
+  ]
+  where scriptSigRawTx = scriptSig
+          (encode $ rawTransaction tx) -- get rid of `encode`?
+          (snd . head $ inputs )
+        val = value $ head outputs
+        CompiledScript payToPubKeyHashBS = payToPubkeyHash (pubKeyRep $ head outputs)
 
 data UTXO = UTXO
   { scriptSigUTXO :: ByteString
@@ -111,15 +128,18 @@ examplePubKeyRep :: PublicKeyRep
 examplePubKeyRep = Uncompressed 
   "0450863AD64A87AE8A2FE83C1AF1A8403CB53F53E486D8511DAD8A04887E5B23522CD470243453A299FA9E77237716103ABC11A1DF38855ED6F2EE187E9C582BA6"
 
+exampleTxOutput :: TxOutput
 exampleTxOutput = TxOutput {value = Satoshis 99900000, pubKeyRep = examplePubKeyRep}
 
-exampleTransaction = Transaction {inputs = [(exampleUTXO, undefined)], outputs = [exampleTxOutput]}
+exampleTransaction :: IO Transaction
+exampleTransaction = do
+  keyset <- genKeySet
+  return $ Transaction {inputs = [(exampleUTXO, keyset)], outputs = [exampleTxOutput]}
 
-rawExample :: String
-rawExample = T.unpack $ T.decodeUtf8 $ encode $ rawTransaction exampleTransaction
-
-
-
+rawExample :: IO ()
+rawExample =
+  exampleTransaction >>=
+  putStrLn . T.unpack . T.decodeUtf8 . encode . rawTransaction
 
 scriptSig :: ByteString -> KeySet -> ByteString
 scriptSig rawTx keySet@(KeySet { keySetPrivateKey = privateKey, keySetPublicKey = publicKey}) =

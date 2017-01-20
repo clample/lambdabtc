@@ -19,7 +19,7 @@ main = do
   runApplication config
 --}
 
-main = putStrLn rawExample
+main = rawExample
 
 showScript :: String
 showScript =

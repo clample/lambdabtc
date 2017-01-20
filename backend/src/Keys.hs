@@ -12,7 +12,8 @@ module Keys
   , getWIFPrivateKey
   , getHexPrivateKey
   , textToHexByteString
-  , getPrivateKeyFromHex ) where
+  , getPrivateKeyFromHex
+  , genKeySet ) where
 
 import Prelude hiding (take, concat)
 import Data.ByteString (ByteString, append, take, concat)
@@ -33,9 +34,11 @@ import Data.Base58String.Bitcoin (Base58String, fromBytes, toBytes, toText)
 import Data.Word8 (Word8(..))
 import Data.ByteString.Base16 (decode, encode)
 import Data.Char (toUpper)
+import Control.Monad.IO.Class (liftIO)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Util
+import Persistence (KeySet(..))
 
 data PublicKeyRep =
   Compressed T.Text
@@ -58,6 +61,14 @@ btcCurve = getCurveByName SEC_p256k1
 genKeys :: IO (PublicKey, PrivateKey)
 genKeys = generate btcCurve
 
+genKeySet :: IO KeySet
+genKeySet = do
+  (pubKey, privKey) <- liftIO genKeys
+  let compressedPub@(Compressed pubKeyText) = compressed pubKey
+      (Hex privKeyText) = getHexPrivateKey privKey
+      (Address addressText) = getAddress compressedPub
+  return (KeySet addressText privKeyText pubKeyText)
+
 -- Addresses are generated from public key by
 -- SHA256, then RIPEMD160 hashing of the public key
 -- Then Base58 encoding the resulting hash
@@ -69,13 +80,13 @@ getAddress pubKeyRep =
 
 getHexPrivateKey :: PrivateKey -> PrivateKeyRep
 getHexPrivateKey privateKey =
-  Hex $ hexify (private_d privateKey) 32
+  Hex $ hexify (private_d privateKey) 32 -- should this be 64?
 
 getPrivateKeyFromHex :: PrivateKeyRep -> PrivateKey
 getPrivateKeyFromHex (Hex privateKeyHex) = PrivateKey curve privateNumber
   where
     curve = getCurveByName SEC_p256k1
-    privateNumber = fst . head . readHex . show $ privateKeyHex
+    privateNumber = fst . head . readHex . T.unpack $ privateKeyHex
       -- will throw runtime error if privateKeyHex is not readable hex
 
 getWIFPrivateKey :: PrivateKeyRep -> PrivateKeyRep
@@ -98,8 +109,8 @@ uncompressed :: PublicKey -> PublicKeyRep
 uncompressed pubKey =
   Uncompressed $
   "04"
-  `T.append` hexify x 32 -- Pretty sure 32 should be replaced by 64
-  `T.append` hexify y 32 -- The uncompressed key is 65 bytes -> 130 hex characters
+  `T.append` hexify x 64 
+  `T.append` hexify y 64 
   where
     Point x y = public_q pubKey
 
@@ -107,7 +118,7 @@ uncompressed pubKey =
 -- https://github.com/bitcoinbook/bitcoinbook/blob/first_edition/ch04.asciidoc#compressed-public-keys
 compressed :: PublicKey -> PublicKeyRep
 compressed pubKey =
-  Compressed $  prefix `T.append` hexify x 32
+  Compressed $  prefix `T.append` hexify x 64
   where
     Point x y = public_q pubKey
     prefix = if isEven y

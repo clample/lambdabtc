@@ -15,6 +15,7 @@ import Data.ByteString (length)
 import Data.Base58String.Bitcoin (Base58String, toText, fromBytes, toBytes, b58String, fromText)
 import qualified Data.Text as T
 import Data.ByteString.Base16 (decode, encode)
+import KeyTest
 
 main :: IO ()
 main = defaultMain tests
@@ -23,10 +24,6 @@ tests =
   [
     -- Helps to make sure the encoding is correct
     testGroup "length tests" [
-      testCase "Uncompressed public key length"
-        $ uncompressedPubKeyLength $ uncompressed testKey,
-      testCase "Compressed public key length"
-        $ compressedPubKeyLength $ compressed testKey,
       testCase "Address length"
         $ addressLengthTest $ compressed testKey
       ],
@@ -51,6 +48,11 @@ tests =
         txValueTest,
       testCase "txValue length test"
         txValueLengthTest
+      ],
+    testGroup "QuickCheck Key Tests" [
+      privateKeyInvertible,
+      uncompressedPubKeyLength,
+      compressedPubKeyLength
       ]
   ]
 
@@ -66,26 +68,14 @@ testKey :: PublicKey
 testKey = PublicKey
   (getCurveByName SEC_p256k1)
   (Point
-    55066263022277343669578718895168534326250603453777594175500187360389116729240
-    32670510020758816978083085130507043184471273380659243275938904335757337482424)
+    2435542118318941536549736896088266274185466139974628681528188988422678268037
+    40154657187598551676528272430241015512113165283093043230821742291003909073699)
 
 pubKeyHashTest :: PublicKeyRep -> Assertion
 pubKeyHashTest pubKeyRep = assertEqual
   "public key hashing should give the expected output"
   (stringToHexByteString "010966776006953D5567439E5E39F86A0D273BEE")
   (pubKeyHash pubKeyRep)
-
-uncompressedPubKeyLength :: PublicKeyRep -> Assertion
-uncompressedPubKeyLength (Uncompressed key) = assertEqual
-  "Uncompressed key should have 65 bytes"
-  65
-  $ length (textToHexByteString key)
-
-compressedPubKeyLength :: PublicKeyRep -> Assertion
-compressedPubKeyLength (Compressed key) = assertEqual
-  "Compressed key should have 33 bytes"
-  33
-  $ length (textToHexByteString key)
 
 addressTest :: PublicKeyRep -> Assertion
 addressTest pubKeyRep = assertEqual
