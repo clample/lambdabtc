@@ -22,11 +22,6 @@ main = defaultMain tests
 
 tests =
   [
-    -- Helps to make sure the encoding is correct
-    testGroup "length tests" [
-      testCase "Address length"
-        $ addressLengthTest $ compressed testKey
-      ],
     testGroup "Key hashing tests" [
       testCase "Hash public key correctly"
         $ pubKeyHashTest testPublicKeyRep,
@@ -52,24 +47,17 @@ tests =
     testGroup "QuickCheck Key Tests" [
       privateKeyInvertible,
       uncompressedPubKeyLength,
-      compressedPubKeyLength
+      compressedPubKeyLength,
+      addressLength
       ]
   ]
 
 -- This key rep is from https://en.bitcoin.it/wiki/Technical_background_of_version_1_Bitcoin_addresses
--- It is not the key rep for testKey
 testPublicKeyRep :: PublicKeyRep
 testPublicKeyRep =
   Uncompressed 
   "0450863AD64A87AE8A2FE83C1AF1A8403CB53F53E486D8511DAD8A04887E5B23522CD470243453A299FA9E77237716103ABC11A1DF38855ED6F2EE187E9C582BA6"
 
-
-testKey :: PublicKey
-testKey = PublicKey
-  (getCurveByName SEC_p256k1)
-  (Point
-    2435542118318941536549736896088266274185466139974628681528188988422678268037
-    40154657187598551676528272430241015512113165283093043230821742291003909073699)
 
 pubKeyHashTest :: PublicKeyRep -> Assertion
 pubKeyHashTest pubKeyRep = assertEqual
@@ -82,15 +70,6 @@ addressTest pubKeyRep = assertEqual
   "We should derive the correct address from a given public key"
   (Address $ toText $ b58String "16UwLL9Risc3QfPqBUvKofHmBQ7wMtjvM")
   (getAddress pubKeyRep)
-
-addressLengthTest :: PublicKeyRep -> Assertion
-addressLengthTest pubKeyRep = assertEqual
-  "Address should have 25 bytes"
-  25
-  addressLength
-  where
-    Address b58 = getAddress pubKeyRep
-    addressLength = length $ toBytes . fromText $ b58
 
 testWIFPrivateKey :: (PrivateKeyRep, PrivateKeyRep) -> Assertion
 testWIFPrivateKey (input, expected) = assertEqual

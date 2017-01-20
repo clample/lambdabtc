@@ -8,6 +8,7 @@ import Crypto.PubKey.ECC.ECDSA (PrivateKey(..), PublicKey(..))
 import Crypto.PubKey.ECC.Types (ecc_n, common_curve, getCurveByName, CurveName(SEC_p256k1))
 import Crypto.PubKey.ECC.Generate (generateQ)
 import qualified Data.ByteString as BS
+import Data.Base58String.Bitcoin (fromText, toBytes)
 
 instance Arbitrary PrivateKey where
   arbitrary = do
@@ -51,4 +52,13 @@ prop_compressedPubKeyLength pubKey =
   where
     (Compressed key) = compressed pubKey
 
+addressLength = testProperty
+  "Address should always be 25 bytes"
+  prop_addressLength
 
+prop_addressLength :: PublicKey -> Bool
+prop_addressLength pubKey =
+  addressLength == 25
+  where
+    (Address b58) = (getAddress . compressed) pubKey
+    addressLength = (BS.length . toBytes . fromText) b58
