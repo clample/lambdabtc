@@ -50,35 +50,40 @@ tipAmount tx = Satoshis $ amountInput - amountOutput
     Satoshis amountOutput = undefined
 
 blockLockTime :: ByteString -- Binary rather than Hex representation
-blockLockTime = fst . decode . pack $ replicate 8 '0'
+blockLockTime = pack $ replicate 8 '0'
 
 defaultVersion :: TxVersion -- Binary rather than Hex representation
-defaultVersion = fst . decode $ "01000000" 
+defaultVersion = "01000000" 
 
 inputCount :: Int -> ByteString -- Binary rather than Hex representation
-inputCount count = fst . decode . T.encodeUtf8 $ hexify (toInteger count) 2
+inputCount count = T.encodeUtf8 $ hexify (toInteger count) 2
 
 outputCount :: Int -> ByteString -- Binary rather than Hex representation
-outputCount count = fst . decode . T.encodeUtf8 $ hexify (toInteger count) 2
+outputCount count = T.encodeUtf8 $ hexify (toInteger count) 2
 -- TODO: Don't duplicate this code from inputCount
 
 outPoint :: UTXO -> ByteString
 outPoint utxo =
-  (BS.reverse (outTxHash utxo))
+  (switchEndian (outTxHash utxo))
   -- 32 Bytes, little endian
   -- http://www.righto.com/2014/02/bitcoins-hard-way-using-raw-bitcoin.html#ref7
   `BS.append`
-  (BS.reverse . fst . decode . T.encodeUtf8 $ hexify  (toInteger $ outIndex utxo) 8)
+  (switchEndian . T.encodeUtf8 $ hexify  (toInteger $ outIndex utxo) 8)
   -- 4 Bytes, pretty sure this is little endian as well
   -- (see: http://bitcoin.stackexchange.com/questions/3374/how-to-redeem-a-basic-tx)
 
 txValue :: Value -> ByteString
-txValue (Satoshis i) =  BS.reverse . fst . decode . T.encodeUtf8 $ hexify (toInteger i) 16
+txValue (Satoshis i) =  switchEndian . T.encodeUtf8 $ hexify (toInteger i) 16
   -- should be little endian, hence the BS.reverse
   -- 8 bytes
+
+switchEndian :: ByteString -> ByteString
+switchEndian = encode . BS.reverse . fst . decode 
+  -- converts a hex encoded bytestring from little endian to big endian
+  -- (and vice versa)
   
 sequence :: ByteString -- Binary rather than Hex representation
-sequence = stringToHexByteString $ replicate 8 'f'
+sequence = pack $ replicate 8 'f'
 
 -- Maybe this needs to be a hex ByteString before hashing it?
 rawTransaction :: Transaction -> ByteString
@@ -91,7 +96,7 @@ rawTransaction tx@(Transaction inputs outputs txVersion) = BS.concat
   , sequence
   , outputCount (length outputs)
   , txValue val
-  , payloadLength payToPubKeyHashBS
+  , encode $ payloadLength payToPubKeyHashBS
   , payToPubKeyHashBS
   , blockLockTime
   , txVersion
@@ -111,12 +116,12 @@ signedTransaction tx@(Transaction inputs outputs txVersion) = BS.concat
   , sequence
   , outputCount (length outputs)
   , txValue val
-  , payloadLength payToPubKeyHashBS
+  , encode $ payloadLength payToPubKeyHashBS
   , payToPubKeyHashBS
   , blockLockTime
   ]
   where scriptSigRawTx = scriptSig
-          (encode $ rawTransaction tx) -- get rid of `encode`?
+          (rawTransaction tx)
           (snd . head $ inputs )
         val = value $ head outputs
         CompiledScript payToPubKeyHashBS = payToPubkeyHash (pubKeyRep $ head outputs)
@@ -131,15 +136,16 @@ scriptSig rawTx keySet@(KeySet { keySetPrivateKey = privateKey, keySetPublicKey 
   , publicKeyBS
   ]
   where
-  rawTxHash = stringToHexByteString . show . hashWith SHA256 . hashWith SHA256 $ encode rawTx
+  rawTxHash = pack . show . hashWith SHA256 . hashWith SHA256 $ rawTx
   signedHash = fromJust $ signWith 100 (getPrivateKeyFromHex $ Hex privateKey) SHA256 rawTxHash
     -- TODO: CHANGE THIS!
     -- signWith should use a random number, not a hardcoded 100
     -- fromJust will cause runtime errors
   signedHashDER = (derSignature signedHash) `BS.append` sighashAll
-  derSigHashLength = payloadLength signedHashDER
-  publicKeyBS = textToHexByteString publicKey
-  publicKeyBSLength = payloadLength publicKeyBS
+  derSigHashLength = payloadLength signedHashDER -- TODO: payload length might be off by * 2
+  publicKeyBS = T.encodeUtf8 publicKey
+  publicKeyBSLength = payloadLength publicKeyBS -- TODO: payload length might be off by * 2
+                                                -- Depending on if this is hex encoded
   
   
 -- TODO: Try to use https://hackage.haskell.org/package/asn1-encoding
@@ -159,21 +165,21 @@ derSignature signature = BS.concat
       , intCode
       , payloadLength yBS
       , yBS ]
-    intCode = stringToHexByteString "02"
-    sequenceCode = stringToHexByteString "30"
-    xBS = stringToHexByteString $ showHex (sign_r signature) ""
-    yBS = stringToHexByteString $ showHex (sign_s signature) ""
+    intCode = "02"
+    sequenceCode = "30"
+    xBS = pack $ showHex (sign_r signature) ""
+    yBS = pack $ showHex (sign_s signature) ""
       -- There is probably a better way than
       -- reading to hex then to binary
     
 sighashAll :: ByteString
-sighashAll = stringToHexByteString "01"
+sighashAll = "01"
 
 ------------- EXAMPLE
 exampleUTXO :: UTXO
 exampleUTXO = UTXO
-  { outTxHash = stringToHexByteString "eccf7e3034189b851985d871f91384b8ee357cd47c3024736e5676eb2debb3f2"
-  , scriptSigUTXO = stringToHexByteString "76a914010966776006953d5567439e5e39f86a0d273bee88ac"
+  { outTxHash = "eccf7e3034189b851985d871f91384b8ee357cd47c3024736e5676eb2debb3f2"
+  , scriptSigUTXO = "76a914010966776006953d5567439e5e39f86a0d273bee88ac"
   , outIndex = 1
   }
 
@@ -192,5 +198,5 @@ exampleTransaction = do
 rawExample :: IO ()
 rawExample =
   exampleTransaction >>=
-  putStrLn . T.unpack . T.decodeUtf8 . encode . signedTransaction
+  putStrLn .{-- T.unpack . T.decodeUtf8 --} show . rawTransaction
 -----------------------
