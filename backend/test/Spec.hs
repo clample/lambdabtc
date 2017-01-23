@@ -48,7 +48,8 @@ tests =
       base58CheckInvertible
       ],
     testGroup "QuickCheck Transaction Tests" [
-      derSignatureInvertible
+      derSignatureInvertible,
+      transactionInvertible
       ]
   ]
 

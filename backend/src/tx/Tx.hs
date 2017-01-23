@@ -20,7 +20,7 @@ import Data.List (reverse)
 import Data.Maybe (fromJust)
 import Crypto.Hash (Digest, digestFromByteString, hashWith)
 import Crypto.Hash.Algorithms (SHA256(..))
-import Crypto.PubKey.ECC.ECDSA (signWith, Signature(..))
+import Crypto.PubKey.ECC.ECDSA (signWith, Signature(..), PrivateKey(..))
 import Data.ASN1.BinaryEncoding (DER(..))
 import Data.ASN1.Encoding (decodeASN1, encodeASN1)
 import Control.Lens (makeLenses, set, over, mapped, _3)
@@ -28,7 +28,8 @@ import Control.Lens (makeLenses, set, over, mapped, _3)
 
 data TxOutput = TxOutput
   { value :: Value
-  , pubKeyRep :: PublicKeyRep }
+  , pubKeyRep :: PublicKeyRep
+  } deriving (Eq, Show)
 
 type TxVersion = ByteString
 
@@ -36,13 +37,14 @@ type Count = ByteString
 
 data UTXO = UTXO
   { outTxHash :: ByteString
-  , outIndex :: Int }
+  , outIndex :: Int
+  } deriving (Eq, Show)
 
 data Transaction = Transaction
-  { __inputs :: [(UTXO, KeySet {--, CompiledScript--})]
+  { __inputs :: [(UTXO, PrivateKey)]
   , __outputs :: [TxOutput]
   , __version :: TxVersion
-  }
+  } deriving (Eq, Show)
 
 makeLenses ''Transaction
 
@@ -78,7 +80,7 @@ switchEndian = encode . BS.reverse . fst . decode
 sequence :: ByteString
 sequence = pack $ replicate 8 'f'
 
-showTransaction :: Transaction -> ((UTXO, KeySet) -> CompiledScript) -> ByteString
+showTransaction :: Transaction -> ((UTXO, PrivateKey) -> CompiledScript) -> ByteString
 showTransaction tx@(Transaction inputs outputs txVersion) getScript = BS.concat
   [ txVersion
   , count (length inputs)
@@ -100,7 +102,7 @@ showTransaction tx@(Transaction inputs outputs txVersion) getScript = BS.concat
 
 signedTransaction :: Transaction -> ByteString
 signedTransaction tx@(Transaction inputs outputs txVersion) =
-  showTransaction tx (\(_, keyset) -> scriptSig fillerTransaction keyset)
+  showTransaction tx (\(_, privKey) -> scriptSig fillerTransaction privKey)
   where
     fillerTransaction =  showTransaction tx (\(utxo, _) -> getUtxoScript utxo) `BS.append` txVersion
 
@@ -108,8 +110,8 @@ getUtxoScript :: UTXO -> CompiledScript -- Returns the output script from the gi
 getUtxoScript utxo = CompiledScript "76a914010966776006953d5567439e5e39f86a0d273bee88ac"
 
 -- TODO: Move this to Script.hs?
-scriptSig :: ByteString -> KeySet -> CompiledScript
-scriptSig rawTx keySet@(KeySet { keySetPrivateKey = privateKey, keySetPublicKey = publicKey}) =
+scriptSig :: ByteString -> PrivateKey -> CompiledScript
+scriptSig rawTx privKey =
   CompiledScript $ BS.concat
   [ derSigHashLength
   , signedHashDER
@@ -118,13 +120,14 @@ scriptSig rawTx keySet@(KeySet { keySetPrivateKey = privateKey, keySetPublicKey 
   ]
   where
   rawTxHash = pack . show . hashWith SHA256 . hashWith SHA256 $ rawTx
-  signedHash = fromJust $ signWith 100 (getPrivateKeyFromHex $ Hex privateKey) SHA256 rawTxHash
+  signedHash = fromJust $ signWith 100 privKey SHA256 rawTxHash
     -- TODO: CHANGE THIS!
     -- signWith should use a random number, not a hardcoded 100
     -- fromJust will cause runtime errors
   signedHashDER = (derSignature signedHash) `BS.append` sighashAll
   derSigHashLength = payloadLength signedHashDER
-  publicKeyBS = T.encodeUtf8 publicKey
+  Compressed publicKeyText = compressed . getPubKey $ privKey
+  publicKeyBS = T.encodeUtf8 publicKeyText
   publicKeyBSLength = payloadLength publicKeyBS
   
   
@@ -174,18 +177,18 @@ examplePubKeyRep = Uncompressed
 exampleTxOutput :: TxOutput
 exampleTxOutput = TxOutput {value = Satoshis 99900000, pubKeyRep = examplePubKeyRep}
 
-exampleTransaction :: IO Transaction
-exampleTransaction = do
-  keyset <- genKeySet
-  return $ Transaction
+examplePrivKey :: PrivateKey
+examplePrivKey = PrivateKey {private_curve = btcCurve, private_d = 4167233851084631310712071883598278467110431420085937463079548684279652237141}
+
+exampleTransaction :: Transaction
+exampleTransaction = 
+  Transaction
     { __inputs = [ ( exampleUTXO
-                 , keyset
-                 {--, CompiledScript "76a914010966776006953d5567439e5e39f86a0d273bee88ac"--})]
+                 , examplePrivKey)]
     , __outputs = [exampleTxOutput]
     , __version = defaultVersion }
 
 rawExample :: IO ()
 rawExample =
-  exampleTransaction >>=
-  putStrLn . show . signedTransaction
+  putStrLn . show . signedTransaction $ exampleTransaction
 -----------------------

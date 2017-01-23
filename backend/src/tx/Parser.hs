@@ -1,31 +1,34 @@
 module TX.Parser where
 
 import Text.Megaparsec
-import TX (Transaction(..), TxVersion, switchEndian)
-import Script (Value(..))
+import TX (Transaction(..), TxVersion, switchEndian, UTXO(..), TxOutput(..))
+import Script (Value(..), CompiledScript(..))
 import qualified Data.ByteString.Char8 as Char8
 import Data.ByteString (ByteString)
 import Numeric (readHex)
 import Crypto.PubKey.ECC.ECDSA (signWith, Signature(..))
 
 
-parseTransaction :: Parsec Dec String Transaction
+data ParsedTransaction = ParsedTransaction
+  { version :: TxVersion 
+  ,  inputs :: [(UTXO, CompiledScript)]
+  , outputs :: [(Value, CompiledScript)]
+  } deriving (Eq, Show)
+
+parseTransaction :: Parsec Dec String ParsedTransaction
 parseTransaction = do
-  version <- parseVersion
+  v <- parseVersion
   inputCount <- parseCount
-  inputArray <- count inputCount $ do
-    outPoint <- parseOutPoint
-    inputScript <- parsePayload
-    return (outPoint, inputScript)
+  inputArray <- count inputCount parseInput
   parseSequence
   outputCount <- parseCount
-  outputArray <- count outputCount $ do
-    val <- parseTxValue
-    outputScript <- parsePayload
-    return (val, outputScript)
+  outputArray <- count outputCount parseOutput
   parseBlockLockTime
   eof
-  return undefined
+  return ParsedTransaction
+    { version = v
+    , inputs = inputArray
+    , outputs =  outputArray}
     
 
 parseVersion :: Parsec Dec String TxVersion
@@ -38,11 +41,24 @@ parseCount = do
   countStr <- count 2 hexDigitChar
   return . readInt . Char8.pack $ countStr
 
-parseOutPoint :: Parsec Dec String (ByteString, ByteString)
+parseInput :: Parsec Dec String (UTXO, CompiledScript)
+parseInput = do
+  outPoint <- parseOutPoint
+  inputScript <- parsePayload
+  return (outPoint, CompiledScript inputScript)
+
+parseOutput :: Parsec Dec String (Value, CompiledScript)
+parseOutput = do
+  val <- parseTxValue
+  outputScript <- parsePayload
+  return (val, CompiledScript outputScript)
+
+parseOutPoint :: Parsec Dec String UTXO
 parseOutPoint = do
   txHash <- switchEndian . Char8.pack <$> count 64 hexDigitChar
   outIndex <- switchEndian . Char8.pack <$> count 8 hexDigitChar
-  return (txHash, outIndex)
+  let parsedIndex = read . Char8.unpack $ outIndex
+  return $ UTXO txHash parsedIndex
 
 parsePayload :: Parsec Dec String ByteString
 parsePayload = do

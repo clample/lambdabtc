@@ -24,7 +24,10 @@ data ScriptComponent
   = OP OPCODE
   | Txt ByteString -- should contain hex
 
-data Value = Satoshis Int -- TODO: Improve this. Handle different units
+data Value = Satoshis Int
+  -- TODO: Improve this. Handle different units
+  -- Make a smart constructor so this is never negative?
+  deriving (Eq, Show)
 
 payToPubkeyHash :: PublicKeyRep -> CompiledScript
 payToPubkeyHash pubKeyRep = compile $ Script [OP OP_DUP, OP OP_HASH160, Txt (encode $ pubKeyHash pubKeyRep)  , OP OP_EQUALVERIFY, OP OP_CHECKSIG]

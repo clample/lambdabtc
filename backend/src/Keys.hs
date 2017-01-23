@@ -16,7 +16,8 @@ module Keys
   , genKeySet
   , getPrivateKeyFromWIF
   , addressPrefix
-  , getPubKey) where
+  , getPubKey
+  , btcCurve) where
 
 import Prelude hiding (take, concat)
 import Data.ByteString (ByteString, append, take, concat)
@@ -44,7 +45,7 @@ import Persistence (KeySet(..))
 data PublicKeyRep =
   Compressed T.Text
   | Uncompressed T.Text
-  deriving (Eq)
+  deriving (Eq, Show)
 
 data PrivateKeyRep =
   WIF T.Text
