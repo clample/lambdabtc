@@ -1,4 +1,14 @@
-module Util where
+module Util
+  ( Payload(..)
+  , prefix
+  , Prefix
+  , maybeRead
+  , encodeBase58Check
+  , decodeBase58Check
+  , stringToHexByteString
+  , textToHexByteString
+  , hexify
+  , payloadLength) where
 
 import Prelude
 
@@ -21,6 +31,12 @@ data Payload = Payload ByteString
 data Prefix = Prefix ByteString
   deriving (Show, Eq)
 
+prefix :: ByteString -> Prefix
+prefix bs =
+  if BS.length bs == 1
+  then Prefix bs
+  else error "Prefix should be 1 byte"
+  
 data CheckSum = CheckSum ByteString
   deriving (Show, Eq)
 
@@ -33,8 +49,6 @@ base58CheckSum =
   BS.take 4 . stringToHexByteString . show . hashWith SHA256 . hashWith SHA256 
 
 -- https://github.com/bitcoinbook/bitcoinbook/blob/first_edition/ch04.asciidoc#base58-and-base58check-encoding
--- Prefix should be a single byte
--- TODO: Make a smart constructor for Prefix?
 encodeBase58Check :: Prefix -> Payload -> T.Text
 encodeBase58Check (Prefix prefix) (Payload payload) =
   toText . fromBytes . BS.concat $ [withPrefix, base58CheckSum withPrefix]

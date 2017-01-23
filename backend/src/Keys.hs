@@ -138,8 +138,8 @@ compressed pubKey =
     isEven n = n `mod` 2 == 0
 
 addressPrefix :: Prefix
-addressPrefix = Prefix $ stringToHexByteString "00"
+addressPrefix = prefix $ stringToHexByteString "00"
 
 privateKeyPrefix :: Prefix
-privateKeyPrefix = Prefix $ stringToHexByteString "80"
+privateKeyPrefix = prefix $ stringToHexByteString "80"
 

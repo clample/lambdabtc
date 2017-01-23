@@ -29,7 +29,7 @@ instance Arbitrary PublicKey where
 instance Arbitrary Prefix where
   arbitrary = do
     char <- arbitrary
-    return (Prefix $ Char8.pack [char])
+    return (prefix $ Char8.pack [char])
     
 instance Arbitrary Payload where
   arbitrary = do
