@@ -105,17 +105,11 @@ signedTransaction tx@(Transaction inputs outputs txVersion) = BS.concat
   , count (length inputs)
   , outPoint utxo
   , payloadLength scriptSigRawTx
-    -- TODO: payloadLength takes a binary encoded bs but we are giving it a hex encoded
-    -- so this will be off by * 2
-    -- Also, payloadLength returns binary encoded, not hex!
   , scriptSigRawTx
   , sequence
   , count (length outputs)
   , txValue val
   , encode $ payloadLength payToPubKeyHashBS
-      -- TODO: payloadLength takes a binary encoded bs but we are giving it a hex encoded
-    -- so this will be off by * 2
-    -- Also, payloadLength returns binary encoded, not hex!
   , payToPubKeyHashBS
   , blockLockTime
   ]
@@ -141,10 +135,9 @@ scriptSig rawTx keySet@(KeySet { keySetPrivateKey = privateKey, keySetPublicKey 
     -- signWith should use a random number, not a hardcoded 100
     -- fromJust will cause runtime errors
   signedHashDER = (derSignature signedHash) `BS.append` sighashAll
-  derSigHashLength = payloadLength signedHashDER -- TODO: payload length might be off by * 2
+  derSigHashLength = payloadLength signedHashDER
   publicKeyBS = T.encodeUtf8 publicKey
-  publicKeyBSLength = payloadLength publicKeyBS -- TODO: payload length might be off by * 2
-                                                -- Depending on if this is hex encoded
+  publicKeyBSLength = payloadLength publicKeyBS
   
   
 -- TODO: Try to use https://hackage.haskell.org/package/asn1-encoding

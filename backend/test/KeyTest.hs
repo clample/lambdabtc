@@ -22,9 +22,7 @@ instance Arbitrary PrivateKey where
 instance Arbitrary PublicKey where
   arbitrary = do
     privKey <-  arbitrary
-    let curve = getCurveByName SEC_p256k1
-        pubPoint = generateQ (getCurveByName SEC_p256k1) (private_d privKey)
-    return (PublicKey curve pubPoint)
+    return (getPubKey privKey)
 
 instance Arbitrary Prefix where
   arbitrary = do

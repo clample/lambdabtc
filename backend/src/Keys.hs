@@ -15,7 +15,8 @@ module Keys
   , getPrivateKeyFromHex
   , genKeySet
   , getPrivateKeyFromWIF
-  , addressPrefix) where
+  , addressPrefix
+  , getPubKey) where
 
 import Prelude hiding (take, concat)
 import Data.ByteString (ByteString, append, take, concat)
@@ -24,12 +25,10 @@ import Crypto.PubKey.ECC.Types ( Curve
                                , getCurveByName
                                , Point(..)
                                , CurveName(SEC_p256k1))
-import Crypto.PubKey.ECC.Generate (generate)
+import Crypto.PubKey.ECC.Generate (generate, generateQ)
 import Crypto.Hash.Algorithms (SHA256(..), RIPEMD160(..))
-import Crypto.PubKey.ECC.ECDSA ( PublicKey
-                               , public_q
-                               , PrivateKey(..)
-                               , private_d)
+import Crypto.PubKey.ECC.ECDSA ( PublicKey(..)
+                               , PrivateKey(..))
 import Crypto.Hash (Digest, digestFromByteString, hashWith)
 import Numeric (showHex, readHex)
 import Data.Base58String.Bitcoin (Base58String, fromBytes, toBytes, toText)
@@ -71,6 +70,11 @@ genKeySet = do
       (Address addressText) = getAddress compressedPub
   return (KeySet addressText privKeyText pubKeyText)
 
+getPubKey :: PrivateKey -> PublicKey
+getPubKey privKey =
+  PublicKey btcCurve pubPoint
+  where pubPoint = generateQ btcCurve (private_d privKey)
+
 -- Addresses are generated from public key by
 -- SHA256, then RIPEMD160 hashing of the public key
 -- Then Base58 encoding the resulting hash
@@ -89,12 +93,10 @@ getPrivateKeyFromHex (Hex privateKeyHex) = PrivateKey curve privateNumber
   where
     curve = getCurveByName SEC_p256k1
     privateNumber = fst . head . readHex . T.unpack $ privateKeyHex
-      -- will throw runtime error if privateKeyHex is not readable hex
 
 getWIFPrivateKey :: PrivateKeyRep -> PrivateKeyRep
 getWIFPrivateKey (Hex privateKey) =
   WIF $ encodeBase58Check privateKeyPrefix (Payload $ textToHexByteString privateKey)
-
 
 getPrivateKeyFromWIF :: PrivateKeyRep -> PrivateKey
 getPrivateKeyFromWIF (WIF privateKeyWIF) = PrivateKey curve privateNumber
@@ -111,7 +113,6 @@ pubKeyHash pubKeyRep =
     pubKey = textToHexByteString $ case pubKeyRep of
                Compressed bs -> bs
                Uncompressed bs -> bs
-
 
 -- The prefix 04 is prepended to uncompressed public keys.
 -- The x and y coordinates of the point are represented in hexidecimal and concatenated

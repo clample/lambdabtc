@@ -79,7 +79,7 @@ hexify n desiredLength = T.pack $ leadingZeroes ++ base
     base = showHex n ""
     leadingZeroes = replicate (desiredLength - length base) '0'
 
--- Take a binary encoded payload and give a bytestring with payload length
+-- Take a hex encoded payload and give a hex bs with payload length
 payloadLength :: ByteString -> ByteString
 payloadLength payload =
-  fst $ decode $ T.encodeUtf8 $ hexify (toInteger $ BS.length payload) 2
+  T.encodeUtf8 $ hexify (toInteger . BS.length . fst . decode $ payload) 2

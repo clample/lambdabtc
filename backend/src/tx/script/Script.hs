@@ -30,11 +30,11 @@ payToPubkeyHash :: PublicKeyRep -> CompiledScript
 payToPubkeyHash pubKeyRep = compile $ Script [OP OP_DUP, OP OP_HASH160, Txt (encode $ pubKeyHash pubKeyRep)  , OP OP_EQUALVERIFY, OP OP_CHECKSIG]
 
 compile :: Script -> CompiledScript 
-compile (Script script) = CompiledScript $ encode . BS.concat $ map compileScriptComponent script
+compile (Script script) = CompiledScript $ BS.concat $ map compileScriptComponent script
 
 compileScriptComponent :: ScriptComponent -> ByteString
-compileScriptComponent (OP opcode) = BS.singleton . fromIntegral . fromEnum $ opcode
+compileScriptComponent (OP opcode) = T.encodeUtf8 $ hexify (fromIntegral . fromEnum $ opcode) 2
 compileScriptComponent (Txt bs) =
    (payloadLength compiledTextComponent) `BS.append` compiledTextComponent
    where
-     compiledTextComponent = fst . decode $ bs
+     compiledTextComponent = bs
