@@ -1,3 +1,4 @@
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
 module TX where
 
@@ -22,12 +23,8 @@ import Crypto.Hash.Algorithms (SHA256(..))
 import Crypto.PubKey.ECC.ECDSA (signWith, Signature(..))
 import Data.ASN1.BinaryEncoding (DER(..))
 import Data.ASN1.Encoding (decodeASN1, encodeASN1)
+import Control.Lens (makeLenses, set, over, mapped, _3)
 
-data Transaction = Transaction
-  { inputs :: [(UTXO, KeySet)]
-  , outputs :: [TxOutput]
-  , version :: TxVersion
-  }
 
 data TxOutput = TxOutput
   { value :: Value
@@ -38,9 +35,16 @@ type TxVersion = ByteString
 type Count = ByteString
 
 data UTXO = UTXO
-  { scriptSigUTXO :: ByteString
-  , outTxHash :: ByteString
+  { outTxHash :: ByteString
   , outIndex :: Int }
+
+data Transaction = Transaction
+  { __inputs :: [(UTXO, KeySet {--, CompiledScript--})]
+  , __outputs :: [TxOutput]
+  , __version :: TxVersion
+  }
+
+makeLenses ''Transaction
 
 blockLockTime :: ByteString 
 blockLockTime = pack $ replicate 8 '0'
@@ -63,8 +67,7 @@ outPoint utxo =
 
 txValue :: Value -> ByteString
 txValue (Satoshis i) =  switchEndian . T.encodeUtf8 $ hexify (toInteger i) 16
-  -- should be little endian, hence the BS.reverse
-  -- 8 bytes
+  -- littleEndian, 8 bytes
 
 switchEndian :: ByteString -> ByteString
 switchEndian = encode . BS.reverse . fst . decode 
@@ -72,57 +75,42 @@ switchEndian = encode . BS.reverse . fst . decode
   -- (and vice versa)
   -- TODO: Probably belongs in Util
   
-sequence :: ByteString -- Binary rather than Hex representation
+sequence :: ByteString
 sequence = pack $ replicate 8 'f'
 
--- Maybe this needs to be a hex ByteString before hashing it?
-rawTransaction :: Transaction -> ByteString
-rawTransaction tx@(Transaction inputs outputs txVersion) = BS.concat
-  [ txVersion
-  , count (length inputs)
-  , outPoint utxo -- will probably take some parameter?
-  , payloadLength (scriptSigUTXO utxo)
-    -- TODO: payloadLength takes a binary encoded bs but we are giving it a hex encoded
-    -- so this will be off by * 2
-    -- Also, payloadLength returns binary encoded, not hex!
-  , scriptSigUTXO utxo
-  , sequence
-  , count (length outputs)
-  , txValue val
-  , encode $ payloadLength payToPubKeyHashBS
-  , payToPubKeyHashBS
-  , blockLockTime
-  , txVersion
-  ]
-  where
-    utxo = fst . head $ inputs
-    val = value $ head outputs
-    CompiledScript payToPubKeyHashBS = payToPubkeyHash (pubKeyRep $ head outputs)
-    
-signedTransaction :: Transaction -> ByteString
-signedTransaction tx@(Transaction inputs outputs txVersion) = BS.concat
+showTransaction :: Transaction -> ((UTXO, KeySet) -> CompiledScript) -> ByteString
+showTransaction tx@(Transaction inputs outputs txVersion) getScript = BS.concat
   [ txVersion
   , count (length inputs)
   , outPoint utxo
-  , payloadLength scriptSigRawTx
-  , scriptSigRawTx
+  , payloadLength inputScript
+  , inputScript
   , sequence
   , count (length outputs)
   , txValue val
-  , encode $ payloadLength payToPubKeyHashBS
+  , payloadLength payToPubKeyHashBS
   , payToPubKeyHashBS
   , blockLockTime
   ]
-  where scriptSigRawTx = scriptSig
-          (rawTransaction tx)
-          (snd . head $ inputs )
-        val = value $ head outputs
-        CompiledScript payToPubKeyHashBS = payToPubkeyHash (pubKeyRep $ head outputs)
-        utxo = fst . head $ inputs
+  where
+    CompiledScript inputScript = getScript $ head inputs
+    (utxo, _) = head inputs
+    val = value $ head outputs
+    CompiledScript payToPubKeyHashBS = payToPubkeyHash (pubKeyRep $ head outputs)
 
-scriptSig :: ByteString -> KeySet -> ByteString
+signedTransaction :: Transaction -> ByteString
+signedTransaction tx@(Transaction inputs outputs txVersion) =
+  showTransaction tx (\(_, keyset) -> scriptSig fillerTransaction keyset)
+  where
+    fillerTransaction =  showTransaction tx (\(utxo, _) -> getUtxoScript utxo) `BS.append` txVersion
+
+getUtxoScript :: UTXO -> CompiledScript -- Returns the output script from the given UTXO
+getUtxoScript utxo = CompiledScript "76a914010966776006953d5567439e5e39f86a0d273bee88ac"
+
+-- TODO: Move this to Script.hs?
+scriptSig :: ByteString -> KeySet -> CompiledScript
 scriptSig rawTx keySet@(KeySet { keySetPrivateKey = privateKey, keySetPublicKey = publicKey}) =
-  BS.concat
+  CompiledScript $ BS.concat
   [ derSigHashLength
   , signedHashDER
   , publicKeyBSLength
@@ -176,7 +164,6 @@ sighashAll = "01"
 exampleUTXO :: UTXO
 exampleUTXO = UTXO
   { outTxHash = "eccf7e3034189b851985d871f91384b8ee357cd47c3024736e5676eb2debb3f2"
-  , scriptSigUTXO = "76a914010966776006953d5567439e5e39f86a0d273bee88ac"
   , outIndex = 1
   }
 
@@ -190,10 +177,15 @@ exampleTxOutput = TxOutput {value = Satoshis 99900000, pubKeyRep = examplePubKey
 exampleTransaction :: IO Transaction
 exampleTransaction = do
   keyset <- genKeySet
-  return $ Transaction {inputs = [(exampleUTXO, keyset)], outputs = [exampleTxOutput], version = defaultVersion}
+  return $ Transaction
+    { __inputs = [ ( exampleUTXO
+                 , keyset
+                 {--, CompiledScript "76a914010966776006953d5567439e5e39f86a0d273bee88ac"--})]
+    , __outputs = [exampleTxOutput]
+    , __version = defaultVersion }
 
 rawExample :: IO ()
 rawExample =
   exampleTransaction >>=
-  putStrLn .{-- T.unpack . T.decodeUtf8 --} show . rawTransaction
+  putStrLn . show . signedTransaction
 -----------------------
