@@ -82,7 +82,7 @@ getAddress pubKeyRep =
 
 getHexPrivateKey :: PrivateKey -> PrivateKeyRep
 getHexPrivateKey privateKey =
-  Hex $ hexify (private_d privateKey) 32 -- should this be 64?
+  Hex $ hexify (private_d privateKey) 64
 
 getPrivateKeyFromHex :: PrivateKeyRep -> PrivateKey
 getPrivateKeyFromHex (Hex privateKeyHex) = PrivateKey curve privateNumber
