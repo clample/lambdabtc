@@ -23,9 +23,6 @@ import Crypto.PubKey.ECC.ECDSA (signWith, Signature(..))
 import Data.ASN1.BinaryEncoding (DER(..))
 import Data.ASN1.Encoding (decodeASN1, encodeASN1)
 
-unspentAmount :: UTXO -> Value
-unspentAmount = undefined
-
 data Transaction = Transaction
   { inputs :: [(UTXO, KeySet)]
   , outputs :: [TxOutput]
@@ -38,29 +35,21 @@ data TxOutput = TxOutput
 
 type TxVersion = ByteString
 
+type Count = ByteString
+
 data UTXO = UTXO
   { scriptSigUTXO :: ByteString
   , outTxHash :: ByteString
   , outIndex :: Int }
 
-tipAmount :: Transaction -> Value
-tipAmount tx = Satoshis $ amountInput - amountOutput
-  where
-    Satoshis amountInput = undefined
-    Satoshis amountOutput = undefined
-
-blockLockTime :: ByteString -- Binary rather than Hex representation
+blockLockTime :: ByteString 
 blockLockTime = pack $ replicate 8 '0'
 
-defaultVersion :: TxVersion -- Binary rather than Hex representation
+defaultVersion :: TxVersion 
 defaultVersion = "01000000" 
 
-inputCount :: Int -> ByteString -- Binary rather than Hex representation
-inputCount count = T.encodeUtf8 $ hexify (toInteger count) 2
-
-outputCount :: Int -> ByteString -- Binary rather than Hex representation
-outputCount count = T.encodeUtf8 $ hexify (toInteger count) 2
--- TODO: Don't duplicate this code from inputCount
+count :: Int -> Count -- represents the input our output count
+count count = T.encodeUtf8 $ hexify (toInteger count) 2
 
 outPoint :: UTXO -> ByteString
 outPoint utxo =
@@ -81,6 +70,7 @@ switchEndian :: ByteString -> ByteString
 switchEndian = encode . BS.reverse . fst . decode 
   -- converts a hex encoded bytestring from little endian to big endian
   -- (and vice versa)
+  -- TODO: Probably belongs in Util
   
 sequence :: ByteString -- Binary rather than Hex representation
 sequence = pack $ replicate 8 'f'
@@ -89,12 +79,15 @@ sequence = pack $ replicate 8 'f'
 rawTransaction :: Transaction -> ByteString
 rawTransaction tx@(Transaction inputs outputs txVersion) = BS.concat
   [ txVersion
-  , inputCount (length inputs)
+  , count (length inputs)
   , outPoint utxo -- will probably take some parameter?
   , payloadLength (scriptSigUTXO utxo)
+    -- TODO: payloadLength takes a binary encoded bs but we are giving it a hex encoded
+    -- so this will be off by * 2
+    -- Also, payloadLength returns binary encoded, not hex!
   , scriptSigUTXO utxo
   , sequence
-  , outputCount (length outputs)
+  , count (length outputs)
   , txValue val
   , encode $ payloadLength payToPubKeyHashBS
   , payToPubKeyHashBS
@@ -109,14 +102,20 @@ rawTransaction tx@(Transaction inputs outputs txVersion) = BS.concat
 signedTransaction :: Transaction -> ByteString
 signedTransaction tx@(Transaction inputs outputs txVersion) = BS.concat
   [ txVersion
-  , inputCount (length inputs)
+  , count (length inputs)
   , outPoint utxo
   , payloadLength scriptSigRawTx
+    -- TODO: payloadLength takes a binary encoded bs but we are giving it a hex encoded
+    -- so this will be off by * 2
+    -- Also, payloadLength returns binary encoded, not hex!
   , scriptSigRawTx
   , sequence
-  , outputCount (length outputs)
+  , count (length outputs)
   , txValue val
   , encode $ payloadLength payToPubKeyHashBS
+      -- TODO: payloadLength takes a binary encoded bs but we are giving it a hex encoded
+    -- so this will be off by * 2
+    -- Also, payloadLength returns binary encoded, not hex!
   , payToPubKeyHashBS
   , blockLockTime
   ]

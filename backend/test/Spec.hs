@@ -35,14 +35,8 @@ tests =
         optCodeScriptTest,
       testCase "payToPubkeyHash test"
         payToPubkeyHashTest,
-      testCase "blockLockTime length test"
-        blockLockTimeLengthTest,
-      testCase "txVersion length test"
-        txVersionLengthTest,
       testCase "txValue test"
-        txValueTest,
-      testCase "txValue length test"
-        txValueLengthTest
+        txValueTest
       ],
     testGroup "QuickCheck Key Tests" [
       privateKeyInvertibleHex,
@@ -87,38 +81,20 @@ testDataWIFPrivateKey =
 optCodeScriptTest :: Assertion
 optCodeScriptTest = assertEqual
   "Simple script should compile correctly"
-  (CompiledScript $ fst $ decode "76A988AC")
+  (CompiledScript "76a988ac")
   -- expected output from https://en.bitcoin.it/wiki/Script
   (compile $ Script [OP OP_DUP, OP OP_HASH160, OP OP_EQUALVERIFY, OP OP_CHECKSIG])
 
 payToPubkeyHashTest :: Assertion
 payToPubkeyHashTest = assertEqual
   "payToPubkeyHash should have correct output"
-  (CompiledScript $ fst $ decode "76a914010966776006953d5567439e5e39f86a0d273bee88ac")
+  (CompiledScript $ "76a914010966776006953d5567439e5e39f86a0d273bee88ac")
   (payToPubkeyHash $ Uncompressed 
   "0450863AD64A87AE8A2FE83C1AF1A8403CB53F53E486D8511DAD8A04887E5B23522CD470243453A299FA9E77237716103ABC11A1DF38855ED6F2EE187E9C582BA6")
-
-blockLockTimeLengthTest :: Assertion
-blockLockTimeLengthTest = assertEqual
-  "block lock time should be 4 bytes long"
-  4
-  (length blockLockTime)
-
-txVersionLengthTest :: Assertion
-txVersionLengthTest = assertEqual
-  "tx version should be 4 bytes long"
-  4
-  (length defaultVersion)
 
 txValueTest :: Assertion
 txValueTest = assertEqual
   "txValue should be correctly rendered"
   -- Example taken from http://www.righto.com/2014/02/bitcoins-hard-way-using-raw-bitcoin.html#ref7
   ("6264010000000000")
-  (encode $ txValue $ Satoshis 91234)
-
-txValueLengthTest :: Assertion
-txValueLengthTest = assertEqual
-  "txValue should be 8 bytes long"
-  8
-  (length $ txValue $ Satoshis 100)
+  (txValue $ Satoshis 91234)
