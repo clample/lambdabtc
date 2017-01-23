@@ -159,8 +159,13 @@ derSignature signature = BS.concat
       , yBS ]
     intCode = "02"
     sequenceCode = "30"
-    xBS = pack $ showHex (sign_r signature) ""
-    yBS = pack $ showHex (sign_s signature) ""
+    xBS = pack $ showPaddedHex (sign_r signature)
+    yBS = pack $ showPaddedHex (sign_s signature)
+    showPaddedHex i =
+      case length str `mod` 2 of
+        0 -> str
+        1 -> "0" ++ str
+      where str = showHex i ""
       -- There is probably a better way than
       -- reading to hex then to binary
     

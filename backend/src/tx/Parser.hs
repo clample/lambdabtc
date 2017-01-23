@@ -6,6 +6,7 @@ import Script (Value(..))
 import qualified Data.ByteString.Char8 as Char8
 import Data.ByteString (ByteString)
 import Numeric (readHex)
+import Crypto.PubKey.ECC.ECDSA (signWith, Signature(..))
 
 
 parseTransaction :: Parsec Dec String Transaction
@@ -35,7 +36,7 @@ parseVersion = do
 parseCount :: Parsec Dec String Int
 parseCount = do
   countStr <- count 2 hexDigitChar
-  return . fst . head . readHex $ countStr 
+  return . readInt . Char8.pack $ countStr
 
 parseOutPoint :: Parsec Dec String (ByteString, ByteString)
 parseOutPoint = do
@@ -58,9 +59,26 @@ parseSequence = do
 parseTxValue :: Parsec Dec String Value
 parseTxValue = do
   val <- switchEndian . Char8.pack <$> count 16 hexDigitChar
-  return $ Satoshis $ fst. head . readHex . Char8.unpack $ val
+  return $ Satoshis $ readInt val
 
 parseBlockLockTime :: Parsec Dec String ByteString
 parseBlockLockTime = do
   bs <- switchEndian . Char8.pack <$> count 8 hexDigitChar
   return bs
+
+parseDerSignature :: Parsec Dec String Signature
+parseDerSignature = do
+  sequenceCode <- count 2 hexDigitChar
+  derLength <- parseCount
+  parseIntCode
+  x <- parsePayload
+  parseIntCode
+  y <- parsePayload
+  return $
+    Signature (fromIntegral . readInt $ x) (fromIntegral . readInt $ y)
+  where
+    parseIntCode = count 2 hexDigitChar
+
+readInt :: ByteString -> Int
+readInt = fst . head . readHex . Char8.unpack
+

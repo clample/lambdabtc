@@ -16,6 +16,7 @@ import Data.Base58String.Bitcoin (Base58String, toText, fromBytes, toBytes, b58S
 import qualified Data.Text as T
 import Data.ByteString.Base16 (decode, encode)
 import KeyTest
+import TxTest
 
 main :: IO ()
 main = defaultMain tests
@@ -45,6 +46,9 @@ tests =
       compressedPubKeyLength,
       addressLength,
       base58CheckInvertible
+      ],
+    testGroup "QuickCheck Transaction Tests" [
+      derSignatureInvertible
       ]
   ]
 
