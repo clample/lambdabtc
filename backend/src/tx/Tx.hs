@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Transaction where
+module TX where
 
 import Util
 import Script
@@ -29,11 +29,19 @@ unspentAmount = undefined
 data Transaction = Transaction
   { inputs :: [(UTXO, KeySet)]
   , outputs :: [TxOutput]
+  , version :: TxVersion
   }
 
 data TxOutput = TxOutput
   { value :: Value
   , pubKeyRep :: PublicKeyRep }
+
+type TxVersion = ByteString
+
+data UTXO = UTXO
+  { scriptSigUTXO :: ByteString
+  , outTxHash :: ByteString
+  , outIndex :: Int }
 
 tipAmount :: Transaction -> Value
 tipAmount tx = Satoshis $ amountInput - amountOutput
@@ -44,8 +52,8 @@ tipAmount tx = Satoshis $ amountInput - amountOutput
 blockLockTime :: ByteString -- Binary rather than Hex representation
 blockLockTime = fst . decode . pack $ replicate 8 '0'
 
-txVersion :: ByteString               -- Binary rather than Hex representation
-txVersion = fst . decode $ "01000000" -- TODO: this should maybe be not hardcoded
+defaultVersion :: TxVersion -- Binary rather than Hex representation
+defaultVersion = fst . decode $ "01000000" 
 
 inputCount :: Int -> ByteString -- Binary rather than Hex representation
 inputCount count = fst . decode . T.encodeUtf8 $ hexify (toInteger count) 2
@@ -74,7 +82,7 @@ sequence = stringToHexByteString $ replicate 8 'f'
 
 -- Maybe this needs to be a hex ByteString before hashing it?
 rawTransaction :: Transaction -> ByteString
-rawTransaction tx@(Transaction inputs outputs) = BS.concat
+rawTransaction tx@(Transaction inputs outputs txVersion) = BS.concat
   [ txVersion
   , inputCount (length inputs)
   , outPoint utxo -- will probably take some parameter?
@@ -94,9 +102,10 @@ rawTransaction tx@(Transaction inputs outputs) = BS.concat
     CompiledScript payToPubKeyHashBS = payToPubkeyHash (pubKeyRep $ head outputs)
     
 signedTransaction :: Transaction -> ByteString
-signedTransaction tx@(Transaction inputs outputs) = BS.concat
+signedTransaction tx@(Transaction inputs outputs txVersion) = BS.concat
   [ txVersion
   , inputCount (length inputs)
+  , outPoint utxo
   , payloadLength scriptSigRawTx
   , scriptSigRawTx
   , sequence
@@ -111,35 +120,7 @@ signedTransaction tx@(Transaction inputs outputs) = BS.concat
           (snd . head $ inputs )
         val = value $ head outputs
         CompiledScript payToPubKeyHashBS = payToPubkeyHash (pubKeyRep $ head outputs)
-
-data UTXO = UTXO
-  { scriptSigUTXO :: ByteString
-  , outTxHash :: ByteString
-  , outIndex :: Int }
-
-exampleUTXO :: UTXO
-exampleUTXO = UTXO
-  { outTxHash = stringToHexByteString "eccf7e3034189b851985d871f91384b8ee357cd47c3024736e5676eb2debb3f2"
-  , scriptSigUTXO = stringToHexByteString "76a914010966776006953d5567439e5e39f86a0d273bee88ac"
-  , outIndex = 1
-  }
-
-examplePubKeyRep :: PublicKeyRep
-examplePubKeyRep = Uncompressed 
-  "0450863AD64A87AE8A2FE83C1AF1A8403CB53F53E486D8511DAD8A04887E5B23522CD470243453A299FA9E77237716103ABC11A1DF38855ED6F2EE187E9C582BA6"
-
-exampleTxOutput :: TxOutput
-exampleTxOutput = TxOutput {value = Satoshis 99900000, pubKeyRep = examplePubKeyRep}
-
-exampleTransaction :: IO Transaction
-exampleTransaction = do
-  keyset <- genKeySet
-  return $ Transaction {inputs = [(exampleUTXO, keyset)], outputs = [exampleTxOutput]}
-
-rawExample :: IO ()
-rawExample =
-  exampleTransaction >>=
-  putStrLn . T.unpack . T.decodeUtf8 . encode . rawTransaction
+        utxo = fst . head $ inputs
 
 scriptSig :: ByteString -> KeySet -> ByteString
 scriptSig rawTx keySet@(KeySet { keySetPrivateKey = privateKey, keySetPublicKey = publicKey}) =
@@ -187,3 +168,29 @@ derSignature signature = BS.concat
     
 sighashAll :: ByteString
 sighashAll = stringToHexByteString "01"
+
+------------- EXAMPLE
+exampleUTXO :: UTXO
+exampleUTXO = UTXO
+  { outTxHash = stringToHexByteString "eccf7e3034189b851985d871f91384b8ee357cd47c3024736e5676eb2debb3f2"
+  , scriptSigUTXO = stringToHexByteString "76a914010966776006953d5567439e5e39f86a0d273bee88ac"
+  , outIndex = 1
+  }
+
+examplePubKeyRep :: PublicKeyRep
+examplePubKeyRep = Uncompressed 
+  "0450863AD64A87AE8A2FE83C1AF1A8403CB53F53E486D8511DAD8A04887E5B23522CD470243453A299FA9E77237716103ABC11A1DF38855ED6F2EE187E9C582BA6"
+
+exampleTxOutput :: TxOutput
+exampleTxOutput = TxOutput {value = Satoshis 99900000, pubKeyRep = examplePubKeyRep}
+
+exampleTransaction :: IO Transaction
+exampleTransaction = do
+  keyset <- genKeySet
+  return $ Transaction {inputs = [(exampleUTXO, keyset)], outputs = [exampleTxOutput], version = defaultVersion}
+
+rawExample :: IO ()
+rawExample =
+  exampleTransaction >>=
+  putStrLn . T.unpack . T.decodeUtf8 . encode . signedTransaction
+-----------------------

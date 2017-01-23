@@ -8,7 +8,7 @@ import Test.HUnit
 import Script
 import Optcodes
 import Keys
-import Transaction
+import TX
 import Crypto.PubKey.ECC.ECDSA (PublicKey(..), PrivateKey(..))
 import Crypto.PubKey.ECC.Types (Curve, getCurveByName, Point(..), CurveName(SEC_p256k1))
 import Data.ByteString (length)
@@ -108,7 +108,7 @@ txVersionLengthTest :: Assertion
 txVersionLengthTest = assertEqual
   "tx version should be 4 bytes long"
   4
-  (length txVersion)
+  (length defaultVersion)
 
 txValueTest :: Assertion
 txValueTest = assertEqual

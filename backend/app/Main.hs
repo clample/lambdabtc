@@ -9,7 +9,7 @@ import Data.ByteString.Base16 (encode)
 import Data.Text.Encoding (decodeUtf8)
 import Data.Text (unpack)
 import Keys
-import Transaction
+import TX
 
 {--
 main :: IO ()

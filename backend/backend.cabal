@@ -26,7 +26,8 @@ library
                      , Script
                      , Optcodes
                      , Util
-                     , Transaction
+                     , TX
+                     , TX.Parser
   build-depends:       base >= 4.7 && < 5
                      , bytestring >= 0.10 && < 0.11
                      , cryptonite == 0.19
@@ -50,6 +51,7 @@ library
                      , monad-logger ==0.3.*
                      , containers ==0.5.7.*
                      , asn1-encoding ==0.9.4
+                     , megaparsec ==5.0.1
   default-language:    Haskell2010
 
 executable backend-exe
