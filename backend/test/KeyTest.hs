@@ -4,10 +4,12 @@ import Test.Framework.Providers.QuickCheck2 (testProperty)
 import Test.QuickCheck.Arbitrary (Arbitrary(..))
 import Test.QuickCheck.Gen (choose)
 import Keys
+import Util
 import Crypto.PubKey.ECC.ECDSA (PrivateKey(..), PublicKey(..))
 import Crypto.PubKey.ECC.Types (ecc_n, common_curve, getCurveByName, CurveName(SEC_p256k1))
 import Crypto.PubKey.ECC.Generate (generateQ)
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as Char8
 import Data.Base58String.Bitcoin (fromText, toBytes)
 
 instance Arbitrary PrivateKey where
@@ -24,13 +26,32 @@ instance Arbitrary PublicKey where
         pubPoint = generateQ (getCurveByName SEC_p256k1) (private_d privKey)
     return (PublicKey curve pubPoint)
 
+instance Arbitrary Prefix where
+  arbitrary = do
+    char <- arbitrary
+    return (Prefix $ Char8.pack [char])
+    
+instance Arbitrary Payload where
+  arbitrary = do
+    str <- arbitrary
+    return (Payload $ Char8.pack str)
 
-privateKeyInvertible = testProperty
+
+privateKeyInvertibleHex = testProperty
   "Private key should be invertible between hex and private key"
-  prop_privateKeyInvertible
+  prop_privateKeyInvertibleHex
 
-prop_privateKeyInvertible :: PrivateKey -> Bool
-prop_privateKeyInvertible privKey = (getPrivateKeyFromHex . getHexPrivateKey) privKey == privKey
+prop_privateKeyInvertibleHex :: PrivateKey -> Bool
+prop_privateKeyInvertibleHex privKey =
+  (getPrivateKeyFromHex . getHexPrivateKey) privKey == privKey
+
+privateKeyInvertibleWIF = testProperty
+  "Private key should be invertible between WIF and private key"
+  prop_privateKeyInvertibleWIF
+
+prop_privateKeyInvertibleWIF :: PrivateKey -> Bool
+prop_privateKeyInvertibleWIF privKey =
+  (getPrivateKeyFromWIF . getWIFPrivateKey. getHexPrivateKey) privKey == privKey
 
 uncompressedPubKeyLength = testProperty
   "Uncompressed public key should always be 65 bytes"
@@ -62,3 +83,15 @@ prop_addressLength pubKey =
   where
     (Address b58) = (getAddress . compressed) pubKey
     addressLength = (BS.length . toBytes . fromText) b58
+
+base58CheckInvertible = testProperty
+  "We should be able to convert to and from base 58 check"
+  prop_base58CheckInvertible
+
+prop_base58CheckInvertible :: Prefix -> Payload -> Bool
+prop_base58CheckInvertible prefix payload  =
+  (prefix == decodedPrefix) && (payload == decodedPayload)
+  where
+    b58 = encodeBase58Check prefix payload
+    (decodedPrefix, decodedPayload, _) = decodeBase58Check b58
+  

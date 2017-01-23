@@ -45,10 +45,12 @@ tests =
         txValueLengthTest
       ],
     testGroup "QuickCheck Key Tests" [
-      privateKeyInvertible,
+      privateKeyInvertibleHex,
+      privateKeyInvertibleWIF,
       uncompressedPubKeyLength,
       compressedPubKeyLength,
-      addressLength
+      addressLength,
+      base58CheckInvertible
       ]
   ]
 

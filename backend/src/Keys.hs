@@ -13,11 +13,13 @@ module Keys
   , getHexPrivateKey
   , textToHexByteString
   , getPrivateKeyFromHex
-  , genKeySet ) where
+  , genKeySet
+  , getPrivateKeyFromWIF
+  , addressPrefix) where
 
 import Prelude hiding (take, concat)
 import Data.ByteString (ByteString, append, take, concat)
-import Data.ByteString.Char8 (pack)
+import Data.ByteString.Char8 (pack, unpack)
 import Crypto.PubKey.ECC.Types ( Curve
                                , getCurveByName
                                , Point(..)
@@ -76,7 +78,7 @@ genKeySet = do
 getAddress :: PublicKeyRep  -> Address 
 getAddress pubKeyRep =
   Address $ encodeBase58Check addressPrefix payload
-  where payload = pubKeyHash pubKeyRep
+  where payload = Payload $ pubKeyHash pubKeyRep
 
 getHexPrivateKey :: PrivateKey -> PrivateKeyRep
 getHexPrivateKey privateKey =
@@ -91,7 +93,16 @@ getPrivateKeyFromHex (Hex privateKeyHex) = PrivateKey curve privateNumber
 
 getWIFPrivateKey :: PrivateKeyRep -> PrivateKeyRep
 getWIFPrivateKey (Hex privateKey) =
-  WIF $ encodeBase58Check privateKeyPrefix (textToHexByteString privateKey)
+  WIF $ encodeBase58Check privateKeyPrefix (Payload $ textToHexByteString privateKey)
+
+
+getPrivateKeyFromWIF :: PrivateKeyRep -> PrivateKey
+getPrivateKeyFromWIF (WIF privateKeyWIF) = PrivateKey curve privateNumber
+  where
+    curve = getCurveByName SEC_p256k1
+    privateNumber = (fst . head . readHex . unpack . encode) payload
+    (_, Payload payload, _) = decodeBase58Check privateKeyWIF
+
 
 pubKeyHash :: PublicKeyRep -> ByteString
 pubKeyHash pubKeyRep =
@@ -127,8 +138,8 @@ compressed pubKey =
     isEven n = n `mod` 2 == 0
 
 addressPrefix :: Prefix
-addressPrefix = stringToHexByteString "00"
+addressPrefix = Prefix $ stringToHexByteString "00"
 
 privateKeyPrefix :: Prefix
-privateKeyPrefix = stringToHexByteString "80"
+privateKeyPrefix = Prefix $ stringToHexByteString "80"
 
