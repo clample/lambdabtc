@@ -71,12 +71,6 @@ txValue :: Value -> ByteString
 txValue (Satoshis i) =  switchEndian . T.encodeUtf8 $ hexify (toInteger i) 16
   -- littleEndian, 8 bytes
 
-switchEndian :: ByteString -> ByteString
-switchEndian = encode . BS.reverse . fst . decode 
-  -- converts a hex encoded bytestring from little endian to big endian
-  -- (and vice versa)
-  -- TODO: Probably belongs in Util
-  
 sequence :: ByteString
 sequence = pack $ replicate 8 'f'
 

@@ -1,18 +1,18 @@
 module TX.Parser where
 
 import Text.Megaparsec (Parsec, Dec, count, hexDigitChar, eof, many)
-import TX (Transaction(..), TxVersion, switchEndian, UTXO(..), TxOutput(..))
+import TX (Transaction(..), TxVersion,  UTXO(..), TxOutput(..))
 import Script (Value(..), CompiledScript(..))
 import qualified Data.ByteString.Char8 as Char8
 import Data.ByteString (ByteString)
 import Numeric (readHex)
 import Script (ScriptComponent(..), Script(..))
 import Crypto.PubKey.ECC.ECDSA (signWith, Signature(..))
-
+import Util (switchEndian)
 
 data ParsedTransaction = ParsedTransaction
   { version :: TxVersion 
-  ,  inputs :: [(UTXO, CompiledScript)]
+  , inputs :: [(UTXO, CompiledScript)]
   , outputs :: [(Value, CompiledScript)]
   } deriving (Eq, Show)
 

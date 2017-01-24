@@ -18,6 +18,7 @@ library
                      , src/server
                      , src/tx
                      , src/tx/script
+                     , src/protocol
   exposed-modules:     Keys
                      , Persistence
                      , Server
@@ -28,6 +29,7 @@ library
                      , Util
                      , TX
                      , TX.Parser
+                     , Messages
   build-depends:       base >= 4.7 && < 5
                      , bytestring >= 0.10 && < 0.11
                      , cryptonite == 0.19

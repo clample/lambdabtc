@@ -10,6 +10,7 @@ import Data.Text.Encoding (decodeUtf8)
 import Data.Text (unpack)
 import Keys
 import TX
+import Messages (headerCheck)
 
 {--
 main :: IO ()
@@ -19,7 +20,7 @@ main = do
   runApplication config
 --}
 
-main = rawExample
+main = putStrLn headerCheck
 
 showScript :: String
 showScript =

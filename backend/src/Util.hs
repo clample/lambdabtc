@@ -8,7 +8,10 @@ module Util
   , stringToHexByteString
   , textToHexByteString
   , hexify
-  , payloadLength) where
+  , payloadLength
+  , switchEndian
+  , payloadLength'
+  , checkSum) where
 
 import Prelude
 
@@ -44,14 +47,14 @@ data CheckSum = CheckSum ByteString
 maybeRead :: Read a => String -> Maybe a
 maybeRead = fmap fst . listToMaybe . reads
 
-base58CheckSum :: ByteString -> ByteString
-base58CheckSum =
+checkSum :: ByteString -> ByteString
+checkSum =
   BS.take 4 . stringToHexByteString . show . hashWith SHA256 . hashWith SHA256 
 
 -- https://github.com/bitcoinbook/bitcoinbook/blob/first_edition/ch04.asciidoc#base58-and-base58check-encoding
 encodeBase58Check :: Prefix -> Payload -> T.Text
 encodeBase58Check (Prefix prefix) (Payload payload) =
-  toText . fromBytes . BS.concat $ [withPrefix, base58CheckSum withPrefix]
+  toText . fromBytes . BS.concat $ [withPrefix, checkSum withPrefix]
   where
    withPrefix = prefix `BS.append` payload
 
@@ -81,5 +84,14 @@ hexify n desiredLength = T.pack $ leadingZeroes ++ base
 
 -- Take a hex encoded payload and give a hex bs with payload length
 payloadLength :: ByteString -> ByteString
-payloadLength payload =
-  T.encodeUtf8 $ hexify (toInteger . BS.length . fst . decode $ payload) 2
+payloadLength = payloadLength' 2
+
+payloadLength' :: Int -> ByteString -> ByteString
+payloadLength' padding payload =
+  T.encodeUtf8 $ hexify (toInteger . BS.length . fst . decode $ payload) padding
+
+
+switchEndian :: ByteString -> ByteString
+switchEndian = encode . BS.reverse . fst . decode 
+  -- converts a hex encoded bytestring from little endian to big endian
+  -- (and vice versa)
