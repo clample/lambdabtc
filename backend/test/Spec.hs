@@ -49,7 +49,8 @@ tests =
       ],
     testGroup "QuickCheck Transaction Tests" [
       derSignatureInvertible,
-      transactionInvertible
+      transactionInvertible,
+      scriptInvertible
       ]
   ]
 

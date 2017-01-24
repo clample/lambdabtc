@@ -2,14 +2,15 @@ module TxTest where
 
 import Test.Framework.Providers.QuickCheck2 (testProperty)
 import Test.QuickCheck.Arbitrary (Arbitrary(..))
-import Test.QuickCheck.Gen (choose, suchThat, vectorOf, elements, Gen)
+import Test.QuickCheck.Gen (choose, suchThat, vectorOf, elements, Gen, oneof, listOf)
 import TX
 import KeyTest 
 import Keys (compressed)
-import Script (Value(..))
+import Script (Value(..), Script(..), ScriptComponent(..), CompiledScript(..), compile)
+import Optcodes (OPCODE(..), opcodeTable)
 import Crypto.PubKey.ECC.ECDSA (Signature(..))
-import Text.Megaparsec (runParser)
-import TX.Parser (parseDerSignature, parseTransaction, ParsedTransaction(..))
+import Text.Megaparsec (runParser, parseMaybe)
+import TX.Parser (parseDerSignature, parseTransaction, ParsedTransaction(..), parseScript)
 import qualified Data.ByteString.Char8 as Char8
 import Data.ByteString (ByteString)
 
@@ -45,6 +46,22 @@ instance Arbitrary Transaction where
     privKey <- arbitrary
     txOutput <- arbitrary
     return $ Transaction [(utxo, privKey)] [txOutput] defaultVersion
+
+instance Arbitrary OPCODE where
+  arbitrary = do
+    let opcodes = map fst opcodeTable
+    elements opcodes
+
+instance Arbitrary ScriptComponent where
+  arbitrary = oneof [genTxt, genOp]
+    where
+      genTxt = do
+        txtLength <- arbitrary `suchThat` (\n -> 1 <= n && n <= 75)
+        Txt <$> hexBS (2 * txtLength)
+      genOp = OP <$> arbitrary
+
+instance Arbitrary Script where
+  arbitrary = Script <$> listOf arbitrary
     
 derSignatureInvertible = testProperty
   "It should be possible to encode and decode a signature through DER"
@@ -53,11 +70,11 @@ derSignatureInvertible = testProperty
 prop_derSignatureInvertible :: Signature -> Bool
 prop_derSignatureInvertible sig = 
   case eitherSig of
-    Left _ -> False
-    Right parsedSig -> sig == parsedSig
+    Nothing -> False
+    Just parsedSig -> sig == parsedSig
   where
     derString = Char8.unpack . derSignature $ sig
-    eitherSig = runParser parseDerSignature "" derString
+    eitherSig = parseMaybe parseDerSignature derString
 
 transactionInvertible = testProperty
   "It should be possible to encode and decode a transaction"
@@ -66,11 +83,11 @@ transactionInvertible = testProperty
 prop_transactionInvertible :: Transaction -> Bool
 prop_transactionInvertible tx =
   case eitherTx of
-    Left _ -> False
-    Right parsedTx -> compareTransactions parsedTx
+    Nothing -> False
+    Just parsedTx -> compareTransactions parsedTx
   where
     txString = Char8.unpack . signedTransaction $ tx
-    eitherTx = runParser parseTransaction "" txString
+    eitherTx = parseMaybe parseTransaction txString
     compareTransactions parsedTx =
       (version parsedTx == __version tx) &&
       (and $ zipWith compareInputs (__inputs tx) (inputs parsedTx)) &&
@@ -78,3 +95,17 @@ prop_transactionInvertible tx =
     compareInputs (utxoIn, privKey) (utxoParsed, compiledScript) = utxoIn == utxoParsed
     compareOutputs txOut (val, compiledScript) =
       (value txOut == val)
+
+scriptInvertible = testProperty
+  "It should be possible to encode and decode a script"
+  prop_scriptInvertible
+
+prop_scriptInvertible :: Script -> Bool
+prop_scriptInvertible script =
+  case eitherScript of
+    Nothing -> False
+    Just parsedScript -> parsedScript == script
+  where
+    eitherScript = parseMaybe parseScript scriptString
+    scriptString = Char8.unpack scriptBS
+    CompiledScript scriptBS = compile script 

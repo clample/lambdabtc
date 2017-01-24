@@ -17,12 +17,15 @@ import Numeric (readHex)
 import Data.List (reverse)
 
 data Script = Script [ ScriptComponent ]
+  deriving (Eq, Show)
+
 data CompiledScript = CompiledScript ByteString
   deriving (Eq, Show)
 
 data ScriptComponent
   = OP OPCODE
   | Txt ByteString -- should contain hex
+  deriving (Eq, Show)
 
 data Value = Satoshis Int
   -- TODO: Improve this. Handle different units

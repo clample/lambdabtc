@@ -1,4 +1,4 @@
-module Optcodes (OPCODE(..)) where
+module Optcodes (OPCODE(..), opcodeTable) where
 
 import Data.Maybe (fromJust)
 import Data.Tuple (swap)
@@ -10,7 +10,7 @@ data OPCODE
   | OP_EQUAL
   | OP_EQUALVERIFY
   | OP_CHECKSIG
-  deriving (Eq)
+  deriving (Eq, Show)
 
 instance Enum OPCODE where
   fromEnum = fromJust . flip lookup opcodeTable

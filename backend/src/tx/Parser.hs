@@ -1,11 +1,12 @@
 module TX.Parser where
 
-import Text.Megaparsec
+import Text.Megaparsec (Parsec, Dec, count, hexDigitChar, eof, many)
 import TX (Transaction(..), TxVersion, switchEndian, UTXO(..), TxOutput(..))
 import Script (Value(..), CompiledScript(..))
 import qualified Data.ByteString.Char8 as Char8
 import Data.ByteString (ByteString)
 import Numeric (readHex)
+import Script (ScriptComponent(..), Script(..))
 import Crypto.PubKey.ECC.ECDSA (signWith, Signature(..))
 
 
@@ -98,3 +99,23 @@ parseDerSignature = do
 readInt :: ByteString -> Int
 readInt = fst . head . readHex . Char8.unpack
 
+parseScript :: Parsec Dec String Script
+parseScript =
+  Script <$> many parseScriptComponent
+
+parseScriptStep :: Script -> Parsec Dec String Script
+parseScriptStep (Script scriptArr) = do
+  undefined
+  
+parseScriptComponent :: Parsec Dec String ScriptComponent
+parseScriptComponent = do
+  code <- parseCount
+  if ( 0 < code && code < 76)
+    then parseTxtComponent code
+    else return $ OP $ toEnum code
+
+parseTxtComponent :: Int -> Parsec Dec String ScriptComponent
+parseTxtComponent numBytes = do
+  let charsToParse = numBytes * 2
+  payload <- count (charsToParse) hexDigitChar
+  return $ Txt $ Char8.pack payload
