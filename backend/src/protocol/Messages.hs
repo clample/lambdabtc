@@ -3,19 +3,36 @@
 module Messages where
 
 import Data.ByteString (ByteString)
-import Data.ByteString as BS
-import Data.ByteString.Char8 as Char8
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as Char8
 import qualified Data.Text.Encoding as T
 import Util (switchEndian, hexify, payloadLength', checkSum)
 import Data.ByteString.Base16 (decode, encode)
+import Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
+import Network.Socket (connect
+                      , socket
+                      , Family(..)
+                      , SocketType(..)
+                      , defaultProtocol
+                      , connect
+                      , SockAddr(..)
+                      , tupleToHostAddress
+                      , getAddrInfo
+                      , AddrInfo(..)
+                      , iNADDR_ANY
+                      , bind
+                      , defaultHints
+                      , AddrInfoFlag(..)
+                      , setSocketOption
+                      , SocketOption(..))
+import Network.Socket.ByteString (send, recv )
 
-{--
-versionMessage :: ByteString
-versionMessage =
+versionMessage :: POSIXTime -> Int -> Int -> ByteString
+versionMessage time randInt blockN =
   (header versionCommand message) `BS.append` message
   where
     message = BS.concat
-      [ version 
+      [ version 60002
       , services
       , timestamp
       , addrRecv
@@ -23,8 +40,15 @@ versionMessage =
       , nonce
       , userAgent
       , startHeight
-      , relay]
---}
+      , relay ]
+    timestamp = (switchEndian . T.encodeUtf8 . flip hexify 16 . floor) time
+    addrRecv = networkAddress Nothing (160, 16 , 233, 215) 18333
+    addrFrom = networkAddress Nothing (207, 251, 103, 46 ) 18333
+    nonce = (BS.take 16 . T.encodeUtf8 . flip hexify 16 . fromIntegral) randInt
+      -- Maybe this needs to be made more carefully / cryptographically secure?
+    userAgent = "00" -- See https://github.com/bitcoin/bips/blob/master/bip-0014.mediawiki
+    startHeight = (switchEndian . T.encodeUtf8 . flip hexify 4 . fromIntegral) blockN
+    relay = "" -- See https://github.com/bitcoin/bips/blob/master/bip-0037.mediawiki
 
 header :: ByteString -> ByteString -> ByteString
 header command message = BS.concat
@@ -32,7 +56,12 @@ header command message = BS.concat
   , command
   , switchEndian $ payloadLength' 8 message
   , (encode . checkSum . fst . decode) message ]
-  
+
+version :: Int -> ByteString
+version v = switchEndian . T.encodeUtf8 $ hexify (fromIntegral v) 8
+
+services :: ByteString -- This should not be hardcoded
+services = "0100000000000000"
 
 magicHeaderMain :: ByteString
 magicHeaderMain = "F9BEB4D9" 
@@ -43,6 +72,61 @@ magicHeaderTestNet3 = "0B110907"
 versionCommand :: ByteString
 versionCommand = "76657273696F6E0000000000"
 
+networkAddress :: (Maybe POSIXTime) -> (Int, Int, Int, Int) -> Int -> ByteString
+networkAddress mTime (a, b, c, d) port =
+  case mTime of
+    Nothing -> BS.concat [services, ipAddress, portBS]
+    Just time -> BS.concat [timestamp time, services, ipAddress, portBS]
+  where
+    portBS = (T.encodeUtf8 . flip hexify 4 . fromIntegral) port
+    timestamp = (switchEndian . T.encodeUtf8 . flip hexify 8 . floor)
+    ipAddress =  BS.concat
+                 [ ipAddressMagicStr
+                 , showAddressComponent a
+                 , showAddressComponent b
+                 , showAddressComponent c
+                 , showAddressComponent d]
+    ipAddressMagicStr = "00000000000000000000FFFF"  
+    showAddressComponent = T.encodeUtf8 . flip hexify 2 . fromIntegral
+    -- time is not present in version message. It is present in other messages
+
+----------------------
+-- Find testnet hosts with `nslookup testnet-seed.bitcoin.petertodd.org`
+
+connectTestnet = do
+  addrInfo <- (head) <$> getAddrInfo Nothing (Just "testnet-seed.bitcoin.petertodd.org") (Just "18333")
+  peerSocket <- socket (addrFamily addrInfo) Stream defaultProtocol
+  setSocketOption peerSocket KeepAlive 1
+  connect peerSocket (addrAddress addrInfo)
+  putStrLn "Great Job, we connected"
+  time <- getPOSIXTime
+  send peerSocket . fst . decode $ versionMessage time 100 10
+  bs <- recv peerSocket 300
+  putStrLn $ "Recieved message: " ++ (Char8.unpack . encode) bs
+
+{--
+-- Find testnet hosts with `nslookup testnet-seed.bitcoin.petertodd.org`
+connectTestnet = connect "160.16.233.215" "18333" $ \(connectionSocket, remoteAddr) -> do
+  putStrLn "Good job connecting!!!"
+  time <- getPOSIXTime
+  send connectionSocket . fst . decode $ versionMessage time 100 10
+  putStrLn "Sent message"
+  mBS <- recv connectionSocket 300
+  case mBS of
+    Nothing -> putStrLn "Didn't recieve anything"
+    Just bs -> putStrLn $ "Recieved message: " ++ (Char8.unpack . encode) bs
+--}
+
+--------------- Example
+
+printVersionMessage :: IO ()
+printVersionMessage = do
+  time <- getPOSIXTime
+  putStrLn . Char8.unpack $ versionMessage time 100 1
+
 headerCheck :: String
 headerCheck = Char8.unpack $ header versionCommand
   "62EA0000010000000000000011B2D05000000000010000000000000000000000000000000000FFFF000000000000010000000000000000000000000000000000FFFF0000000000003B2EB35D8CE617650F2F5361746F7368693A302E372E322FC03E0300"
+
+exampleAddress :: String
+exampleAddress = Char8.unpack $ networkAddress Nothing (10, 0, 0, 1) 8333

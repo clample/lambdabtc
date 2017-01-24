@@ -10,7 +10,7 @@ import Data.Text.Encoding (decodeUtf8)
 import Data.Text (unpack)
 import Keys
 import TX
-import Messages (headerCheck)
+import Messages (headerCheck, printVersionMessage, exampleAddress, connectTestnet)
 
 {--
 main :: IO ()
@@ -20,7 +20,7 @@ main = do
   runApplication config
 --}
 
-main = putStrLn headerCheck
+main = connectTestnet
 
 showScript :: String
 showScript =
