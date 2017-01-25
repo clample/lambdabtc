@@ -11,7 +11,10 @@ module Util
   , payloadLength
   , switchEndian
   , payloadLength'
-  , checkSum) where
+  , checkSum
+  , readInt
+  , parseCount
+  , parsePayload) where
 
 import Prelude
 
@@ -24,9 +27,10 @@ import Crypto.Hash.Algorithms (SHA256(..), RIPEMD160(..))
 import Crypto.Hash (Digest, digestFromByteString, hashWith)
 import qualified Data.ByteString as BS
 import Data.ByteString (ByteString)
-import Data.ByteString.Char8 (pack)
+import qualified Data.ByteString.Char8 as Char8
 import Data.ByteString.Base16 (decode, encode)
 import Numeric (showHex, readHex)
+import Text.Megaparsec (Parsec, Dec, count, hexDigitChar)
 
 data Payload = Payload ByteString
   deriving (Show, Eq)
@@ -70,7 +74,7 @@ decodeBase58Check b58 = (Prefix prefix, Payload payload, CheckSum checksum)
 -- this function name is misleading?
 -- This is going from hex string to binary bytestring
 stringToHexByteString :: String -> ByteString
-stringToHexByteString = fst . decode . pack 
+stringToHexByteString = fst . decode . Char8.pack 
 
 textToHexByteString :: T.Text -> ByteString
 textToHexByteString = stringToHexByteString . T.unpack
@@ -95,3 +99,19 @@ switchEndian :: ByteString -> ByteString
 switchEndian = encode . BS.reverse . fst . decode 
   -- converts a hex encoded bytestring from little endian to big endian
   -- (and vice versa)
+
+
+readInt :: ByteString -> Int
+readInt = fst . head . readHex . Char8.unpack
+
+parsePayload :: Parsec Dec String ByteString
+parsePayload = do
+  length <- parseCount
+  payload <- count (length * 2) hexDigitChar
+    -- * 2 because we are parsing hex characters but the length is in bytes
+  return $ Char8.pack payload
+
+parseCount :: Parsec Dec String Int
+parseCount = do
+  countStr <- count 2 hexDigitChar
+  return . readInt . Char8.pack $ countStr

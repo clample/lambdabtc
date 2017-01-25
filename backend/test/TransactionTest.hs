@@ -82,7 +82,7 @@ prop_transactionInvertible tx =
     txString = Char8.unpack . signedTransaction $ tx
     eitherTx = parseMaybe parseTransaction txString
     compareTransactions parsedTx =
-      (version parsedTx == __version tx) &&
+      (txVersion parsedTx == __version tx) &&
       (and $ zipWith compareInputs (__inputs tx) (inputs parsedTx)) &&
       (and $ zipWith compareOutputs (__outputs tx) (outputs parsedTx))
     compareInputs (utxoIn, privKey) (utxoParsed, compiledScript) = utxoIn == utxoParsed
