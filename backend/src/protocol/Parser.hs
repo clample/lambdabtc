@@ -38,6 +38,7 @@ parseVersionMessage = do
 
 parseAddr :: Parsec Dec String Addr
 parseAddr = do
+  count 16  hexDigitChar
   count 24 hexDigitChar -- parse ipv6 magic str
   a <- parseIpComponent
   b <- parseIpComponent
