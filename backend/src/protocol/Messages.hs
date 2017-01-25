@@ -99,6 +99,7 @@ data Command
   | VerackCommand
   | AddrCommand
   | TxCommand
+  | RejectCommand
   deriving (Show, Eq)
 
 commandTable :: [(Command, ByteString)]
@@ -106,7 +107,8 @@ commandTable =
   [ (VersionCommand, "76657273696F6E0000000000")
   , (VerackCommand , "76657261636B000000000000")
   , (AddrCommand,    "616464720000000000000000")
-  , (TxCommand,      "747800000000000000000000")]
+  , (TxCommand,      "747800000000000000000000")
+  , (RejectCommand,  "72656a656374000000000000")]
 
 printCommand :: Command -> ByteString
 printCommand = fromJust . flip lookup commandTable
