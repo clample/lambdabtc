@@ -36,6 +36,7 @@ KeySet
     publicKey Text
     deriving Show
 |]
+  
 
 migrateSchema :: Config -> IO ()
 migrateSchema c =

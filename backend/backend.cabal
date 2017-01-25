@@ -15,13 +15,21 @@ cabal-version:       >=1.10
 
 library
   hs-source-dirs:      src
-                     , src/Server
+                     , src/server
+                     , src/transaction
+                     , src/protocol
   exposed-modules:     Keys
                      , Persistence
                      , Server
                      , Server.Config
                      , Server.Handlers
+                     , Transaction.Script
+                     , Transaction.Optcodes
                      , Util
+                     , Transaction
+                     , Transaction.Parser
+                     , Messages
+                     , Protocol.Parser
   build-depends:       base >= 4.7 && < 5
                      , bytestring >= 0.10 && < 0.11
                      , cryptonite == 0.19
@@ -43,6 +51,12 @@ library
                      , aeson >=0.7 && <0.12
                      , transformers == 0.5.*
                      , monad-logger ==0.3.*
+                     , containers ==0.5.7.*
+                     , asn1-encoding ==0.9.4
+                     , megaparsec ==5.0.1
+                     , lens ==4.14
+                     , time ==1.6.*
+                     , network ==2.6.3.1
   default-language:    Haskell2010
 
 executable backend-exe
@@ -70,6 +84,7 @@ executable backend-exe
                      , aeson >=0.7 && <0.12
                      , transformers == 0.5.*
                      , monad-logger ==0.3.*
+                     , lens ==4.14
   default-language:    Haskell2010
 
 test-suite backend-test
@@ -89,6 +104,8 @@ test-suite backend-test
                      , word8 == 0.1.2
                      , base16-bytestring >= 0.1.1 && < 0.1.2
                      , text == 1.2.2.1
+                     , megaparsec ==5.0.1
+                     , lens ==4.14
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   default-language:    Haskell2010
 

@@ -45,6 +45,7 @@ getFundRequestsH = do
 
 postFundRequestsH :: Action
 postFundRequestsH = do
+  -- TODO: Refractor to use genKeySet
   (pubKey, privKey) <- liftIO genKeys
   let compressedPub@(Compressed pubKeyText) = compressed pubKey
       Hex privKeyText = getHexPrivateKey privKey
