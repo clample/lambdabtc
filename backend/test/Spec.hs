@@ -17,6 +17,7 @@ import qualified Data.Text as T
 import Data.ByteString.Base16 (decode, encode)
 import KeyTest
 import TxTest
+import MessageTest
 
 main :: IO ()
 main = defaultMain tests
@@ -51,6 +52,9 @@ tests =
       derSignatureInvertible,
       transactionInvertible,
       scriptInvertible
+      ],
+    testGroup "QuickCheck Message Tests" [
+      messageHeaderInvertible
       ]
   ]
 

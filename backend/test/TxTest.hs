@@ -1,8 +1,5 @@
 module TxTest where
 
-import Test.Framework.Providers.QuickCheck2 (testProperty)
-import Test.QuickCheck.Arbitrary (Arbitrary(..))
-import Test.QuickCheck.Gen (choose, suchThat, vectorOf, elements, Gen, oneof, listOf)
 import TX
 import KeyTest 
 import Keys (compressed)
@@ -13,6 +10,7 @@ import Text.Megaparsec (runParser, parseMaybe)
 import TX.Parser (parseDerSignature, parseTransaction, ParsedTransaction(..), parseScript)
 import qualified Data.ByteString.Char8 as Char8
 import Data.ByteString (ByteString)
+import TestUtil
 
 instance Arbitrary Signature where
   arbitrary = do
@@ -25,11 +23,6 @@ instance Arbitrary UTXO where
     hash <- hexBS 64
     index <- choose (0, 9)
     return $ UTXO hash index
-
-hexBS :: Int -> Gen ByteString
-hexBS i = Char8.pack <$> vectorOf i hexChars
-  where
-    hexChars = elements ['0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f']
 
 instance Arbitrary Value where
   arbitrary = Satoshis <$> arbitrary `suchThat` (> 0)

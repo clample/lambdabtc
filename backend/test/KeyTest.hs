@@ -1,8 +1,6 @@
 module KeyTest where
 
-import Test.Framework.Providers.QuickCheck2 (testProperty)
-import Test.QuickCheck.Arbitrary (Arbitrary(..))
-import Test.QuickCheck.Gen (choose)
+import TestUtil
 import Keys
 import Util
 import Crypto.PubKey.ECC.ECDSA (PrivateKey(..), PublicKey(..))
