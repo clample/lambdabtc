@@ -7,7 +7,7 @@ import qualified Data.ByteString.Char8 as Char8
 import Data.ByteString (ByteString)
 import Numeric (readHex)
 import Crypto.PubKey.ECC.ECDSA (signWith, Signature(..))
-import Util (switchEndian)
+import Util (switchEndian, readInt)
 
 data ParsedTransaction = ParsedTransaction
   { version :: TxVersion 
@@ -94,9 +94,6 @@ parseDerSignature = do
     Signature (fromIntegral . readInt $ x) (fromIntegral . readInt $ y)
   where
     parseIntCode = count 2 hexDigitChar
-
-readInt :: ByteString -> Int
-readInt = fst . head . readHex . Char8.unpack
 
 parseScript :: Parsec Dec String Script
 parseScript =

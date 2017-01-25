@@ -33,8 +33,17 @@ import Data.List (lookup)
 import Data.Tuple (swap)
 import Transaction (Transaction(..), signedTransaction)
 
-versionMessage :: Network -> POSIXTime -> Int -> Int -> SockAddr -> ByteString
-versionMessage network time randInt blockN peerAddr =
+data VersionMessage = VersionMessage
+  { network    :: Network
+  , time       :: POSIXTime
+  , nonceInt   :: Int
+  , lastBlockN :: Int
+  , senderAddr :: Addr
+  , peerAddr   :: Addr }
+  
+
+showVersionMessage :: VersionMessage -> ByteString
+showVersionMessage (VersionMessage network time randInt blockN senderAddr peerAddr) =
   headerBS  `BS.append` message
   where
     headerBS = showHeader $ Header network VersionCommand message
@@ -49,8 +58,8 @@ versionMessage network time randInt blockN peerAddr =
       , startHeight
       , relay ]
     timestamp = (switchEndian . T.encodeUtf8 . flip hexify 16 . floor) time
-    addrRecv = networkAddress' Nothing peerAddr
-    addrFrom = networkAddress Nothing (207, 251, 103, 46 ) 18333
+    addrRecv = networkAddress Nothing peerAddr
+    addrFrom = networkAddress Nothing senderAddr-- $ Addr (207, 251, 103, 46 ) 18333
     nonce = (BS.take 16 . T.encodeUtf8 . flip hexify 16 . fromIntegral) randInt
       -- Maybe this needs to be made more carefully / cryptographically secure?
     userAgent = "00" -- See https://github.com/bitcoin/bips/blob/master/bip-0014.mediawiki
@@ -61,12 +70,12 @@ verackMessage :: Network -> ByteString
 verackMessage network =
   showHeader $ Header network VerackCommand ""
 
-addrMessage :: Network -> POSIXTime -> SockAddr -> ByteString
+addrMessage :: Network -> POSIXTime -> Addr -> ByteString
 addrMessage network time addr =
   headerBS `BS.append` message
   where
     headerBS = showHeader $ Header network AddrCommand message
-    message = networkAddress' (Just time) addr
+    message = networkAddress (Just time) addr
 
 txMessage :: Network -> Transaction -> ByteString
 txMessage network transaction =
@@ -128,8 +137,22 @@ version v = switchEndian . T.encodeUtf8 $ hexify (fromIntegral v) 8
 services :: ByteString -- This should not be hardcoded
 services = "0100000000000000"
 
-networkAddress :: (Maybe POSIXTime) -> (Int, Int, Int, Int) -> Int -> ByteString
-networkAddress mTime (a, b, c, d) port =
+data Addr = Addr IP Port
+  deriving (Show, Eq)
+
+type IP = (Int, Int, Int, Int)
+
+type Port = Int
+
+getAddr :: SockAddr -> Addr
+getAddr (SockAddrInet port host) =
+  Addr hostIP (fromIntegral port)
+  where
+    hostIP = (fromIntegral a, fromIntegral b, fromIntegral c, fromIntegral d)
+    (a, b, c, d) = hostAddressToTuple host
+
+networkAddress :: (Maybe POSIXTime) -> Addr -> ByteString
+networkAddress mTime (Addr (a, b, c, d) port) =
   case mTime of
     Nothing -> BS.concat [services, ipAddress, portBS]
     Just time -> BS.concat [timestamp time, services, ipAddress, portBS]
@@ -146,14 +169,6 @@ networkAddress mTime (a, b, c, d) port =
     showAddressComponent = T.encodeUtf8 . flip hexify 2 . fromIntegral
     -- time is not present in version message. It is present in other messages
 
-networkAddress' :: (Maybe POSIXTime) -> SockAddr -> ByteString
-networkAddress' time (SockAddrInet port host) =
-  networkAddress time hostIP (fromIntegral port)
-  where
-    (a, b, c, d) = hostAddressToTuple host
-    hostIP = (fromIntegral a, fromIntegral b, fromIntegral c, fromIntegral d)
-    
-
 ----------------------
 -- Find testnet hosts with `nslookup testnet-seed.bitcoin.petertodd.org`
 
@@ -164,7 +179,8 @@ connectTestnet = do
   connect peerSocket (addrAddress addrInfo)
   putStrLn "Great Job, we connected"
   time <- getPOSIXTime
-  let message = versionMessage TestNet3 time 100 10 (addrAddress addrInfo)
+  let message = showVersionMessage $ VersionMessage TestNet3 time 100 10 (getAddr $ addrAddress addrInfo) senderAddr
+      senderAddr = Addr (207, 251, 103, 46 ) 18333
   send peerSocket $ fst . decode $ message
   putStrLn . Char8.unpack $ message
   bs <- recv peerSocket 300
@@ -184,4 +200,4 @@ headerCheck = Char8.unpack $ showHeader $ Header TestNet3 VersionCommand
   "62EA0000010000000000000011B2D05000000000010000000000000000000000000000000000FFFF000000000000010000000000000000000000000000000000FFFF0000000000003B2EB35D8CE617650F2F5361746F7368693A302E372E322FC03E0300"
 
 exampleAddress :: String
-exampleAddress = Char8.unpack $ networkAddress Nothing (10, 0, 0, 1) 8333
+exampleAddress = Char8.unpack $ networkAddress Nothing $ Addr (10, 0, 0, 1) 8333
