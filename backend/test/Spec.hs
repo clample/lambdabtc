@@ -55,7 +55,8 @@ tests =
       ],
     testGroup "QuickCheck Message Tests" [
       messageHeaderInvertible,
-      addrInvertible
+      addrInvertible,
+      versionMessageInvertible
       ]
   ]
 

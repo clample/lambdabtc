@@ -1,10 +1,11 @@
 module MessageTest where
 
 import TestUtil
-import Messages (Command(..), commandTable, Network(..), networkTable, Header(..), showHeader, Addr(..), networkAddress)
-import Protocol.Parser (parseHeader, parseAddr)
+import Messages (Command(..), commandTable, Network(..), networkTable, Header(..), showHeader, Addr(..), networkAddress, VersionMessage(..), showVersionMessage)
+import Protocol.Parser (parseHeader, parseAddr, parseVersionMessage)
 import Text.Megaparsec (parseMaybe)
 import qualified Data.ByteString.Char8 as Char8
+import Data.Time.Clock (NominalDiffTime(..))
 
 instance Arbitrary Command where
   arbitrary = do
@@ -36,6 +37,22 @@ instance Arbitrary Addr where
       chooseIpComponent = choose (0, 255)
       choosePort = choose (0, 65535)
 
+instance Arbitrary VersionMessage where
+  arbitrary = do
+    version    <- choose (0, maxVersion) 
+    network    <- arbitrary
+    time       <- choose (0, maxTime)  :: Gen Integer
+    nonceInt   <- choose (0, maxNonce) :: Gen Integer
+    lastBlockN <- choose (0, maxBlock)
+    senderAddr <- arbitrary
+    peerAddr   <- arbitrary
+    return $ VersionMessage version network (realToFrac time) nonceInt lastBlockN senderAddr peerAddr
+    where
+      maxVersion = 0xffffffff         -- 4 bytes
+      maxTime    = 0xffffffffffffffff -- 8 bytes
+      maxNonce   = 0xffffffffffffffff -- 8 bytes
+      maxBlock   = 0xffffffff         -- 4 bytes
+
 messageHeaderInvertible = testProperty
   "It should be possible to encode and parse a message header"
   prop_messageHeaderInvertible
@@ -62,5 +79,18 @@ prop_addrInvertible addr =
     Just parsedAddr -> parsedAddr == addr
   where
     eitherAddr = parseMaybe parseAddr addrString
-    addrString = Char8.unpack $ networkAddress Nothing addr
-      -- TODO: Make test more general by also passing (Just time) to networkAddress
+    addrString = Char8.unpack $ networkAddress addr
+
+versionMessageInvertible = testProperty
+  "It should be possible to encode and decode a versionMessage"
+  prop_versionMessageInvertible
+
+prop_versionMessageInvertible :: VersionMessage -> Bool
+prop_versionMessageInvertible versionMsg =
+  case eitherVersionMsg of
+    Nothing -> False
+    Just parsedVersionMsg ->
+      parsedVersionMsg == versionMsg
+  where
+    eitherVersionMsg = parseMaybe parseVersionMessage versionMsgString
+    versionMsgString = Char8.unpack $ showVersionMessage versionMsg
