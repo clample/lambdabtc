@@ -10,7 +10,7 @@ import Data.Text.Encoding (decodeUtf8)
 import Data.Text (unpack)
 import Keys
 import TX
-import Messages (headerCheck, printVersionMessage, exampleAddress, connectTestnet)
+import Messages (headerCheck, exampleAddress, connectTestnet)
 
 {--
 main :: IO ()

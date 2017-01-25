@@ -24,11 +24,13 @@ import Network.Socket (connect
                       , defaultHints
                       , AddrInfoFlag(..)
                       , setSocketOption
-                      , SocketOption(..))
+                      , SocketOption(..)
+                      , hostAddressToTuple)
 import Network.Socket.ByteString (send, recv )
+import Control.Lens (over, mapped)
 
-versionMessage :: POSIXTime -> Int -> Int -> ByteString
-versionMessage time randInt blockN =
+versionMessage :: POSIXTime -> Int -> Int -> SockAddr -> ByteString
+versionMessage time randInt blockN peerAddr =
   (header versionCommand message) `BS.append` message
   where
     message = BS.concat
@@ -42,12 +44,12 @@ versionMessage time randInt blockN =
       , startHeight
       , relay ]
     timestamp = (switchEndian . T.encodeUtf8 . flip hexify 16 . floor) time
-    addrRecv = networkAddress Nothing (160, 16 , 233, 215) 18333
+    addrRecv = networkAddress' peerAddr
     addrFrom = networkAddress Nothing (207, 251, 103, 46 ) 18333
     nonce = (BS.take 16 . T.encodeUtf8 . flip hexify 16 . fromIntegral) randInt
       -- Maybe this needs to be made more carefully / cryptographically secure?
     userAgent = "00" -- See https://github.com/bitcoin/bips/blob/master/bip-0014.mediawiki
-    startHeight = (switchEndian . T.encodeUtf8 . flip hexify 4 . fromIntegral) blockN
+    startHeight = (switchEndian . T.encodeUtf8 . flip hexify 8 . fromIntegral) blockN
     relay = "" -- See https://github.com/bitcoin/bips/blob/master/bip-0037.mediawiki
 
 header :: ByteString -> ByteString -> ByteString
@@ -90,6 +92,14 @@ networkAddress mTime (a, b, c, d) port =
     showAddressComponent = T.encodeUtf8 . flip hexify 2 . fromIntegral
     -- time is not present in version message. It is present in other messages
 
+networkAddress' :: SockAddr -> ByteString
+networkAddress' (SockAddrInet port host) =
+  networkAddress Nothing hostIP (fromIntegral port)
+  where
+    (a, b, c, d) = hostAddressToTuple host
+    hostIP = (fromIntegral a, fromIntegral b, fromIntegral c, fromIntegral d)
+    
+
 ----------------------
 -- Find testnet hosts with `nslookup testnet-seed.bitcoin.petertodd.org`
 
@@ -100,7 +110,9 @@ connectTestnet = do
   connect peerSocket (addrAddress addrInfo)
   putStrLn "Great Job, we connected"
   time <- getPOSIXTime
-  send peerSocket . fst . decode $ versionMessage time 100 10
+  let message = versionMessage time 100 10 (addrAddress addrInfo)
+  send peerSocket $ fst . decode $ message
+  putStrLn . Char8.unpack $ message
   bs <- recv peerSocket 300
   putStrLn $ "Recieved message: " ++ (Char8.unpack . encode) bs
 
@@ -119,10 +131,12 @@ connectTestnet = connect "160.16.233.215" "18333" $ \(connectionSocket, remoteAd
 
 --------------- Example
 
+{--
 printVersionMessage :: IO ()
 printVersionMessage = do
   time <- getPOSIXTime
   putStrLn . Char8.unpack $ versionMessage time 100 1
+--}
 
 headerCheck :: String
 headerCheck = Char8.unpack $ header versionCommand
