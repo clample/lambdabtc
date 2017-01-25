@@ -28,11 +28,15 @@ import Network.Socket (connect
                       , hostAddressToTuple)
 import Network.Socket.ByteString (send, recv )
 import Control.Lens (over, mapped)
+import Data.Maybe (fromJust)
+import Data.List (lookup)
+import Data.Tuple (swap)
 
-versionMessage :: POSIXTime -> Int -> Int -> SockAddr -> ByteString
-versionMessage time randInt blockN peerAddr =
-  (header versionCommand message) `BS.append` message
+versionMessage :: Network -> POSIXTime -> Int -> Int -> SockAddr -> ByteString
+versionMessage network time randInt blockN peerAddr =
+  headerBS  `BS.append` message
   where
+    headerBS = showHeader $ Header network VersionCommand message
     message = BS.concat
       [ version 60002
       , services
@@ -52,27 +56,51 @@ versionMessage time randInt blockN peerAddr =
     startHeight = (switchEndian . T.encodeUtf8 . flip hexify 8 . fromIntegral) blockN
     relay = "" -- See https://github.com/bitcoin/bips/blob/master/bip-0037.mediawiki
 
-header :: ByteString -> ByteString -> ByteString
-header command message = BS.concat
-  [ magicHeaderTestNet3
-  , command
+showHeader :: Header -> ByteString
+showHeader (Header network command message) = BS.concat
+  [ printNetwork network
+  , printCommand command
   , switchEndian $ payloadLength' 8 message
   , (encode . checkSum . fst . decode) message ]
+
+data Header = Header Network Command ByteString
+  deriving (Show, Eq)
+
+-------------------------------
+data Network = TestNet3 | MainNet
+  deriving (Show, Eq)
+
+networkTable :: [(Network, ByteString)]
+networkTable =
+  [ (TestNet3, "0B110907")
+  , (MainNet,  "F9BEB4D9")]
+
+printNetwork :: Network -> ByteString
+printNetwork = fromJust . flip lookup networkTable
+
+readNetwork :: ByteString -> Maybe Network
+readNetwork = flip lookup (map swap networkTable)
+-------------------------------
+
+data Command = VersionCommand
+  deriving (Show, Eq)
+
+commandTable :: [(Command, ByteString)]
+commandTable =
+  [ (VersionCommand, "76657273696F6E0000000000")]
+
+printCommand :: Command -> ByteString
+printCommand = fromJust . flip lookup commandTable
+
+readCommand :: ByteString -> Maybe Command
+readCommand = flip lookup (map swap commandTable)
+-------------------------------
 
 version :: Int -> ByteString
 version v = switchEndian . T.encodeUtf8 $ hexify (fromIntegral v) 8
 
 services :: ByteString -- This should not be hardcoded
 services = "0100000000000000"
-
-magicHeaderMain :: ByteString
-magicHeaderMain = "F9BEB4D9" 
-
-magicHeaderTestNet3 :: ByteString
-magicHeaderTestNet3 = "0B110907"
-
-versionCommand :: ByteString
-versionCommand = "76657273696F6E0000000000"
 
 networkAddress :: (Maybe POSIXTime) -> (Int, Int, Int, Int) -> Int -> ByteString
 networkAddress mTime (a, b, c, d) port =
@@ -110,24 +138,11 @@ connectTestnet = do
   connect peerSocket (addrAddress addrInfo)
   putStrLn "Great Job, we connected"
   time <- getPOSIXTime
-  let message = versionMessage time 100 10 (addrAddress addrInfo)
+  let message = versionMessage TestNet3 time 100 10 (addrAddress addrInfo)
   send peerSocket $ fst . decode $ message
   putStrLn . Char8.unpack $ message
   bs <- recv peerSocket 300
   putStrLn $ "Recieved message: " ++ (Char8.unpack . encode) bs
-
-{--
--- Find testnet hosts with `nslookup testnet-seed.bitcoin.petertodd.org`
-connectTestnet = connect "160.16.233.215" "18333" $ \(connectionSocket, remoteAddr) -> do
-  putStrLn "Good job connecting!!!"
-  time <- getPOSIXTime
-  send connectionSocket . fst . decode $ versionMessage time 100 10
-  putStrLn "Sent message"
-  mBS <- recv connectionSocket 300
-  case mBS of
-    Nothing -> putStrLn "Didn't recieve anything"
-    Just bs -> putStrLn $ "Recieved message: " ++ (Char8.unpack . encode) bs
---}
 
 --------------- Example
 
@@ -139,7 +154,7 @@ printVersionMessage = do
 --}
 
 headerCheck :: String
-headerCheck = Char8.unpack $ header versionCommand
+headerCheck = Char8.unpack $ showHeader $ Header TestNet3 VersionCommand
   "62EA0000010000000000000011B2D05000000000010000000000000000000000000000000000FFFF000000000000010000000000000000000000000000000000FFFF0000000000003B2EB35D8CE617650F2F5361746F7368693A302E372E322FC03E0300"
 
 exampleAddress :: String
