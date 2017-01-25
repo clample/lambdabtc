@@ -137,7 +137,7 @@ getAddr (SockAddrInet port host) =
 
 networkAddress :: Addr -> ByteString
 networkAddress (Addr (a, b, c, d) port) =
-  BS.concat [ipAddress, portBS]
+  BS.concat [services, ipAddress, portBS]
   where
     portBS = (T.encodeUtf8 . flip hexify 4 . fromIntegral) port
     ipAddress =  BS.concat
