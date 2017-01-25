@@ -1,4 +1,4 @@
-module Optcodes (OPCODE(..), opcodeTable) where
+module Transaction.Optcodes (OPCODE(..), opcodeTable) where
 
 import Data.Maybe (fromJust)
 import Data.Tuple (swap)

@@ -31,6 +31,7 @@ import Control.Lens (over, mapped)
 import Data.Maybe (fromJust)
 import Data.List (lookup)
 import Data.Tuple (swap)
+import Transaction (Transaction(..), signedTransaction)
 
 versionMessage :: Network -> POSIXTime -> Int -> Int -> SockAddr -> ByteString
 versionMessage network time randInt blockN peerAddr =
@@ -48,13 +49,31 @@ versionMessage network time randInt blockN peerAddr =
       , startHeight
       , relay ]
     timestamp = (switchEndian . T.encodeUtf8 . flip hexify 16 . floor) time
-    addrRecv = networkAddress' peerAddr
+    addrRecv = networkAddress' Nothing peerAddr
     addrFrom = networkAddress Nothing (207, 251, 103, 46 ) 18333
     nonce = (BS.take 16 . T.encodeUtf8 . flip hexify 16 . fromIntegral) randInt
       -- Maybe this needs to be made more carefully / cryptographically secure?
     userAgent = "00" -- See https://github.com/bitcoin/bips/blob/master/bip-0014.mediawiki
     startHeight = (switchEndian . T.encodeUtf8 . flip hexify 8 . fromIntegral) blockN
     relay = "" -- See https://github.com/bitcoin/bips/blob/master/bip-0037.mediawiki
+
+verackMessage :: Network -> ByteString
+verackMessage network =
+  showHeader $ Header network VerackCommand ""
+
+addrMessage :: Network -> POSIXTime -> SockAddr -> ByteString
+addrMessage network time addr =
+  headerBS `BS.append` message
+  where
+    headerBS = showHeader $ Header network AddrCommand message
+    message = networkAddress' (Just time) addr
+
+txMessage :: Network -> Transaction -> ByteString
+txMessage network transaction =
+  headerBS `BS.append` message
+  where
+    headerBS = showHeader $ Header network TxCommand message
+    message = signedTransaction transaction
 
 showHeader :: Header -> ByteString
 showHeader (Header network command message) = BS.concat
@@ -82,12 +101,19 @@ readNetwork :: ByteString -> Maybe Network
 readNetwork = flip lookup (map swap networkTable)
 -------------------------------
 
-data Command = VersionCommand
+data Command
+  = VersionCommand
+  | VerackCommand
+  | AddrCommand
+  | TxCommand
   deriving (Show, Eq)
 
 commandTable :: [(Command, ByteString)]
 commandTable =
-  [ (VersionCommand, "76657273696F6E0000000000")]
+  [ (VersionCommand, "76657273696F6E0000000000")
+  , (VerackCommand , "76657261636B000000000000")
+  , (AddrCommand,    "616464720000000000000000")
+  , (TxCommand,      "747800000000000000000000")]
 
 printCommand :: Command -> ByteString
 printCommand = fromJust . flip lookup commandTable
@@ -120,9 +146,9 @@ networkAddress mTime (a, b, c, d) port =
     showAddressComponent = T.encodeUtf8 . flip hexify 2 . fromIntegral
     -- time is not present in version message. It is present in other messages
 
-networkAddress' :: SockAddr -> ByteString
-networkAddress' (SockAddrInet port host) =
-  networkAddress Nothing hostIP (fromIntegral port)
+networkAddress' :: (Maybe POSIXTime) -> SockAddr -> ByteString
+networkAddress' time (SockAddrInet port host) =
+  networkAddress time hostIP (fromIntegral port)
   where
     (a, b, c, d) = hostAddressToTuple host
     hostIP = (fromIntegral a, fromIntegral b, fromIntegral c, fromIntegral d)

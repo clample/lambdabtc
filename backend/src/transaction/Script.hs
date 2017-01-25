@@ -1,8 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Script where
+module Transaction.Script where
 
 import Util
-import Optcodes (OPCODE(..))
+import Transaction.Optcodes (OPCODE(..))
 import Keys
 
 import Prelude hiding (concat, reverse, sequence)

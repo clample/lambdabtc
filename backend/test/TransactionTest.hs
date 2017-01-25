@@ -1,13 +1,13 @@
-module TxTest where
+module TransactionTest where
 
-import TX
+import Transaction
 import KeyTest 
 import Keys (compressed)
-import Script (Value(..), Script(..), ScriptComponent(..), CompiledScript(..), compile)
-import Optcodes (OPCODE(..), opcodeTable)
+import Transaction.Script (Value(..), Script(..), ScriptComponent(..), CompiledScript(..), compile)
+import Transaction.Optcodes (OPCODE(..), opcodeTable)
 import Crypto.PubKey.ECC.ECDSA (Signature(..))
 import Text.Megaparsec (runParser, parseMaybe)
-import TX.Parser (parseDerSignature, parseTransaction, ParsedTransaction(..), parseScript)
+import Transaction.Parser (parseDerSignature, parseTransaction, ParsedTransaction(..), parseScript)
 import qualified Data.ByteString.Char8 as Char8
 import Data.ByteString (ByteString)
 import TestUtil

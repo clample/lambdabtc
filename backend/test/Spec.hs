@@ -5,10 +5,10 @@ import Prelude hiding (length)
 import Test.Framework (defaultMain, testGroup)
 import Test.Framework.Providers.HUnit (testCase)
 import Test.HUnit
-import Script
-import Optcodes
+import Transaction.Script
+import Transaction.Optcodes
 import Keys
-import TX
+import Transaction
 import Crypto.PubKey.ECC.ECDSA (PublicKey(..), PrivateKey(..))
 import Crypto.PubKey.ECC.Types (Curve, getCurveByName, Point(..), CurveName(SEC_p256k1))
 import Data.ByteString (length)
@@ -16,7 +16,7 @@ import Data.Base58String.Bitcoin (Base58String, toText, fromBytes, toBytes, b58S
 import qualified Data.Text as T
 import Data.ByteString.Base16 (decode, encode)
 import KeyTest
-import TxTest
+import TransactionTest
 import MessageTest
 
 main :: IO ()

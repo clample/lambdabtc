@@ -4,12 +4,12 @@ module Main where
 import Server (developmentConfig, runApplication)
 import Persistence (migrateSchema)
 -------------
-import Script
+import Transaction.Script
 import Data.ByteString.Base16 (encode)
 import Data.Text.Encoding (decodeUtf8)
 import Data.Text (unpack)
 import Keys
-import TX
+import Transaction
 import Messages (headerCheck, exampleAddress, connectTestnet)
 
 {--

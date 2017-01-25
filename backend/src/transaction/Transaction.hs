@@ -1,9 +1,9 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
-module TX where
+module Transaction where
 
 import Util
-import Script
+import Transaction.Script
 import Persistence
 import Keys
 

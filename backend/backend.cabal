@@ -16,19 +16,18 @@ cabal-version:       >=1.10
 library
   hs-source-dirs:      src
                      , src/server
-                     , src/tx
-                     , src/tx/script
+                     , src/transaction
                      , src/protocol
   exposed-modules:     Keys
                      , Persistence
                      , Server
                      , Server.Config
                      , Server.Handlers
-                     , Script
-                     , Optcodes
+                     , Transaction.Script
+                     , Transaction.Optcodes
                      , Util
-                     , TX
-                     , TX.Parser
+                     , Transaction
+                     , Transaction.Parser
                      , Messages
                      , Protocol.Parser
   build-depends:       base >= 4.7 && < 5
