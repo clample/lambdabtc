@@ -10,7 +10,7 @@ import Data.Text.Encoding (decodeUtf8)
 import Data.Text (unpack)
 import Keys
 import Transaction
-import Messages (headerCheck, exampleAddress, connectTestnet)
+import Protocol.Server (connectTestnet)
 
 {--
 main :: IO ()

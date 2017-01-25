@@ -30,6 +30,7 @@ library
                      , Transaction.Parser
                      , Messages
                      , Protocol.Parser
+                     , Protocol.Server
   build-depends:       base >= 4.7 && < 5
                      , bytestring >= 0.10 && < 0.11
                      , cryptonite == 0.19

@@ -9,29 +9,12 @@ import qualified Data.Text.Encoding as T
 import Util (switchEndian, hexify, payloadLength', checkSum)
 import Data.ByteString.Base16 (decode, encode)
 import Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
-import Network.Socket (connect
-                      , socket
-                      , Family(..)
-                      , SocketType(..)
-                      , defaultProtocol
-                      , connect
-                      , SockAddr(..)
-                      , tupleToHostAddress
-                      , getAddrInfo
-                      , AddrInfo(..)
-                      , iNADDR_ANY
-                      , bind
-                      , defaultHints
-                      , AddrInfoFlag(..)
-                      , setSocketOption
-                      , SocketOption(..)
-                      , hostAddressToTuple)
-import Network.Socket.ByteString (send, recv )
 import Control.Lens (over, mapped)
 import Data.Maybe (fromJust)
 import Data.List (lookup)
 import Data.Tuple (swap)
 import Transaction (Transaction(..), signedTransaction)
+import Network.Socket (SockAddr(..), hostAddressToTuple)
 
 data VersionMessage = VersionMessage
   { version    :: Int
@@ -165,29 +148,4 @@ networkAddress (Addr (a, b, c, d) port) =
                  , showAddressComponent d]
     ipAddressMagicStr = "00000000000000000000FFFF"  
     showAddressComponent = T.encodeUtf8 . flip hexify 2 . fromIntegral
-
-----------------------
--- Find testnet hosts with `nslookup testnet-seed.bitcoin.petertodd.org`
-
-connectTestnet = do
-  addrInfo <- (head) <$> getAddrInfo Nothing (Just "testnet-seed.bitcoin.petertodd.org") (Just "18333")
-  peerSocket <- socket (addrFamily addrInfo) Stream defaultProtocol
-  setSocketOption peerSocket KeepAlive 1
-  connect peerSocket (addrAddress addrInfo)
-  putStrLn "Great Job, we connected"
-  time <- getPOSIXTime
-  let message = showVersionMessage $ VersionMessage 60002 TestNet3 time 100 10 (getAddr $ addrAddress addrInfo) senderAddr
-      senderAddr = Addr (207, 251, 103, 46 ) 18333
-  send peerSocket $ fst . decode $ message
-  putStrLn . Char8.unpack $ message
-  bs <- recv peerSocket 300
-  putStrLn $ "Recieved message: " ++ (Char8.unpack . encode) bs
-
---------------- Example
-
-headerCheck :: String
-headerCheck = Char8.unpack . showHeader $ Header TestNet3 VersionCommand
-  "62EA0000010000000000000011B2D05000000000010000000000000000000000000000000000FFFF000000000000010000000000000000000000000000000000FFFF0000000000003B2EB35D8CE617650F2F5361746F7368693A302E372E322FC03E0300"
-
-exampleAddress :: String
-exampleAddress = Char8.unpack . networkAddress $ Addr (10, 0, 0, 1) 8333
+  
