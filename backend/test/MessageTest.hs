@@ -1,29 +1,43 @@
 module MessageTest where
 
 import TestUtil
-import Messages (Command(..), commandTable, Network(..), networkTable, Header(..), showHeader, Addr(..), networkAddress, VersionMessage(..), showVersionMessage)
-import Protocol.Parser (parseHeader, parseAddr, parseVersionMessage)
+import Messages (Command(..), commandTable, Network(..), networkTable, Header(..), showHeader, Addr(..), networkAddress, VersionMessage(..), showVersionMessage, MessageBody(..), MessageContext(..), Message(..), showMessage)
+import Protocol.Parser (parseHeader, parseAddr, parseVersionMessage, parseMessage)
 import Text.Megaparsec (parseMaybe)
 import qualified Data.ByteString.Char8 as Char8
 import Data.Time.Clock (NominalDiffTime(..))
 
-instance Arbitrary Command where
+instance Arbitrary Message where
+  arbitrary = Message <$> arbitrary <*> arbitrary
+
+instance Arbitrary MessageBody where
+  arbitrary = oneof [Version <$> arbitrary]
+
+instance Arbitrary MessageContext where
   arbitrary = do
-    let commands = map fst commandTable
-    elements commands
+    network <- arbitrary
+    time <- choose (0, maxTime) :: Gen Integer
+    return $ MessageContext network (realToFrac time)
+    where
+      maxTime = 0xffffffffffffffff -- 8 bytes
+
+instance Arbitrary VersionMessage where
+  arbitrary = do
+    version    <- choose (0, maxVersion)
+    nonceInt   <- choose (0, maxNonce) :: Gen Integer
+    lastBlockN <- choose (0, maxBlock)
+    senderAddr <- arbitrary
+    peerAddr   <- arbitrary
+    return $ VersionMessage version {--network (realToFrac time)--} nonceInt lastBlockN senderAddr peerAddr
+    where
+      maxVersion = 0xffffffff         -- 4 bytes
+      maxNonce   = 0xffffffffffffffff -- 8 bytes
+      maxBlock   = 0xffffffff         -- 4 bytes
 
 instance Arbitrary Network where
   arbitrary = do
     let networks = map fst networkTable
     elements networks
-
-instance Arbitrary Header where
-  arbitrary = do
-    command <- arbitrary
-    network <- arbitrary
-    messageLength <- arbitrary
-    message <- hexBS messageLength
-    return $ Header network command message
 
 instance Arbitrary Addr where
   arbitrary = do
@@ -37,60 +51,15 @@ instance Arbitrary Addr where
       chooseIpComponent = choose (0, 255)
       choosePort = choose (0, 65535)
 
-instance Arbitrary VersionMessage where
-  arbitrary = do
-    version    <- choose (0, maxVersion) 
-    network    <- arbitrary
-    time       <- choose (0, maxTime)  :: Gen Integer
-    nonceInt   <- choose (0, maxNonce) :: Gen Integer
-    lastBlockN <- choose (0, maxBlock)
-    senderAddr <- arbitrary
-    peerAddr   <- arbitrary
-    return $ VersionMessage version network (realToFrac time) nonceInt lastBlockN senderAddr peerAddr
-    where
-      maxVersion = 0xffffffff         -- 4 bytes
-      maxTime    = 0xffffffffffffffff -- 8 bytes
-      maxNonce   = 0xffffffffffffffff -- 8 bytes
-      maxBlock   = 0xffffffff         -- 4 bytes
+messageInvertible = testProperty
+  "It should be possible to encode and decode messages"
+  prop_messageInvertible
 
-messageHeaderInvertible = testProperty
-  "It should be possible to encode and parse a message header"
-  prop_messageHeaderInvertible
-
-prop_messageHeaderInvertible :: Header -> Bool
-prop_messageHeaderInvertible header@(Header network command _) =
-  case eitherHeader of
+prop_messageInvertible :: Message -> Bool
+prop_messageInvertible message@(Message messageBody _) =
+  case maybeMessageBody of
     Nothing -> False
-    Just (Header network' command' _) ->
-      network == network' &&
-      command == command'
+    Just (parsedMessageBody) -> parsedMessageBody == messageBody
   where
-    eitherHeader = parseMaybe parseHeader headerString
-    headerString = Char8.unpack . showHeader $ header
-
-addrInvertible = testProperty
-  "It should be possible to encode and decode an Addr"
-  prop_addrInvertible
-
-prop_addrInvertible :: Addr -> Bool
-prop_addrInvertible addr =
-  case eitherAddr of
-    Nothing -> False
-    Just parsedAddr -> parsedAddr == addr
-  where
-    eitherAddr = parseMaybe parseAddr addrString
-    addrString = Char8.unpack $ networkAddress addr
-
-versionMessageInvertible = testProperty
-  "It should be possible to encode and decode a versionMessage"
-  prop_versionMessageInvertible
-
-prop_versionMessageInvertible :: VersionMessage -> Bool
-prop_versionMessageInvertible versionMsg =
-  case eitherVersionMsg of
-    Nothing -> False
-    Just parsedVersionMsg ->
-      parsedVersionMsg == versionMsg
-  where
-    eitherVersionMsg = parseMaybe parseVersionMessage versionMsgString
-    versionMsgString = Char8.unpack $ showVersionMessage versionMsg
+    messageString = (Char8.unpack . showMessage) message
+    maybeMessageBody = parseMessage messageString

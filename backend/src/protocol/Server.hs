@@ -2,7 +2,7 @@ module Protocol.Server where
 
 import qualified Data.ByteString.Char8 as Char8
 import Protocol.Parser (parseVersionMessage)
-import Messages (VersionMessage(..), Network(..), getAddr, showVersionMessage, Addr(..))
+import Messages (VersionMessage(..), Network(..), getAddr, showVersionMessage, Addr(..), showMessage, MessageContext(..), Message(..), MessageBody(..))
 import Text.Megaparsec (parseMaybe)
 import Network.Socket (connect
                       , socket
@@ -34,7 +34,7 @@ connectTestnet = do
   connect peerSocket (addrAddress addrInfo)
   putStrLn "Great Job, we connected"
   time <- getPOSIXTime
-  let message = showVersionMessage $ VersionMessage 60002 TestNet3 time 100 10 (getAddr $ addrAddress addrInfo) senderAddr
+  let message = showMessage $ Message (Version $ VersionMessage 60002 100 10 (getAddr $ addrAddress addrInfo) senderAddr) (MessageContext TestNet3 time)
       senderAddr = Addr (207, 251, 103, 46 ) 18333
   send peerSocket $ fst . decode $ message
   putStrLn . Char8.unpack $ message

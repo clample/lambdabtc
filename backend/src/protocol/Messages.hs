@@ -15,34 +15,50 @@ import Data.List (lookup)
 import Data.Tuple (swap)
 import Transaction (Transaction(..), signedTransaction)
 import Network.Socket (SockAddr(..), hostAddressToTuple)
+import Text.Megaparsec (Parsec, Dec)
+
+
+data Message = Message MessageBody MessageContext
+  deriving (Show, Eq)
+
+data MessageBody = Version VersionMessage
+  deriving (Show, Eq)
+
+data MessageContext = MessageContext
+  { network :: Network
+  , time    :: POSIXTime 
+  } deriving (Show, Eq)
 
 data VersionMessage = VersionMessage
   { version    :: Int
-  , network    :: Network
-  , time       :: POSIXTime
   , nonceInt   :: Integer -- Nonce can be 8 bytes -> use integer 
   , lastBlockN :: Integer
   , senderAddr :: Addr
   , peerAddr   :: Addr
   } deriving (Show, Eq)
-  
 
-showVersionMessage :: VersionMessage -> ByteString
-showVersionMessage (VersionMessage v network time randInt blockN senderAddr peerAddr) =
-  headerBS  `BS.append` message
+showMessage :: Message -> ByteString
+showMessage (Message message context) =
+  headerBS `BS.append` messageBS
   where
-    headerBS = showHeader $ Header network VersionCommand message
-    message = BS.concat
-      [ showVersion v
-      , services
-      , timestamp
-      , addrRecv
-      , addrFrom
-      , nonce
-      , userAgent
-      , startHeight
-      , relay ]
-    timestamp = (switchEndian . T.encodeUtf8 . flip hexify 16 . floor) time
+    headerBS = showHeader $ Header (network context) command messageBS
+    (command, messageBS) =
+      case message of
+        Version versionMessage -> (VersionCommand, showVersionMessage context versionMessage)
+
+showVersionMessage :: MessageContext -> VersionMessage -> ByteString
+showVersionMessage context (VersionMessage v randInt blockN senderAddr peerAddr) = BS.concat
+  [ showVersion v
+  , services
+  , timestamp
+  , addrRecv
+  , addrFrom
+  , nonce
+  , userAgent
+  , startHeight
+  , relay ]
+  where
+    timestamp = (switchEndian . T.encodeUtf8 . flip hexify 16 . floor) (time context)
     addrRecv = networkAddress peerAddr
     addrFrom = networkAddress senderAddr
     nonce = (BS.take 16 . T.encodeUtf8 . flip hexify 16 . fromIntegral) randInt
@@ -68,6 +84,8 @@ txMessage network transaction =
     headerBS = showHeader $ Header network TxCommand message
     message = signedTransaction transaction
 
+-- Get rid of Header type and make this Message -> MessageBody -> ByteString
+-- type MessageBody = ByteString
 showHeader :: Header -> ByteString
 showHeader (Header network command message) = BS.concat
   [ printNetwork network
@@ -77,6 +95,7 @@ showHeader (Header network command message) = BS.concat
 
 data Header = Header Network Command ByteString
   deriving (Show, Eq)
+
 
 -------------------------------
 data Network = TestNet3 | MainNet

@@ -54,9 +54,10 @@ tests =
       scriptInvertible
       ],
     testGroup "QuickCheck Message Tests" [
-      messageHeaderInvertible,
-      addrInvertible,
-      versionMessageInvertible
+      -- messageHeaderInvertible,
+      -- addrInvertible,
+      -- versionMessageInvertible
+      messageInvertible
       ]
   ]
 
