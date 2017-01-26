@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Util
   ( Payload(..)
   , prefix
@@ -14,7 +16,9 @@ module Util
   , checkSum
   , readInt
   , parseCount
-  , parsePayload) where
+  , parsePayload
+  , showBool
+  , parseBool) where
 
 import Prelude
 
@@ -115,3 +119,15 @@ parseCount :: Parsec Dec String Int
 parseCount = do
   countStr <- count 2 hexDigitChar
   return . readInt . Char8.pack $ countStr
+
+parseBool :: Parsec Dec String Bool
+parseBool = do
+  str <- count 2 hexDigitChar
+  case str of
+    "01" -> return True
+    "00" -> return False
+    _    -> fail "Unable to parse bool"
+
+showBool :: Bool -> ByteString
+showBool True  = "01"
+showBool False = "00"

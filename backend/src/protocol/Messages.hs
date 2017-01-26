@@ -6,7 +6,7 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as Char8
 import qualified Data.Text.Encoding as T
-import Util (switchEndian, hexify, payloadLength', checkSum)
+import Util (switchEndian, hexify, payloadLength', checkSum, showBool)
 import Data.ByteString.Base16 (decode, encode)
 import Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
 import Control.Lens (over, mapped)
@@ -16,7 +16,7 @@ import Data.Tuple (swap)
 import Transaction (Transaction(..), signedTransaction)
 import Network.Socket (SockAddr(..), hostAddressToTuple)
 import Text.Megaparsec (Parsec, Dec)
-
+import Data.Char (toUpper)
 
 data Message = Message MessageBody MessageContext
   deriving (Show, Eq)
@@ -47,10 +47,11 @@ data VersionMessage = VersionMessage
   , lastBlockN :: Integer
   , senderAddr :: Addr
   , peerAddr   :: Addr
+  , relay      :: Bool
   } deriving (Show, Eq)
 
 showVersionMessage :: MessageContext -> VersionMessage -> ByteString
-showVersionMessage context (VersionMessage v randInt blockN senderAddr peerAddr) = BS.concat
+showVersionMessage context (VersionMessage v randInt blockN senderAddr peerAddr relay) = BS.concat
   [ showVersion v
   , services
   , timestamp
@@ -59,7 +60,7 @@ showVersionMessage context (VersionMessage v randInt blockN senderAddr peerAddr)
   , nonce
   , userAgent
   , startHeight
-  , relay ]
+  , showBool relay ]
   where
     timestamp = (switchEndian . T.encodeUtf8 . flip hexify 16 . floor) (time context)
     addrRecv = networkAddress peerAddr
@@ -67,7 +68,6 @@ showVersionMessage context (VersionMessage v randInt blockN senderAddr peerAddr)
     nonce = (BS.take 16 . T.encodeUtf8 . flip hexify 16 . fromIntegral) randInt
     userAgent = "00" -- See https://github.com/bitcoin/bips/blob/master/bip-0014.mediawiki
     startHeight = (switchEndian . T.encodeUtf8 . flip hexify 8 . fromIntegral) blockN
-    relay = "" -- See https://github.com/bitcoin/bips/blob/master/bip-0037.mediawiki
 
 addrMessage :: Network -> POSIXTime -> Addr -> ByteString
 addrMessage network time addr =
@@ -109,8 +109,8 @@ printNetwork :: Network -> ByteString
 printNetwork = fromJust . flip lookup networkTable
 
 readNetwork :: ByteString -> Maybe Network
-readNetwork = flip lookup (map swap networkTable)
--------------------------------
+readNetwork = readFromTable networkTable
+
 
 data Command
   = VersionCommand
@@ -132,8 +132,13 @@ printCommand :: Command -> ByteString
 printCommand = fromJust . flip lookup commandTable
 
 readCommand :: ByteString -> Maybe Command
-readCommand = flip lookup (map swap commandTable)
--------------------------------
+readCommand = readFromTable commandTable
+
+readFromTable :: [(a, ByteString)] -> ByteString -> Maybe a
+readFromTable table = lookupInTable . uppercase
+  where
+    uppercase     = Char8.pack . (map toUpper) . Char8.unpack
+    lookupInTable = flip lookup (map swap table)
 
 showVersion :: Int -> ByteString
 showVersion version = switchEndian . T.encodeUtf8 $ hexify (fromIntegral version) 8

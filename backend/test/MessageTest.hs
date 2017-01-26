@@ -28,7 +28,8 @@ instance Arbitrary VersionMessage where
     lastBlockN <- choose (0, maxBlock)
     senderAddr <- arbitrary
     peerAddr   <- arbitrary
-    return $ VersionMessage version nonceInt lastBlockN senderAddr peerAddr
+    relay      <- arbitrary
+    return $ VersionMessage version nonceInt lastBlockN senderAddr peerAddr relay
     where
       maxVersion = 0xffffffff         -- 4 bytes
       maxNonce   = 0xffffffffffffffff -- 8 bytes

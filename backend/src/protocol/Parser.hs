@@ -2,11 +2,11 @@
 
 module Protocol.Parser where
 
-import Text.Megaparsec (Parsec, Dec, hexDigitChar, count, many, manyTill, eof, getPosition, setPosition, lookAhead, parseMaybe)
+import Text.Megaparsec (Parsec, Dec, hexDigitChar, count, many, manyTill, eof, getPosition, setPosition, lookAhead, parseMaybe, (<|>), try)
 import Messages (Header(..), readNetwork, readCommand, Network(..), Command(..), VersionMessage(..), Addr(..), Message(..), showVersionMessage, MessageBody(..))
 import qualified Data.ByteString.Char8 as Char8
 import Numeric (readHex)
-import Util (switchEndian, parsePayload)
+import Util (switchEndian, parsePayload, parseBool)
 
 
 parseMessage :: String -> Maybe MessageBody
@@ -18,6 +18,17 @@ parseMessage input = do
       VersionCommand -> Version <$> parseVersionMessage
       VerackCommand  -> return Verack
 
+parseMessage' :: String -> [Maybe MessageBody]
+parseMessage' input =
+  case maybeHeaders of
+    Nothing      -> []
+    Just headers -> map parseBody headers
+  where
+    maybeHeaders = parseMaybe (many parseHeader) input
+    parseBody (Header network command messageBody) = parseMaybe (getParser command) (Char8.unpack messageBody)
+    getParser command = case command of
+      VersionCommand -> Version <$> parseVersionMessage
+      VerackCommand  -> return Verack
 
 parseHeader :: Parsec Dec String Header
 parseHeader = do
@@ -28,7 +39,7 @@ parseHeader = do
   message        <- Char8.pack <$> count (messageLength * 2) hexDigitChar
   case (mNetwork, mCommand) of
     (Just network, Just command) -> return $ Header network command message
-    (_, _)                       -> fail "Unable to parse header"
+    (_, _)                       -> fail $ "Unable to parse header: " ++ show mNetwork ++ "----" ++ show mCommand 
 
 parseVersionMessage :: Parsec Dec String VersionMessage
 parseVersionMessage  = do
@@ -40,8 +51,9 @@ parseVersionMessage  = do
   nonce                <- (fst . head . readHex) <$> count 16 hexDigitChar
   userAgent            <- Char8.unpack <$> parsePayload
   startHeight          <- (fst . head . readHex . Char8.unpack . switchEndian . Char8.pack) <$> count 8 hexDigitChar
+  relay                <- try parseBool <|> return False
   eof
-  return $ VersionMessage version nonce startHeight sender peer
+  return $ VersionMessage version nonce startHeight sender peer relay
   where
     parseTimestamp = (fst . head . readHex . Char8.unpack . switchEndian . Char8.pack) <$> count 16 hexDigitChar
 
