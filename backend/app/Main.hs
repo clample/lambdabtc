@@ -20,7 +20,9 @@ main = do
   runApplication config
 --}
 
-main = connectTestnet
+main = do
+  connectTestnet 1
+  return ()
 
 showScript :: String
 showScript =
