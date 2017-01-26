@@ -16,6 +16,7 @@ parseMessage input = do
   where
     getParser command = case command of
       VersionCommand -> Version <$> parseVersionMessage
+      VerackCommand  -> return Verack
 
 
 parseHeader :: Parsec Dec String Header
@@ -43,7 +44,7 @@ parseVersionMessage  = do
   return $ VersionMessage version nonce startHeight sender peer
   where
     parseTimestamp = (fst . head . readHex . Char8.unpack . switchEndian . Char8.pack) <$> count 16 hexDigitChar
-  
+
 
 parseAddr :: Parsec Dec String Addr
 parseAddr = do

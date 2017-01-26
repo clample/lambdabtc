@@ -21,20 +21,14 @@ import Text.Megaparsec (Parsec, Dec)
 data Message = Message MessageBody MessageContext
   deriving (Show, Eq)
 
-data MessageBody = Version VersionMessage
+data MessageBody
+  = Version VersionMessage
+  | Verack
   deriving (Show, Eq)
 
 data MessageContext = MessageContext
   { network :: Network
   , time    :: POSIXTime 
-  } deriving (Show, Eq)
-
-data VersionMessage = VersionMessage
-  { version    :: Int
-  , nonceInt   :: Integer -- Nonce can be 8 bytes -> use integer 
-  , lastBlockN :: Integer
-  , senderAddr :: Addr
-  , peerAddr   :: Addr
   } deriving (Show, Eq)
 
 showMessage :: Message -> ByteString
@@ -45,6 +39,15 @@ showMessage (Message message context) =
     (command, messageBS) =
       case message of
         Version versionMessage -> (VersionCommand, showVersionMessage context versionMessage)
+        Verack                 -> (VerackCommand , "")
+
+data VersionMessage = VersionMessage
+  { version    :: Int
+  , nonceInt   :: Integer -- Nonce can be 8 bytes -> use integer 
+  , lastBlockN :: Integer
+  , senderAddr :: Addr
+  , peerAddr   :: Addr
+  } deriving (Show, Eq)
 
 showVersionMessage :: MessageContext -> VersionMessage -> ByteString
 showVersionMessage context (VersionMessage v randInt blockN senderAddr peerAddr) = BS.concat
@@ -65,10 +68,6 @@ showVersionMessage context (VersionMessage v randInt blockN senderAddr peerAddr)
     userAgent = "00" -- See https://github.com/bitcoin/bips/blob/master/bip-0014.mediawiki
     startHeight = (switchEndian . T.encodeUtf8 . flip hexify 8 . fromIntegral) blockN
     relay = "" -- See https://github.com/bitcoin/bips/blob/master/bip-0037.mediawiki
-
-verackMessage :: Network -> ByteString
-verackMessage network =
-  showHeader $ Header network VerackCommand ""
 
 addrMessage :: Network -> POSIXTime -> Addr -> ByteString
 addrMessage network time addr =

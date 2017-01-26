@@ -11,7 +11,7 @@ instance Arbitrary Message where
   arbitrary = Message <$> arbitrary <*> arbitrary
 
 instance Arbitrary MessageBody where
-  arbitrary = oneof [Version <$> arbitrary]
+  arbitrary = oneof [Version <$> arbitrary, return Verack]
 
 instance Arbitrary MessageContext where
   arbitrary = do
@@ -28,7 +28,7 @@ instance Arbitrary VersionMessage where
     lastBlockN <- choose (0, maxBlock)
     senderAddr <- arbitrary
     peerAddr   <- arbitrary
-    return $ VersionMessage version {--network (realToFrac time)--} nonceInt lastBlockN senderAddr peerAddr
+    return $ VersionMessage version nonceInt lastBlockN senderAddr peerAddr
     where
       maxVersion = 0xffffffff         -- 4 bytes
       maxNonce   = 0xffffffffffffffff -- 8 bytes
