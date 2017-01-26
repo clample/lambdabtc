@@ -24,7 +24,7 @@ parseMessage' input =
     Nothing      -> []
     Just headers -> map parseBody headers
   where
-    maybeHeaders = parseMaybe (many parseHeader) input
+    maybeHeaders = parseMaybe (many parseHeader) input -- WARNING: This silently lets some messages fail to parse
     parseBody (Header network command messageBody) = parseMaybe (getParser command) (Char8.unpack messageBody)
     getParser command = case command of
       VersionCommand -> Version <$> parseVersionMessage
