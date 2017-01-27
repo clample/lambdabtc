@@ -3,7 +3,8 @@ module Protocol.Server where
 
 import qualified Data.ByteString.Char8 as Char8
 import Protocol.Parser (parseMessage')
-import Messages (VersionMessage(..), Network(..), getAddr, showVersionMessage, Addr(..), showMessage, MessageContext(..), Message(..), MessageBody(..))
+import Messages (getAddr, showMessage)
+import Protocol.Types (Network(..), Addr(..), MessageContext(..), Message(..), MessageBody(..))
 import Text.Megaparsec (parseMaybe)
 import Network.Socket (connect
                       , socket
@@ -79,7 +80,7 @@ versionHandshake  = do
     time <- getPOSIXTime
     let versionMessage =
           showMessage $ Message
-          (Version $ VersionMessage version' nonce' lastBlock' peerAddr' myAddr' relay')
+          (VersionMessage version' nonce' lastBlock' peerAddr' myAddr' relay')
           (MessageContext network' time)
     send peerSocket $ fst . decode $ versionMessage
     bs <- recv peerSocket 1000

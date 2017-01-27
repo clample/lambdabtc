@@ -17,41 +17,19 @@ import Transaction (Transaction(..), signedTransaction)
 import Network.Socket (SockAddr(..), hostAddressToTuple)
 import Text.Megaparsec (Parsec, Dec)
 import Data.Char (toUpper)
-
-data Message = Message MessageBody MessageContext
-  deriving (Show, Eq)
-
-data MessageBody
-  = Version VersionMessage
-  | Verack
-  deriving (Show, Eq)
-
-data MessageContext = MessageContext
-  { network :: Network
-  , time    :: POSIXTime 
-  } deriving (Show, Eq)
+import Control.Lens (over, _2, mapped)
+import Protocol.Types
 
 showMessage :: Message -> ByteString
-showMessage (Message message context) =
+showMessage message@(Message  messageBody context) =
   headerBS `BS.append` messageBS
   where
-    headerBS = showHeader $ Header (network context) command messageBS
-    (command, messageBS) =
-      case message of
-        Version versionMessage -> (VersionCommand, showVersionMessage context versionMessage)
-        Verack                 -> (VerackCommand , "")
+    headerBS = showHeader $ Header (network context) (getCommand messageBody) messageBS
+    messageBS = showMessageBody message
 
-data VersionMessage = VersionMessage
-  { version    :: Int
-  , nonceInt   :: Integer -- Nonce can be 8 bytes -> use integer 
-  , lastBlockN :: Integer
-  , senderAddr :: Addr
-  , peerAddr   :: Addr
-  , relay      :: Bool
-  } deriving (Show, Eq)
+showMessageBody :: Message -> ByteString
 
-showVersionMessage :: MessageContext -> VersionMessage -> ByteString
-showVersionMessage context (VersionMessage v randInt blockN senderAddr peerAddr relay) = BS.concat
+showMessageBody (Message (VersionMessage v randInt blockN senderAddr peerAddr relay) context) = BS.concat
   [ showVersion v
   , services
   , timestamp
@@ -68,6 +46,8 @@ showVersionMessage context (VersionMessage v randInt blockN senderAddr peerAddr 
     nonce = (BS.take 16 . T.encodeUtf8 . flip hexify 16 . fromIntegral) randInt
     userAgent = "00" -- See https://github.com/bitcoin/bips/blob/master/bip-0014.mediawiki
     startHeight = (switchEndian . T.encodeUtf8 . flip hexify 8 . fromIntegral) blockN
+
+showMessageBody _ = ""
 
 addrMessage :: Network -> POSIXTime -> Addr -> ByteString
 addrMessage network time addr =
@@ -92,66 +72,11 @@ showHeader (Header network command message) = BS.concat
   , switchEndian $ payloadLength' 8 message
   , (encode . checkSum . fst . decode) message ]
 
-data Header = Header Network Command ByteString
-  deriving (Show, Eq)
-
-
--------------------------------
-data Network = TestNet3 | MainNet
-  deriving (Show, Eq)
-
-networkTable :: [(Network, ByteString)]
-networkTable =
-  [ (TestNet3, "0B110907")
-  , (MainNet,  "F9BEB4D9")]
-
-printNetwork :: Network -> ByteString
-printNetwork = fromJust . flip lookup networkTable
-
-readNetwork :: ByteString -> Maybe Network
-readNetwork = readFromTable networkTable
-
-
-data Command
-  = VersionCommand
-  | VerackCommand
-  | AddrCommand
-  | TxCommand
-  | RejectCommand
-  deriving (Show, Eq)
-
-commandTable :: [(Command, ByteString)]
-commandTable =
-  [ (VersionCommand, "76657273696F6E0000000000")
-  , (VerackCommand , "76657261636B000000000000")
-  , (AddrCommand,    "616464720000000000000000")
-  , (TxCommand,      "747800000000000000000000")
-  , (RejectCommand,  "72656a656374000000000000")]
-
-printCommand :: Command -> ByteString
-printCommand = fromJust . flip lookup commandTable
-
-readCommand :: ByteString -> Maybe Command
-readCommand = readFromTable commandTable
-
-readFromTable :: [(a, ByteString)] -> ByteString -> Maybe a
-readFromTable table = lookupInTable . uppercase
-  where
-    uppercase     = Char8.pack . (map toUpper) . Char8.unpack
-    lookupInTable = flip lookup (map swap table)
-
 showVersion :: Int -> ByteString
 showVersion version = switchEndian . T.encodeUtf8 $ hexify (fromIntegral version) 8
 
 services :: ByteString -- This should not be hardcoded
 services = "0100000000000000"
-
-data Addr = Addr IP Port
-  deriving (Show, Eq)
-
-type IP = (Int, Int, Int, Int)
-
-type Port = Int
 
 getAddr :: SockAddr -> Addr
 getAddr (SockAddrInet port host) =

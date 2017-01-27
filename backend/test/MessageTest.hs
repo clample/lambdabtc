@@ -1,8 +1,9 @@
 module MessageTest where
 
 import TestUtil
-import Messages (Command(..), commandTable, Network(..), networkTable, Header(..), showHeader, Addr(..), networkAddress, VersionMessage(..), showVersionMessage, MessageBody(..), MessageContext(..), Message(..), showMessage)
-import Protocol.Parser (parseHeader, parseAddr, parseVersionMessage, parseMessage)
+import Messages (showHeader, networkAddress, showMessageBody, showMessage)
+import Protocol.Types (Command(..), commandTable, Network(..), networkTable, Header(..), Addr(..), MessageBody(..), MessageContext(..), Message(..))
+import Protocol.Parser (parseHeader, parseAddr, parseMessage)
 import Text.Megaparsec (parseMaybe)
 import qualified Data.ByteString.Char8 as Char8
 import Data.Time.Clock (NominalDiffTime(..))
@@ -11,7 +12,7 @@ instance Arbitrary Message where
   arbitrary = Message <$> arbitrary <*> arbitrary
 
 instance Arbitrary MessageBody where
-  arbitrary = oneof [Version <$> arbitrary, return Verack]
+  arbitrary = oneof [arbitraryVersionMessage, return VerackMessage]
 
 instance Arbitrary MessageContext where
   arbitrary = do
@@ -21,19 +22,19 @@ instance Arbitrary MessageContext where
     where
       maxTime = 0xffffffffffffffff -- 8 bytes
 
-instance Arbitrary VersionMessage where
-  arbitrary = do
-    version    <- choose (0, maxVersion)
-    nonceInt   <- choose (0, maxNonce) :: Gen Integer
-    lastBlockN <- choose (0, maxBlock)
-    senderAddr <- arbitrary
-    peerAddr   <- arbitrary
-    relay      <- arbitrary
-    return $ VersionMessage version nonceInt lastBlockN senderAddr peerAddr relay
-    where
-      maxVersion = 0xffffffff         -- 4 bytes
-      maxNonce   = 0xffffffffffffffff -- 8 bytes
-      maxBlock   = 0xffffffff         -- 4 bytes
+
+arbitraryVersionMessage = do
+  version    <- choose (0, maxVersion)
+  nonceInt   <- choose (0, maxNonce) :: Gen Integer
+  lastBlockN <- choose (0, maxBlock)
+  senderAddr <- arbitrary
+  peerAddr   <- arbitrary
+  relay      <- arbitrary
+  return $ VersionMessage version nonceInt lastBlockN senderAddr peerAddr relay
+  where
+    maxVersion = 0xffffffff         -- 4 bytes
+    maxNonce   = 0xffffffffffffffff -- 8 bytes
+    maxBlock   = 0xffffffff         -- 4 bytes
 
 instance Arbitrary Network where
   arbitrary = do
