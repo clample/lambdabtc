@@ -85,7 +85,10 @@ textToHexByteString = stringToHexByteString . T.unpack
 
 -- Make sure that we include leading zeroes when converting an int to its string representatin in hexidecimal
 hexify :: Integer -> Int -> T.Text
-hexify n desiredLength = T.pack $ leadingZeroes ++ base
+hexify n desiredLength =
+  if n >= 0
+  then T.pack $ leadingZeroes ++ base
+  else error $ "hexify: we can not hexify negative integers " ++ show n
   where
     base = showHex n ""
     leadingZeroes = replicate (desiredLength - length base) '0'

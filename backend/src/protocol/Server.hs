@@ -28,7 +28,7 @@ import Network.Socket.ByteString (send, recv )
 import Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
 import Data.ByteString.Base16 (decode, encode)
 import Control.Monad.State.Lazy (StateT(..), runStateT, get, liftIO)
-import System.Random (randomIO)
+import System.Random (randomRIO)
 
 data ConnectionContext = ConnectionContext
   { peer :: Peer
@@ -76,12 +76,13 @@ versionHandshake  = do
        , peer = Peer peerSocket peerAddr'
        , network = network'}) = connectionContext
   liftIO $ do
-    nonce' <- randomIO
+    nonce' <- randomRIO (0, 0xffffffffffffffff )
     time <- getPOSIXTime
     let versionMessage =
           showMessage $ Message
           (VersionMessage version' nonce' lastBlock' peerAddr' myAddr' relay')
           (MessageContext network' time)
+    putStrLn $ "Sending message" ++ Char8.unpack versionMessage
     send peerSocket $ fst . decode $ versionMessage
     bs <- recv peerSocket 1000
     let response = Char8.unpack . encode $ bs
