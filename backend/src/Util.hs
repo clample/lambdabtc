@@ -18,9 +18,9 @@ module Util
   , parseCount
   , parsePayload
   , showBool
-  , parseBool) where
+  , parseBool ) where
 
-import Prelude
+import Prelude hiding (take)
 
 import Data.Maybe (listToMaybe)
 import Data.ByteString (ByteString)
@@ -28,13 +28,15 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Data.Base58String.Bitcoin (Base58String, fromBytes, toBytes, toText, fromText)
 import Crypto.Hash.Algorithms (SHA256(..), RIPEMD160(..))
-import Crypto.Hash (Digest, digestFromByteString, hashWith)
+import Crypto.Hash (Digest(..), digestFromByteString, hashWith)
 import qualified Data.ByteString as BS
-import Data.ByteString (ByteString)
+import Data.ByteString (ByteString, take)
 import qualified Data.ByteString.Char8 as Char8
 import Data.ByteString.Base16 (decode, encode)
 import Numeric (showHex, readHex)
 import Text.Megaparsec (Parsec, Dec, count, hexDigitChar)
+import Data.Word (Word32)
+import Data.ByteArray (convert)
 
 data Payload = Payload ByteString
   deriving (Show, Eq)
@@ -56,8 +58,7 @@ maybeRead :: Read a => String -> Maybe a
 maybeRead = fmap fst . listToMaybe . reads
 
 checkSum :: ByteString -> ByteString
-checkSum =
-  BS.take 4 . stringToHexByteString . show . hashWith SHA256 . hashWith SHA256 
+checkSum = (take 4) . convert . hashWith SHA256 . hashWith SHA256
 
 -- https://github.com/bitcoinbook/bitcoinbook/blob/first_edition/ch04.asciidoc#base58-and-base58check-encoding
 encodeBase58Check :: Prefix -> Payload -> T.Text
@@ -134,3 +135,4 @@ parseBool = do
 showBool :: Bool -> ByteString
 showBool True  = "01"
 showBool False = "00"
+

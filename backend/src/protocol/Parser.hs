@@ -3,12 +3,8 @@
 module Protocol.Parser where
 
 import Text.Megaparsec (Parsec, Dec, hexDigitChar, count, many, manyTill, eof, getPosition, setPosition, lookAhead, parseMaybe, (<|>), try, parse)
-import Messages (showMessageBody)
 import Protocol.Types (MessageBody(..), Header(..), readNetwork, readCommand, Network(..), Command(..), Addr(..), Message(..))
 import qualified Data.ByteString.Char8 as Char8
-import Numeric (readHex)
-import Util (switchEndian, parsePayload, parseBool)
-import qualified Debug.Trace as Trace
 import Data.Binary.Get (Get(..), getByteString, getWord32le, getWord64be, getWord64le, getWord8, getWord16be, isolate, bytesRead)
 import Data.ByteString.Base16 (encode, decode)
 import Foreign.Marshal.Utils (toBool)

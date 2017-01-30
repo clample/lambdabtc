@@ -3,6 +3,7 @@
 module Protocol.Types where
 
 import Data.ByteString (ByteString)
+import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as Char8
 import Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
 import Control.Lens (over, _2, mapped)
@@ -106,6 +107,8 @@ networkTable =
 printNetwork :: Network -> ByteString
 printNetwork = fromJust . flip lookup networkTable
 
+getNetwork' = fst . decode . printNetwork
+
 readNetwork :: ByteString -> Maybe Network
 readNetwork = readFromTable networkTable
 
@@ -145,7 +148,21 @@ data Command
   deriving (Show, Eq)
 
 commandTable :: [(Command, ByteString)]
-commandTable = over (mapped . _2) (getCommandBS)                               
+commandTable = over (mapped . _2) (getCommandBS) commandTable'
+
+commandTableBinary :: [(Command, ByteString)]
+commandTableBinary = over (mapped . _2) (Char8.pack) commandTable'
+
+getCommand' :: Command -> ByteString
+getCommand' = padWithZeroes . getCommand
+  where 
+  getCommand = fromJust . flip lookup commandTableBinary
+  padWithZeroes bs = bs `BS.append` (padding bs)
+  padding bs = BS.replicate (12 - BS.length bs) 0
+  -- need to pad with zeroes
+
+commandTable' :: [(Command, String)]
+commandTable' = 
   [ (VersionCommand, "version") 
   , (VerackCommand , "verack")
   , (AddrCommand,    "addr")

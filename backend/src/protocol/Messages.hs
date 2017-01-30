@@ -6,7 +6,7 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as Char8
 import qualified Data.Text.Encoding as T
-import Util (switchEndian, hexify, payloadLength', checkSum, showBool)
+import Util (checkSum)
 import Data.ByteString.Base16 (decode, encode)
 import Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
 import Control.Lens (over, mapped)
@@ -18,65 +18,44 @@ import Network.Socket (SockAddr(..), hostAddressToTuple)
 import Text.Megaparsec (Parsec, Dec)
 import Data.Char (toUpper)
 import Control.Lens (over, _2, mapped)
-import Protocol.Types
+import Protocol.Types (getCommand', getNetwork', Network(..), Addr(..), Header(..), Command(..), Message(..), MessageContext(..), getCommand, MessageBody (..))
+import Data.Binary.Put (Put, putWord16be, putWord32le, putWord32be, putWord64le, putWord64be, putWord8, putByteString, runPut)
+import Data.Binary (Binary(..))
+import qualified Data.ByteString.Lazy as BL
 
-showMessage :: Message -> ByteString
-showMessage message@(Message  messageBody context) =
-  headerBS `BS.append` messageBS
+putMessage :: Message -> Put
+putMessage message@(Message messageBody context) = do
+  putHeader (Header
+              (network context)
+              (getCommand messageBody)
+              (BL.toStrict $ messageBS))
+  putMessageBody message
   where
-    headerBS = showHeader $ Header (network context) (getCommand messageBody) messageBS
-    messageBS = showMessageBody message
+    messageBS = runPut $ putMessageBody message
 
-showMessageBody :: Message -> ByteString
+putHeader :: Header -> Put
+putHeader (Header network command message) = do
+  putByteString $ getNetwork' network
+  putByteString $ getCommand' command
+  putWord32le $ fromIntegral (BS.length message)
+  putByteString $ checkSum message
 
-showMessageBody (Message (VersionMessage v randInt blockN senderAddr peerAddr relay) context) = BS.concat
-  [ showVersion v
-  , services
-  , timestamp
-  , addrRecv
-  , addrFrom
-  , nonce
-  , userAgent
-  , startHeight
-  , showBool relay ]
-  where
-    timestamp = (switchEndian . T.encodeUtf8 . flip hexify 16 . floor) (time context)
-    addrRecv = networkAddress peerAddr
-    addrFrom = networkAddress senderAddr
-    nonce = (BS.take 16 . T.encodeUtf8 . flip hexify 16 . fromIntegral) randInt
-    userAgent = "00" -- See https://github.com/bitcoin/bips/blob/master/bip-0014.mediawiki
-    startHeight = (switchEndian . T.encodeUtf8 . flip hexify 8 . fromIntegral) blockN
+putMessageBody :: Message -> Put
+putMessageBody (Message (VersionMessage v randInt blockN senderAddr peerAddr relay) context) = do
+  putWord32le (fromIntegral v)
+  putServices
+  putWord64le . floor. time $ context
+  putAddr peerAddr
+  putAddr senderAddr
+  putWord64be . fromIntegral $ randInt
+  putWord8 0
+  putWord32le . fromIntegral $ blockN
+  put relay
 
-showMessageBody _ = ""
+putMessageBody _ = putByteString ""
 
-addrMessage :: Network -> POSIXTime -> Addr -> ByteString
-addrMessage network time addr =
-  headerBS `BS.append` message
-  where
-    headerBS = showHeader $ Header network AddrCommand message
-    message = networkAddress addr
-
-txMessage :: Network -> Transaction -> ByteString
-txMessage network transaction =
-  headerBS `BS.append` message
-  where
-    headerBS = showHeader $ Header network TxCommand message
-    message = signedTransaction transaction
-
--- Get rid of Header type and make this Message -> MessageBody -> ByteString
--- type MessageBody = ByteString
-showHeader :: Header -> ByteString
-showHeader (Header network command message) = BS.concat
-  [ printNetwork network
-  , printCommand command
-  , switchEndian $ payloadLength' 8 message
-  , (encode . checkSum . fst . decode) message ]
-
-showVersion :: Int -> ByteString
-showVersion version = switchEndian . T.encodeUtf8 $ hexify (fromIntegral version) 8
-
-services :: ByteString -- This should not be hardcoded
-services = "0100000000000000"
+putServices :: Put
+putServices = putWord64le 1
 
 getAddr :: SockAddr -> Addr
 getAddr (SockAddrInet port host) =
@@ -85,17 +64,14 @@ getAddr (SockAddrInet port host) =
     hostIP = (fromIntegral a, fromIntegral b, fromIntegral c, fromIntegral d)
     (a, b, c, d) = hostAddressToTuple host
 
-networkAddress :: Addr -> ByteString
-networkAddress (Addr (a, b, c, d) port) =
-  BS.concat [services, ipAddress, portBS]
+putAddr :: Addr -> Put
+putAddr (Addr (a, b, c, d) port) = do
+  putServices
+  putByteString ipAddressMagicStr
+  putWord8 . fromIntegral $ a
+  putWord8 . fromIntegral $ b
+  putWord8 . fromIntegral $ c
+  putWord8 . fromIntegral $ d
+  putWord16be . fromIntegral $ port
   where
-    portBS = (T.encodeUtf8 . flip hexify 4 . fromIntegral) port
-    ipAddress =  BS.concat
-                 [ ipAddressMagicStr
-                 , showAddressComponent a
-                 , showAddressComponent b
-                 , showAddressComponent c
-                 , showAddressComponent d]
-    ipAddressMagicStr = "00000000000000000000FFFF"  
-    showAddressComponent = T.encodeUtf8 . flip hexify 2 . fromIntegral
-  
+    ipAddressMagicStr = fst . decode $ "00000000000000000000FFFF"

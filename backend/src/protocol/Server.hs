@@ -3,7 +3,7 @@ module Protocol.Server where
 
 import qualified Data.ByteString.Char8 as Char8
 import Protocol.Parser (parseMessage)
-import Messages (getAddr, showMessage)
+import Messages (getAddr, putMessage)
 import Protocol.Types (Network(..), Addr(..), MessageContext(..), Message(..), MessageBody(..))
 import Text.Megaparsec (parseMaybe)
 import Network.Socket (connect
@@ -33,8 +33,12 @@ import Conduit (Producer(..), runConduit, (.|), mapC)
 import Data.Conduit.Combinators (encodeBase16, stdout)
 import Data.Conduit.Network (sourceSocket, sinkSocket)
 import Data.Conduit.Serialization.Binary (conduitGet)
+import Data.Conduit.TMChan (sourceTBMChan, sinkTBMChan, newTBMChan, TBMChan)
+import Control.Monad.STM (atomically)
 import Data.ByteString (ByteString)
 import Data.Binary.Get ()
+import Data.Binary.Put (runPut)
+import qualified Data.ByteString.Lazy as BL
 
 data ConnectionContext = ConnectionContext
   { peer' :: Peer
@@ -70,20 +74,27 @@ connectTestnet n = do
         , relay' = False
         , network' = TestNet3
         }
-  return ()
+  chan <- atomically $ newTBMChan 16
   runConnection versionHandshake context
-  inputConnection peerSocket
+  return ()
+  
+{--
+  listener peerSocket
 
 
-inputConnection :: Socket -> IO ()
-inputConnection socket = runConduit
+listener :: Socket -> IO ()
+listener socket = runConduit
   $  sourceSocket socket
-  .| conduitGet parseMessage
-  .| mapC show
+  .| conduitGet parseMessage -- use Data.Conduit.Serialization.Binary
   .| stdout
-
-
-
+--}
+{--
+writer :: TBMChan Message  -> Socket -> IO ()
+writer chan socket = runConduit
+  $  sourceTBMChan chan
+  .| map showMessage -- use Data.Conduit.Serialization.Binary
+  .| sinkSocket socket
+--}
 
 versionHandshake :: Connection ()
 versionHandshake  = do
@@ -98,10 +109,10 @@ versionHandshake  = do
   liftIO $ do
     nonce' <- randomRIO (0, 0xffffffffffffffff )
     time <- getPOSIXTime
-    let versionMessage =
-          showMessage $ Message
+    let versionMessage = BL.toStrict . runPut .
+          putMessage $ Message
           (VersionMessage version' nonce' lastBlock' peerAddr' myAddr' relay')
           (MessageContext network' time)
     putStrLn $ "Sending message " ++ Char8.unpack versionMessage
-    send peerSocket $ fst . decode $ versionMessage
+    send peerSocket versionMessage
     return ()

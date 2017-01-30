@@ -64,6 +64,9 @@ library
                      , conduit-extra ==1.1.*
                      , binary ==0.8.3.*
                      , binary-conduit ==1.2.4.*
+                     , stm-conduit ==3.0.*
+                     , stm ==2.4.4.*
+                     , memory ==0.13
   default-language:    Haskell2010
 
 executable backend-exe

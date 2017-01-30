@@ -1,12 +1,13 @@
 module MessageTest where
 
 import TestUtil
-import Messages (showHeader, networkAddress, showMessageBody, showMessage)
+import Messages (putMessage)
 import Protocol.Types (Command(..), commandTable, Network(..), networkTable, Header(..), Addr(..), MessageBody(..), MessageContext(..), Message(..))
 import Protocol.Parser (parseMessage)
 import qualified Data.ByteString.Char8 as Char8
 import Data.Time.Clock (NominalDiffTime(..))
 import Data.Binary.Get (runGet)
+import Data.Binary.Put (runPut)
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString as B
 import Data.ByteString.Base16 (encode, decode)
@@ -65,5 +66,5 @@ prop_messageInvertible :: Message -> Bool
 prop_messageInvertible message@(Message messageBody _) =
       parsedMessageBody == messageBody
   where
-    parsedMessageBody = runGet parseMessage (BL.fromChunks [fst . decode . showMessage $ message])
+    parsedMessageBody = runGet parseMessage (runPut . putMessage $ message)
     
