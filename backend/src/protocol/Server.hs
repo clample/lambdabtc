@@ -66,7 +66,7 @@ runConnection connection state = runStateT connection state
 
 -- Find testnet hosts with `nslookup testnet-seed.bitcoin.petertodd.org`
 
-connectTestnet :: Int -> IO () -- ConnectionContext
+connectTestnet :: Int -> IO () 
 connectTestnet n = do
   addrInfo <- (!! n) <$> getAddrInfo Nothing (Just "testnet-seed.bitcoin.petertodd.org") (Just "18333")
   peerSocket <- socket (addrFamily addrInfo) Stream defaultProtocol
