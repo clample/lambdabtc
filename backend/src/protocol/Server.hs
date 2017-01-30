@@ -29,13 +29,14 @@ import Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
 import Data.ByteString.Base16 (decode, encode)
 import Control.Monad.State.Lazy (StateT(..), runStateT, liftIO)
 import qualified Control.Monad.State.Lazy as State
-import System.Random (randomRIO)
+import System.Random (randomR, StdGen, getStdGen)
 import Conduit (Producer(..), runConduit, (.|), mapC)
 import Data.Conduit.Combinators (encodeBase16, stdout)
 import Data.Conduit.Network (sourceSocket, sinkSocket)
-import Data.Conduit.Serialization.Binary (conduitGet)
-import Data.Conduit.TMChan (sourceTBMChan, sinkTBMChan, newTBMChan, TBMChan)
-import Control.Monad.STM (atomically)
+import Data.Conduit.Serialization.Binary (conduitGet, conduitPut)
+import Data.Conduit.TMChan (sourceTBMChan, sinkTBMChan, newTBMChan, TBMChan, writeTBMChan, readTBMChan)
+import Control.Concurrent.STM (atomically, STM(..))
+import Control.Concurrent (forkIO)
 import Data.ByteString (ByteString)
 import Data.Binary.Get ()
 import Data.Binary.Put (runPut)
@@ -43,21 +44,24 @@ import Data.Binary (Binary(..))
 import qualified Data.ByteString.Lazy as BL
 
 data ConnectionContext = ConnectionContext
-  { peer' :: Peer
-  , version' :: Int
+  { version' :: Int
   , lastBlock' :: Integer
   , myAddr' :: Addr
+  , peer' :: Peer
   , relay' :: Bool
   , network' :: Network
-  } deriving (Show, Eq)
+  , writerChan :: TBMChan Message
+  , time :: POSIXTime
+  , randGen :: StdGen
+  } -- deriving (Show, Eq)
 
 data Peer = Peer Socket Addr
   deriving (Show, Eq)
 
 
-type Connection a = StateT ConnectionContext IO a
+type Connection a = StateT ConnectionContext STM a
 
-runConnection :: Connection a -> ConnectionContext -> IO (a, ConnectionContext)
+runConnection :: Connection a -> ConnectionContext -> STM (a, ConnectionContext)
 runConnection connection state = runStateT connection state
 
 -- Find testnet hosts with `nslookup testnet-seed.bitcoin.petertodd.org`
@@ -68,39 +72,52 @@ connectTestnet n = do
   peerSocket <- socket (addrFamily addrInfo) Stream defaultProtocol
   setSocketOption peerSocket KeepAlive 1
   connect peerSocket (addrAddress addrInfo)
+  writeChan <- atomically $ newTBMChan 16
+  listenChan <- atomically $ newTBMChan 16
+  time' <- getPOSIXTime
+  randGen' <- getStdGen
   let context = ConnectionContext
-        { peer' = Peer peerSocket (getAddr $ addrAddress addrInfo)
-        , version' = 60002
+        { version' = 60002
         , lastBlock' = 100
         , myAddr' = Addr (0, 0, 0, 0) 18333 -- Addr (207, 251, 103, 46 ) 18333
+        , peer' = Peer peerSocket (getAddr $ addrAddress addrInfo)
         , relay' = False
         , network' = TestNet3
+        , writerChan = writeChan
+        , time = time'
+        , randGen = randGen'
         }
-  chan <- atomically $ newTBMChan 16
-  runConnection versionHandshake context
-  return ()
+        -- Fork listener then writer
+  forkIO $ listener listenChan peerSocket
+  forkIO $ writer writeChan peerSocket
+  atomically $ runConnection versionHandshake context
+  response1 <- atomically $ readTBMChan listenChan
+  putStrLn $ "1: " ++ show response1
+  response2 <- atomically $ readTBMChan listenChan
+  putStrLn $ "2: " ++ show response2 
 
 instance Binary Message where
   put = putMessage
   get = parseMessage
 
-{--
-listener :: Socket -> IO ()
-listener socket = runConduit
+
+listener :: TBMChan Message -> Socket -> IO ()
+listener chan socket = runConduit
   $  sourceSocket socket
-  .| conduitGet parseMessage -- use Data.Conduit.Serialization.Binary
-  .| stdout
+  .| conduitGet parseMessage
+  .| sinkTBMChan chan True 
 
 
 writer :: TBMChan Message  -> Socket -> IO ()
 writer chan socket = runConduit
   $  sourceTBMChan chan
-  .| map showMessage -- use Data.Conduit.Serialization.Binary
+  .| mapC put
+  .| conduitPut 
   .| sinkSocket socket
---}
+
 
 versionHandshake :: Connection ()
-versionHandshake  = do
+versionHandshake = do
   connectionContext <- State.get
   let (ConnectionContext
        { version' = version'
@@ -108,14 +125,17 @@ versionHandshake  = do
        , relay' = relay'
        , myAddr' = myAddr'
        , peer' = Peer peerSocket peerAddr'
-       , network' = network'}) = connectionContext
-  liftIO $ do
-    nonce' <- randomRIO (0, 0xffffffffffffffff )
-    time <- getPOSIXTime
-    let versionMessage = BL.toStrict . runPut .
-          putMessage $ Message
+       , network' = network'
+       , writerChan = writerChan
+       , time = time
+       , randGen = randGen
+       }) = connectionContext
+      nonce' = fst $ randomR (0, 0xffffffffffffffff ) randGen
+      versionMessage = Message
           (VersionMessage version' nonce' lastBlock' peerAddr' myAddr' relay' time)
           (MessageContext network')
-    putStrLn $ "Sending message " ++ Char8.unpack versionMessage
-    send peerSocket versionMessage
-    return ()
+  State.lift $ do
+    writeTBMChan writerChan versionMessage
+
+   
+  
