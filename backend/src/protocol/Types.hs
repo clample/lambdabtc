@@ -6,7 +6,7 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as Char8
 import Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
 import Control.Lens (over, _2, mapped)
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, fromMaybe)
 import Data.Char (toUpper)
 import Data.Tuple (swap)
 import Data.ByteString.Base16 (decode, encode)
@@ -57,6 +57,7 @@ data MessageBody
   | CmpctblockMessage
   | GetblocktxnMessage
   | BlocktxnMessage
+  | UnknownMessage
   deriving (Show, Eq)
 
 getCommand :: MessageBody -> Command
@@ -87,6 +88,7 @@ getCommand SendcmpctMessage = SendcmpctCommand
 getCommand CmpctblockMessage = CmpctblockCommand
 getCommand GetblocktxnMessage = GetblocktxnCommand
 getCommand BlocktxnMessage = BlocktxnCommand
+getCommand UnknownMessage = UnknownCommand
 
 data MessageContext = MessageContext
   { network :: Network
@@ -139,6 +141,7 @@ data Command
   | CmpctblockCommand
   | GetblocktxnCommand
   | BlocktxnCommand
+  | UnknownCommand -- If we are unable to find the incoming command
   deriving (Show, Eq)
 
 commandTable :: [(Command, ByteString)]
@@ -180,8 +183,8 @@ getCommandBS = Char8.pack . (padWithZeroes) . map toUpper . Char8.unpack .  enco
 printCommand :: Command -> ByteString
 printCommand = fromJust . flip lookup commandTable
 
-readCommand :: ByteString -> Maybe Command
-readCommand = readFromTable commandTable
+readCommand :: ByteString -> Command
+readCommand bs = fromMaybe UnknownCommand (readFromTable commandTable bs)
 
 readFromTable :: [(a, ByteString)] -> ByteString -> Maybe a
 readFromTable table = lookupInTable . uppercase

@@ -3,10 +3,14 @@ module MessageTest where
 import TestUtil
 import Messages (showHeader, networkAddress, showMessageBody, showMessage)
 import Protocol.Types (Command(..), commandTable, Network(..), networkTable, Header(..), Addr(..), MessageBody(..), MessageContext(..), Message(..))
-import Protocol.Parser (parseHeader, parseAddr, parseMessage)
-import Text.Megaparsec (parseMaybe)
+import Protocol.Parser (parseMessage)
 import qualified Data.ByteString.Char8 as Char8
 import Data.Time.Clock (NominalDiffTime(..))
+import Data.Binary.Get (runGet)
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString as B
+import Data.ByteString.Base16 (encode, decode)
+
 
 instance Arbitrary Message where
   arbitrary = Message <$> arbitrary <*> arbitrary
@@ -59,9 +63,7 @@ messageInvertible = testProperty
 
 prop_messageInvertible :: Message -> Bool
 prop_messageInvertible message@(Message messageBody _) =
-  case maybeMessageBody of
-    Nothing -> False
-    Just (parsedMessageBody) -> parsedMessageBody == messageBody
+      parsedMessageBody == messageBody
   where
-    messageString = (Char8.unpack . showMessage) message
-    maybeMessageBody = parseMessage messageString
+    parsedMessageBody = runGet parseMessage (BL.fromChunks [fst . decode . showMessage $ message])
+    
