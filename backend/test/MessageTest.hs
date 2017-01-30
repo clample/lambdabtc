@@ -20,12 +20,7 @@ instance Arbitrary MessageBody where
   arbitrary = oneof [arbitraryVersionMessage, return VerackMessage]
 
 instance Arbitrary MessageContext where
-  arbitrary = do
-    network <- arbitrary
-    time <- choose (0, maxTime) :: Gen Integer
-    return $ MessageContext network (realToFrac time)
-    where
-      maxTime = 0xffffffffffffffff -- 8 bytes
+  arbitrary = MessageContext <$> arbitrary
 
 
 arbitraryVersionMessage = do
@@ -35,11 +30,13 @@ arbitraryVersionMessage = do
   senderAddr <- arbitrary
   peerAddr   <- arbitrary
   relay      <- arbitrary
-  return $ VersionMessage version nonceInt lastBlockN senderAddr peerAddr relay
+  time       <- choose (0, maxTime) :: Gen Integer
+  return $ VersionMessage version nonceInt lastBlockN senderAddr peerAddr relay (realToFrac time)
   where
     maxVersion = 0xffffffff         -- 4 bytes
     maxNonce   = 0xffffffffffffffff -- 8 bytes
     maxBlock   = 0xffffffff         -- 4 bytes
+    maxTime = 0xffffffffffffffff -- 8 bytes
 
 instance Arbitrary Network where
   arbitrary = do
@@ -63,8 +60,8 @@ messageInvertible = testProperty
   prop_messageInvertible
 
 prop_messageInvertible :: Message -> Bool
-prop_messageInvertible message@(Message messageBody _) =
-      parsedMessageBody == messageBody
+prop_messageInvertible message =
+      parsedMessage == message
   where
-    parsedMessageBody = runGet parseMessage (runPut . putMessage $ message)
+    parsedMessage = runGet parseMessage (runPut . putMessage $ message)
     

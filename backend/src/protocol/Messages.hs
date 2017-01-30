@@ -29,9 +29,10 @@ putMessage message@(Message messageBody context) = do
               (network context)
               (getCommand messageBody)
               (BL.toStrict $ messageBS))
-  putMessageBody message
+  messageBodyEncode
   where
-    messageBS = runPut $ putMessageBody message
+    messageBS = runPut messageBodyEncode
+    messageBodyEncode = putMessageBody messageBody
 
 putHeader :: Header -> Put
 putHeader (Header network command message) = do
@@ -40,11 +41,11 @@ putHeader (Header network command message) = do
   putWord32le $ fromIntegral (BS.length message)
   putByteString $ checkSum message
 
-putMessageBody :: Message -> Put
-putMessageBody (Message (VersionMessage v randInt blockN senderAddr peerAddr relay) context) = do
+putMessageBody :: MessageBody -> Put
+putMessageBody (VersionMessage v randInt blockN senderAddr peerAddr relay time) = do
   putWord32le (fromIntegral v)
   putServices
-  putWord64le . floor. time $ context
+  putWord64le . floor $ time
   putAddr peerAddr
   putAddr senderAddr
   putWord64be . fromIntegral $ randInt

@@ -3,21 +3,21 @@
 module Protocol.Parser where
 
 import Text.Megaparsec (Parsec, Dec, hexDigitChar, count, many, manyTill, eof, getPosition, setPosition, lookAhead, parseMaybe, (<|>), try, parse)
-import Protocol.Types (MessageBody(..), Header(..), readNetwork, readCommand, Network(..), Command(..), Addr(..), Message(..))
+import Protocol.Types (MessageBody(..), Header(..), readNetwork, readCommand, Network(..), Command(..), Addr(..), Message(..), getNetwork, MessageContext(..))
 import qualified Data.ByteString.Char8 as Char8
 import Data.Binary.Get (Get(..), getByteString, getWord32le, getWord64be, getWord64le, getWord8, getWord16be, isolate, bytesRead)
 import Data.ByteString.Base16 (encode, decode)
 import Foreign.Marshal.Utils (toBool)
 import Data.ByteString (ByteString)
 
-parseMessage :: Get MessageBody
+parseMessage :: Get Message
 parseMessage = do
-  mNetwork <- readNetwork . encode <$> getByteString 4
+  network <- getNetwork
   command  <- readCommand . encode <$> getByteString 12
   messageLength <- fromIntegral <$> getWord32le
   checksum <- getWord32le
-  isolate messageLength (parseMessageBody messageLength command)
-  
+  messageBody <- isolate messageLength (parseMessageBody messageLength command)
+  return $ Message messageBody (MessageContext network)
   
 getPayload :: Get ByteString
 getPayload = do
@@ -55,7 +55,7 @@ parseMessageBody expectedLength VersionCommand = do
   userAgent   <- getPayload
   startHeight <- fromIntegral <$> getWord32le
   relay       <- toBool <$> getWord8 
-  return $ VersionMessage version nonce startHeight sender peer relay
+  return $ VersionMessage version nonce startHeight sender peer relay timestamp
 
 -- These should all at least consume their length!
 parseMessageBody expectedLength VerackCommand =

@@ -27,7 +27,8 @@ import Network.Socket (connect
 import Network.Socket.ByteString (send, recv )
 import Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
 import Data.ByteString.Base16 (decode, encode)
-import Control.Monad.State.Lazy (StateT(..), runStateT, get, liftIO)
+import Control.Monad.State.Lazy (StateT(..), runStateT, liftIO)
+import qualified Control.Monad.State.Lazy as State
 import System.Random (randomRIO)
 import Conduit (Producer(..), runConduit, (.|), mapC)
 import Data.Conduit.Combinators (encodeBase16, stdout)
@@ -38,6 +39,7 @@ import Control.Monad.STM (atomically)
 import Data.ByteString (ByteString)
 import Data.Binary.Get ()
 import Data.Binary.Put (runPut)
+import Data.Binary (Binary(..))
 import qualified Data.ByteString.Lazy as BL
 
 data ConnectionContext = ConnectionContext
@@ -77,18 +79,19 @@ connectTestnet n = do
   chan <- atomically $ newTBMChan 16
   runConnection versionHandshake context
   return ()
-  
+
+instance Binary Message where
+  put = putMessage
+  get = parseMessage
+
 {--
-  listener peerSocket
-
-
 listener :: Socket -> IO ()
 listener socket = runConduit
   $  sourceSocket socket
   .| conduitGet parseMessage -- use Data.Conduit.Serialization.Binary
   .| stdout
---}
-{--
+
+
 writer :: TBMChan Message  -> Socket -> IO ()
 writer chan socket = runConduit
   $  sourceTBMChan chan
@@ -98,7 +101,7 @@ writer chan socket = runConduit
 
 versionHandshake :: Connection ()
 versionHandshake  = do
-  connectionContext <- get
+  connectionContext <- State.get
   let (ConnectionContext
        { version' = version'
        , lastBlock' = lastBlock'
@@ -111,8 +114,8 @@ versionHandshake  = do
     time <- getPOSIXTime
     let versionMessage = BL.toStrict . runPut .
           putMessage $ Message
-          (VersionMessage version' nonce' lastBlock' peerAddr' myAddr' relay')
-          (MessageContext network' time)
+          (VersionMessage version' nonce' lastBlock' peerAddr' myAddr' relay' time)
+          (MessageContext network')
     putStrLn $ "Sending message " ++ Char8.unpack versionMessage
     send peerSocket versionMessage
     return ()

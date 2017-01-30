@@ -11,6 +11,7 @@ import Data.Maybe (fromJust, fromMaybe)
 import Data.Char (toUpper)
 import Data.Tuple (swap)
 import Data.ByteString.Base16 (decode, encode)
+import Data.Binary.Get (Get(..), getByteString)
 
 data Addr = Addr IP Port
   deriving (Show, Eq)
@@ -18,6 +19,7 @@ data Addr = Addr IP Port
 type IP = (Int, Int, Int, Int)
 
 type Port = Int
+
 
 data Message = Message MessageBody MessageContext
   deriving (Show, Eq)
@@ -30,6 +32,7 @@ data MessageBody
     , senderAddr :: Addr
     , peerAddr   :: Addr
     , relay      :: Bool
+    , time       :: POSIXTime
     }
   | VerackMessage
   | AddrMessage
@@ -91,9 +94,10 @@ getCommand GetblocktxnMessage = GetblocktxnCommand
 getCommand BlocktxnMessage = BlocktxnCommand
 getCommand UnknownMessage = UnknownCommand
 
+
 data MessageContext = MessageContext
   { network :: Network
-  , time    :: POSIXTime 
+  -- , time    :: POSIXTime 
   } deriving (Show, Eq)
 
 data Network = TestNet3 | MainNet
@@ -111,6 +115,13 @@ getNetwork' = fst . decode . printNetwork
 
 readNetwork :: ByteString -> Maybe Network
 readNetwork = readFromTable networkTable
+
+getNetwork :: Get Network
+getNetwork = do
+  mNetwork <- readNetwork . encode <$> getByteString 4
+  case mNetwork of
+    Just network -> return network
+    Nothing -> fail "Unable to parse netowrk"
 
 data Header = Header Network Command ByteString
   deriving (Show, Eq)
