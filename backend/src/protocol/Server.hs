@@ -30,7 +30,7 @@ import Data.ByteString.Base16 (decode, encode)
 import Control.Monad.State.Lazy (StateT(..), runStateT, liftIO)
 import qualified Control.Monad.State.Lazy as State
 import System.Random (randomR, StdGen, getStdGen)
-import Conduit (Producer(..), runConduit, (.|), mapC)
+import Conduit (Producer(..), runConduit, (.|), mapC, mapMC)
 import Data.Conduit.Combinators (encodeBase16, stdout)
 import Data.Conduit.Network (sourceSocket, sinkSocket)
 import Data.Conduit.Serialization.Binary (conduitGet, conduitPut)
@@ -43,6 +43,7 @@ import Data.Binary.Put (runPut)
 import Data.Binary (Binary(..))
 import qualified Data.ByteString.Lazy as BL
 
+
 data ConnectionContext = ConnectionContext
   { version' :: Int
   , lastBlock' :: Integer
@@ -53,9 +54,10 @@ data ConnectionContext = ConnectionContext
     -- Relay should be set to False when functioning as an SPV node
   , network' :: Network
   , writerChan :: TBMChan Message
+  , listenChan :: TBMChan Message
   , time :: POSIXTime
   , randGen :: StdGen
-  } -- deriving (Show, Eq)
+  } 
 
 data Peer = Peer Socket Addr
   deriving (Show, Eq)
@@ -81,22 +83,20 @@ connectTestnet n = do
   let context = ConnectionContext
         { version' = 60002
         , lastBlock' = 100
-        , myAddr' = Addr (0, 0, 0, 0) 18333 -- Addr (207, 251, 103, 46 ) 18333
+        , myAddr' = Addr (0, 0, 0, 0) 18333 
         , peer' = Peer peerSocket (getAddr $ addrAddress addrInfo)
         , relay' = False 
         , network' = TestNet3
         , writerChan = writeChan
+        , listenChan = listenChan
         , time = time'
         , randGen = randGen'
         }
-        -- Fork listener then writer
+  -- Fork listener then writer
   forkIO $ listener listenChan peerSocket
   forkIO $ writer writeChan peerSocket
-  atomically $ runConnection versionHandshake context
-  response1 <- atomically $ readTBMChan listenChan
-  putStrLn $ "1: " ++ show response1
-  response2 <- atomically $ readTBMChan listenChan
-  putStrLn $ "2: " ++ show response2 
+  connection context
+  
 
 instance Binary Message where
   put = putMessage
@@ -107,19 +107,62 @@ listener :: TBMChan Message -> Socket -> IO ()
 listener chan socket = runConduit
   $  sourceSocket socket
   .| conduitGet parseMessage
+  .| logMessages "incoming"
   .| sinkTBMChan chan True 
 
 
 writer :: TBMChan Message  -> Socket -> IO ()
 writer chan socket = runConduit
   $  sourceTBMChan chan
+  .| logMessages "outgoing"
   .| mapC put
-  .| conduitPut 
+  .| conduitPut
   .| sinkSocket socket
 
 
-versionHandshake :: Connection ()
-versionHandshake = do
+logMessages context =
+  mapMC logAndReturn
+  where logAndReturn message = do
+          putStrLn $ context ++ " " ++ show message
+          return message
+
+connection :: ConnectionContext -> IO ()
+connection context = do
+  atomically $ runConnection sendVersion context
+  connectionLoop context
+
+connectionLoop :: ConnectionContext -> IO ()
+connectionLoop context = do
+  atomically $ flip runConnection context $ do
+    mResponse <-  State.lift $ readTBMChan (listenChan context)
+    case mResponse of
+      Nothing -> fail "listenChan is closed and empty"
+      Just response -> handleResponse response
+  connectionLoop context
+  
+handleResponse :: Message -> Connection ()
+
+handleResponse (Message (VersionMessage {}) _) = do
+  connectionContext <- State.get
+  let
+    network = network' connectionContext
+    writerChan' = writerChan connectionContext
+    verackMessage = Message VerackMessage (MessageContext network)
+  State.lift $ writeTBMChan writerChan' verackMessage
+
+handleResponse (Message PingMessage _) = do
+  connectionContext <- State.get
+  let
+    network = network' connectionContext
+    writerChan' = writerChan connectionContext
+    pongMessage = Message PongMessage (MessageContext network)
+  State.lift $ writeTBMChan writerChan' pongMessage
+
+handleResponse _ = do
+  return ()
+
+sendVersion :: Connection ()
+sendVersion = do
   connectionContext <- State.get
   let (ConnectionContext
        { version' = version'
