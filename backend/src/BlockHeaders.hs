@@ -8,6 +8,7 @@ import Data.Binary.Get (Get(..), getWord32le, getByteString, getWord8)
 import Data.Binary (Binary(..))
 import Data.ByteString.Base16 (decode, encode)
 import Util (VarInt(..))
+import Persistence
 ------
 import Test.QuickCheck.Arbitrary (Arbitrary(..))
 import Test.QuickCheck.Gen (choose, suchThat, vectorOf, elements, oneof, listOf, Gen)
@@ -51,6 +52,44 @@ instance Show Nonce where
 
 data TxCount = TxCount VarInt -- Always 0 for block headers
   deriving (Eq, Show)
+
+decodeBlockHeader :: PersistentBlockHeader -> BlockHeader
+decodeBlockHeader
+  (PersistentBlockHeader
+    blockVersion
+    prevBlockHash
+    merkleRoot
+    timestamp
+    difficulty
+    nonce
+    txCount) =
+  BlockHeader
+    (BlockVersion blockVersion)
+    (BlockHash prevBlockHash)
+    (MerkleRoot merkleRoot)
+    (Timestamp . fromIntegral $ timestamp)
+    (Difficulty difficulty)
+    (Nonce nonce)
+    (TxCount . VarInt $ txCount)
+
+encodeBlockHeader :: BlockHeader -> PersistentBlockHeader
+encodeBlockHeader
+  (BlockHeader
+    (BlockVersion blockVersion)
+    (BlockHash prevBlockHash)
+    (MerkleRoot merkleRoot)
+    (Timestamp timestamp)
+    (Difficulty difficulty)
+    (Nonce nonce)
+    (TxCount (VarInt txCount))) =
+  (PersistentBlockHeader
+    blockVersion
+    prevBlockHash
+    merkleRoot
+    (fromIntegral . floor $ timestamp)
+    difficulty
+    nonce
+    txCount)
 
 putBlockHeader :: BlockHeader -> Put
 putBlockHeader (BlockHeader version prevHash merkleRoot time difficulty nonce txCount) = do

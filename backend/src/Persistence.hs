@@ -22,6 +22,7 @@ import Control.Monad.IO.Class (liftIO, MonadIO)
 import Control.Monad.Trans.Class (MonadTrans, lift)
 import Server.Config (ConfigM, Config(..))
 import Control.Monad.Reader (asks)
+import Data.ByteString (ByteString)
 
 share [mkPersist sqlSettings, mkMigrate "migrateTables"] [persistLowerCase|
 FundRequest json
@@ -35,6 +36,14 @@ KeySet
     privateKey Text
     publicKey Text
     deriving Show
+PersistentBlockHeader
+    blockVersion Int
+    prevBlockHash ByteString
+    merkleRoot ByteString
+    timestamp Int
+    difficulty ByteString
+    nonce ByteString
+    txCount Int
 |]
   
 
