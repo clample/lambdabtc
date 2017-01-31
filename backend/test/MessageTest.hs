@@ -11,13 +11,13 @@ import Data.Binary.Put (runPut)
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString as B
 import Data.ByteString.Base16 (encode, decode)
-
+import BlockHeaders
 
 instance Arbitrary Message where
   arbitrary = Message <$> arbitrary <*> arbitrary
 
 instance Arbitrary MessageBody where
-  arbitrary = oneof [arbitraryVersionMessage, return VerackMessage]
+  arbitrary = oneof [arbitraryVersionMessage, arbitraryGetHeadersMessage, return VerackMessage]
 
 instance Arbitrary MessageContext where
   arbitrary = MessageContext <$> arbitrary
@@ -37,6 +37,14 @@ arbitraryVersionMessage = do
     maxNonce   = 0xffffffffffffffff -- 8 bytes
     maxBlock   = 0xffffffff         -- 4 bytes
     maxTime = 0xffffffffffffffff -- 8 bytes
+
+arbitraryGetHeadersMessage = do
+  version <- choose (0, maxVersion)
+  n      <- choose (0, 2000)
+  blockLocatorHashes <- vectorOf n arbitrary
+  hashStop <- arbitrary
+  return $ GetHeadersMessage version blockLocatorHashes hashStop
+  where maxVersion = 0xffffffff -- 4 bytes
 
 instance Arbitrary Network where
   arbitrary = do

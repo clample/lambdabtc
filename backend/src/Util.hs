@@ -19,7 +19,8 @@ module Util
   , parsePayload
   , showBool
   , parseBool
-  , getVarInt) where
+  , getVarInt
+  , putVarInt) where
 
 import Prelude hiding (take)
 

@@ -7,6 +7,10 @@ import Data.Binary.Put (Put, putWord32le, putWord32be, putWord64le, putByteStrin
 import Data.Binary.Get (Get(..), getWord32le, getByteString, getWord8)
 import Data.Binary (Binary(..))
 import Data.ByteString.Base16 (decode)
+------
+import Test.QuickCheck.Arbitrary (Arbitrary(..))
+import Test.QuickCheck.Gen (choose, suchThat, vectorOf, elements, oneof, listOf, Gen)
+import qualified Data.ByteString as BS
 
 data BlockHeader =
   BlockHeader BlockVersion PrevBlockHash MerkleRoot Timestamp Difficulty Nonce TxCount
@@ -142,3 +146,37 @@ getTxCount =
 instance Binary TxCount where
   put = putTxCount
   get = getTxCount
+
+instance Arbitrary BlockHeader where
+  arbitrary = BlockHeader
+                <$> arbitrary
+                <*> arbitrary
+                <*> arbitrary
+                <*> arbitrary
+                <*> arbitrary
+                <*> arbitrary
+                <*> arbitrary
+
+instance Arbitrary BlockVersion where
+  arbitrary = BlockVersion <$> choose (0, maxVersion)
+    where maxVersion = 0xffffffff -- 4 bytes
+
+instance Arbitrary BlockHash where
+  arbitrary = BlockHash . BS.pack <$> vectorOf 32 arbitrary
+
+instance Arbitrary MerkleRoot where
+  arbitrary = MerkleRoot . BS.pack <$> vectorOf 32 arbitrary
+
+instance Arbitrary Timestamp where
+  arbitrary = Timestamp . realToFrac <$> (choose (0, maxTime) :: Gen Integer)
+    where maxTime = 0xffffffff -- 4 bytes
+
+instance Arbitrary Difficulty where
+  arbitrary = Difficulty . BS.pack <$> vectorOf 4 arbitrary
+
+instance Arbitrary Nonce where
+  arbitrary = Nonce . BS.pack <$> vectorOf 4 arbitrary
+
+instance Arbitrary TxCount where
+  arbitrary = TxCount <$> choose (0, maxCount)
+    where maxCount = 0xff -- 1 byte

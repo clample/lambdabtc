@@ -80,6 +80,7 @@ getCommand InvMessage = InvCommand
 getCommand GetDataMessage = GetDataCommand
 getCommand NotFoundMessage = NotFoundCommand
 getCommand GetBlocksMessage = GetBlocksCommand
+getCommand (GetHeadersMessage {}) = GetHeadersCommand
 getCommand BlockMessage = BlockCommand
 getCommand HeadersMessage = HeadersCommand
 getCommand GetAddrMessage = GetAddrCommand
@@ -225,4 +226,5 @@ readFromTable table = lookupInTable . uppercase
     lookupInTable = flip lookup (map swap table)
 
 genesisHash :: Network -> BlockHash
-genesisHash TestNet3 = BlockHash . fst . decode $ "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943"
+genesisHash TestNet3 =
+  BlockHash . fst . decode $ "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943"

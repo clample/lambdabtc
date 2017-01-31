@@ -6,7 +6,7 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as Char8
 import qualified Data.Text.Encoding as T
-import Util (checkSum)
+import Util (checkSum, putVarInt)
 import Data.ByteString.Base16 (decode, encode)
 import Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
 import Control.Lens (over, mapped)
@@ -42,8 +42,9 @@ putHeader (Header network command message) = do
   putByteString $ checkSum message
 
 putMessageBody :: MessageBody -> Put
-putMessageBody (VersionMessage v randInt blockN senderAddr peerAddr relay time) = do
-  putWord32le (fromIntegral v)
+
+putMessageBody (VersionMessage version randInt blockN senderAddr peerAddr relay time) = do
+  putWord32le (fromIntegral version)
   putServices
   putWord64le . floor $ time
   putAddr peerAddr
@@ -52,6 +53,12 @@ putMessageBody (VersionMessage v randInt blockN senderAddr peerAddr relay time) 
   putWord8 0
   putWord32le . fromIntegral $ blockN
   put relay
+
+putMessageBody (GetHeadersMessage version blockLocatorHashes hashStop) = do
+  putWord32le (fromIntegral version)
+  putVarInt . length $ blockLocatorHashes
+  mapM_ put blockLocatorHashes
+  put hashStop
 
 putMessageBody _ = putByteString ""
 
