@@ -141,6 +141,7 @@ showBool True  = "01"
 showBool False = "00"
 
 newtype VarInt = VarInt Int
+  deriving (Eq, Show)
 
 instance Binary VarInt where
   get = getVarInt

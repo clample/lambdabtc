@@ -7,6 +7,7 @@ import Data.Binary.Put (Put, putWord32le, putWord32be, putWord64le, putByteStrin
 import Data.Binary.Get (Get(..), getWord32le, getByteString, getWord8)
 import Data.Binary (Binary(..))
 import Data.ByteString.Base16 (decode, encode)
+import Util (VarInt(..))
 ------
 import Test.QuickCheck.Arbitrary (Arbitrary(..))
 import Test.QuickCheck.Gen (choose, suchThat, vectorOf, elements, oneof, listOf, Gen)
@@ -48,7 +49,7 @@ data Nonce = Nonce ByteString
 instance Show Nonce where
   show (Nonce bs) = "Nonce " ++ (show . encode $ bs)
 
-data TxCount = TxCount Int -- Always 0 for block headers
+data TxCount = TxCount VarInt -- Always 0 for block headers
   deriving (Eq, Show)
 
 putBlockHeader :: BlockHeader -> Put
@@ -149,11 +150,11 @@ instance Binary Nonce where
 
 putTxCount :: TxCount -> Put
 putTxCount (TxCount count) =
-  putWord8 . fromIntegral $ count
+  put count
 
 getTxCount :: Get TxCount
 getTxCount =
-  TxCount . fromIntegral <$> getWord8
+  TxCount <$> get
 
 instance Binary TxCount where
   put = putTxCount
@@ -190,5 +191,5 @@ instance Arbitrary Nonce where
   arbitrary = Nonce . BS.pack <$> vectorOf 4 arbitrary
 
 instance Arbitrary TxCount where
-  arbitrary = TxCount <$> choose (0, maxCount)
+  arbitrary = TxCount . VarInt <$> choose (0, maxCount)
     where maxCount = 0xff -- 1 byte
