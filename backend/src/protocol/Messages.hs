@@ -60,6 +60,10 @@ putMessageBody (GetHeadersMessage version blockLocatorHashes hashStop) = do
   mapM_ put blockLocatorHashes
   put hashStop
 
+putMessageBody (HeadersMessage blockHeaders) = do
+  put (VarInt . length $ blockHeaders)
+  mapM_ put blockHeaders
+
 putMessageBody _ = putByteString ""
 
 putServices :: Put

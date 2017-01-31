@@ -17,7 +17,11 @@ instance Arbitrary Message where
   arbitrary = Message <$> arbitrary <*> arbitrary
 
 instance Arbitrary MessageBody where
-  arbitrary = oneof [arbitraryVersionMessage, arbitraryGetHeadersMessage, return VerackMessage]
+  arbitrary = oneof
+    [ arbitraryVersionMessage
+    , arbitraryGetHeadersMessage
+    , arbitraryGetHeadersMessage
+    , return VerackMessage ]
 
 instance Arbitrary MessageContext where
   arbitrary = MessageContext <$> arbitrary
@@ -45,6 +49,11 @@ arbitraryGetHeadersMessage = do
   hashStop <- arbitrary
   return $ GetHeadersMessage version blockLocatorHashes hashStop
   where maxVersion = 0xffffffff -- 4 bytes
+
+arbitraryHeadersMessage = do
+  n            <- choose (0, 2000) -- A headers message contains at most 2000 block headers
+  blockHeaders <- vectorOf n arbitrary
+  return $ HeadersMessage blockHeaders
 
 instance Arbitrary Network where
   arbitrary = do

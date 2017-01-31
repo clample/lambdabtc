@@ -12,7 +12,7 @@ import Data.Char (toUpper)
 import Data.Tuple (swap)
 import Data.ByteString.Base16 (decode, encode)
 import Data.Binary.Get (Get(..), getByteString)
-import BlockHeaders (BlockHash(..))
+import BlockHeaders (BlockHash(..), BlockHeader(..))
 import Util (VarInt(..))
 
 data Addr = Addr IP Port
@@ -52,6 +52,7 @@ data MessageBody
     , hashStop           :: BlockHash}
   | BlockMessage
   | HeadersMessage
+    { blockHeaders :: [BlockHeader]}
   | GetAddrMessage
   | MempoolMessage
   | CheckorderMessage
@@ -83,7 +84,7 @@ getCommand NotFoundMessage = NotFoundCommand
 getCommand GetBlocksMessage = GetBlocksCommand
 getCommand (GetHeadersMessage {}) = GetHeadersCommand
 getCommand BlockMessage = BlockCommand
-getCommand HeadersMessage = HeadersCommand
+getCommand (HeadersMessage {}) = HeadersCommand
 getCommand GetAddrMessage = GetAddrCommand
 getCommand MempoolMessage = MempoolCommand
 getCommand CheckorderMessage = CheckorderCommand

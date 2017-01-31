@@ -80,15 +80,19 @@ parseMessageBody expectedLength GetDataCommand =
 
 parseMessageBody expectedLength GetHeadersCommand = do
   version            <- fromIntegral <$> getWord32le
-  (VarInt nHashes)   <- get
+  VarInt nHashes     <- get
   blockLocatorHashes <- replicateM nHashes get
   hashStop           <- get
   return $ GetHeadersMessage version blockLocatorHashes hashStop
   
 parseMessageBody expectedLength BlockCommand =
   parseRemaining expectedLength >> return BlockMessage
-parseMessageBody expectedLength HeadersCommand =
-  parseRemaining expectedLength >> return HeadersMessage
+  
+parseMessageBody expectedLength HeadersCommand = do
+  VarInt nHeaders <- get
+  blockHeaders    <- replicateM nHeaders get
+  return $ HeadersMessage blockHeaders
+  
 parseMessageBody expectedLength GetAddrCommand =
   parseRemaining expectedLength >> return GetAddrMessage
 parseMessageBody expectedLength MempoolCommand =
