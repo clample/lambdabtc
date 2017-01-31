@@ -49,6 +49,8 @@ data ConnectionContext = ConnectionContext
   , myAddr' :: Addr
   , peer' :: Peer
   , relay' :: Bool
+    -- https://github.com/bitcoin/bips/blob/master/bip-0037.mediawiki#extensions-to-existing-messages
+    -- Relay should be set to False when functioning as an SPV node
   , network' :: Network
   , writerChan :: TBMChan Message
   , time :: POSIXTime
@@ -81,7 +83,7 @@ connectTestnet n = do
         , lastBlock' = 100
         , myAddr' = Addr (0, 0, 0, 0) 18333 -- Addr (207, 251, 103, 46 ) 18333
         , peer' = Peer peerSocket (getAddr $ addrAddress addrInfo)
-        , relay' = False
+        , relay' = False 
         , network' = TestNet3
         , writerChan = writeChan
         , time = time'
