@@ -18,6 +18,7 @@ import Data.ByteString.Base16 (decode, encode)
 import KeyTest
 import TransactionTest
 import MessageTest
+import BlockHeaderTest
 
 main :: IO ()
 main = defaultMain tests
@@ -55,6 +56,9 @@ tests =
       ],
     testGroup "QuickCheck Message Tests" [
       messageInvertible
+      ],
+    testGroup "QuickCheck BlockHeader Tests" [
+      blockHeaderInvertible
       ]
   ]
 
