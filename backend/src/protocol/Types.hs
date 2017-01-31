@@ -12,6 +12,7 @@ import Data.Char (toUpper)
 import Data.Tuple (swap)
 import Data.ByteString.Base16 (decode, encode)
 import Data.Binary.Get (Get(..), getByteString)
+import BlockHeaders (BlockHash(..))
 
 data Addr = Addr IP Port
   deriving (Show, Eq)
@@ -45,6 +46,9 @@ data MessageBody
   | NotFoundMessage
   | GetBlocksMessage
   | GetHeadersMessage
+    { version            :: Int
+    , blockLocatorHashes :: [BlockHash]
+    , hashStop           :: BlockHash}
   | BlockMessage
   | HeadersMessage
   | GetAddrMessage
@@ -219,3 +223,6 @@ readFromTable table = lookupInTable . uppercase
   where
     uppercase     = Char8.pack . (map toUpper) . Char8.unpack
     lookupInTable = flip lookup (map swap table)
+
+genesisHash :: Network -> BlockHash
+genesisHash TestNet3 = BlockHash . fst . decode $ "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943"

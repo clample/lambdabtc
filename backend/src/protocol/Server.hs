@@ -78,7 +78,7 @@ connectTestnet n = do
   randGen' <- getStdGen
   let context = ConnectionContext
         { version' = 60002
-        , lastBlock' = 100
+        , lastBlock' = 1
         , myAddr' = Addr (0, 0, 0, 0) 18333 
         , peer' = Peer peerSocket (getAddr $ addrAddress addrInfo)
         , relay' = False 

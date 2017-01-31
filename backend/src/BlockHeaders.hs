@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 module BlockHeaders where
 
 import Data.ByteString (ByteString(..))
@@ -5,6 +6,7 @@ import Data.Time.Clock.POSIX (POSIXTime)
 import Data.Binary.Put (Put, putWord32le, putWord32be, putWord64le, putByteString, putWord8)
 import Data.Binary.Get (Get(..), getWord32le, getByteString, getWord8)
 import Data.Binary (Binary(..))
+import Data.ByteString.Base16 (decode)
 
 data BlockHeader =
   BlockHeader BlockVersion PrevBlockHash MerkleRoot Timestamp Difficulty Nonce TxCount

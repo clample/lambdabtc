@@ -8,6 +8,10 @@ import Data.Binary.Get (Get(..), getByteString, getWord32le, getWord64be, getWor
 import Data.ByteString.Base16 (encode, decode)
 import Foreign.Marshal.Utils (toBool)
 import Data.ByteString (ByteString)
+import Control.Monad (replicateM)
+import BlockHeaders (BlockHash(..))
+import Data.Binary (Binary(..))
+import Util (getVarInt)
 
 parseMessage :: Get Message
 parseMessage = do
@@ -73,8 +77,14 @@ parseMessageBody expectedLength InvCommand =
   parseRemaining expectedLength >> return InvMessage
 parseMessageBody expectedLength GetDataCommand =
   parseRemaining expectedLength >> return GetDataMessage
-parseMessageBody expectedLength GetHeadersCommand =
-  parseRemaining expectedLength >> return GetHeadersMessage
+
+parseMessageBody expectedLength GetHeadersCommand = do
+  version            <- fromIntegral <$> getWord32le
+  varInt             <- getVarInt
+  blockLocatorHashes <- replicateM varInt get
+  hashStop           <- get
+  return $ GetHeadersMessage version blockLocatorHashes hashStop
+  
 parseMessageBody expectedLength BlockCommand =
   parseRemaining expectedLength >> return BlockMessage
 parseMessageBody expectedLength HeadersCommand =

@@ -18,7 +18,8 @@ module Util
   , parseCount
   , parsePayload
   , showBool
-  , parseBool ) where
+  , parseBool
+  , getVarInt) where
 
 import Prelude hiding (take)
 
@@ -37,6 +38,8 @@ import Numeric (showHex, readHex)
 import Text.Megaparsec (Parsec, Dec, count, hexDigitChar)
 import Data.Word (Word32)
 import Data.ByteArray (convert)
+import Data.Binary.Get(Get(..), getWord8, getWord16le, getWord32le, getWord64le)
+import Data.Binary.Put (Put(..), putWord8, putWord16le, putWord32le, putWord64le)
 
 data Payload = Payload ByteString
   deriving (Show, Eq)
@@ -136,3 +139,28 @@ showBool :: Bool -> ByteString
 showBool True  = "01"
 showBool False = "00"
 
+
+getVarInt :: Get Int
+getVarInt = do
+  firstByte <- fromIntegral <$> getWord8
+  varInt firstByte
+  where
+    varInt firstByte
+      | firstByte < 0xFD  = return firstByte
+      | firstByte == 0xFD = fromIntegral <$> getWord16le
+      | firstByte == 0xFE = fromIntegral <$> getWord32le 
+      | firstByte == 0xFF = fromIntegral <$> getWord64le
+
+putVarInt :: Int -> Put
+putVarInt i
+  | i < 0xFD =
+      putWord8 . fromIntegral $ i
+  | i <= 0xFFFF =  do
+      putWord8 0xFD
+      putWord16le . fromIntegral $ i
+  | i <= 0xFFFFFFFF = do
+      putWord8 0xFE
+      putWord32le . fromIntegral $ i
+  | otherwise = do
+      putWord8 0xFF
+      putWord64le . fromIntegral $ i
