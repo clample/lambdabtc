@@ -1,11 +1,9 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 module Protocol.Server where
 
-import qualified Data.ByteString.Char8 as Char8
 import Protocol.Parser (parseMessage)
 import Messages (getAddr, putMessage)
 import Protocol.Types (Network(..), Addr(..), MessageContext(..), Message(..), MessageBody(..))
-import Text.Megaparsec (parseMaybe)
 import Network.Socket (connect
                       , socket
                       , Family(..)
@@ -24,9 +22,7 @@ import Network.Socket (connect
                       , SocketOption(..)
                       , hostAddressToTuple
                       , Socket)
-import Network.Socket.ByteString (send, recv )
 import Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
-import Data.ByteString.Base16 (decode, encode)
 import Control.Monad.State.Lazy (StateT(..), runStateT, liftIO)
 import qualified Control.Monad.State.Lazy as State
 import System.Random (randomR, StdGen, getStdGen)
