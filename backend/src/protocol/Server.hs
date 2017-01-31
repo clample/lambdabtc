@@ -1,9 +1,10 @@
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Protocol.Server where
 
 import Protocol.Parser (parseMessage)
 import Messages (getAddr, putMessage)
-import Protocol.Types (Network(..), Addr(..), MessageContext(..), Message(..), MessageBody(..))
+import Protocol.Types (Network(..), Addr(..), MessageContext(..), Message(..), MessageBody(..), genesisHash)
 import Network.Socket (connect
                       , socket
                       , Family(..)
@@ -38,7 +39,8 @@ import Data.Binary.Get ()
 import Data.Binary.Put (runPut)
 import Data.Binary (Binary(..))
 import qualified Data.ByteString.Lazy as BL
-
+import Data.ByteString.Base16 (decode)
+import BlockHeaders (BlockHash(..))
 
 data ConnectionContext = ConnectionContext
   { version' :: Int
@@ -125,6 +127,7 @@ logMessages context =
 connection :: ConnectionContext -> IO ()
 connection context = do
   atomically $ runConnection sendVersion context
+  atomically $ runConnection getHeaders context
   connectionLoop context
 
 connectionLoop :: ConnectionContext -> IO ()
@@ -178,5 +181,18 @@ sendVersion = do
   State.lift $ do
     writeTBMChan writerChan versionMessage
 
-   
+getHeaders :: Connection ()
+getHeaders = do
+  connectionContext <- State.get
+  let
+    (ConnectionContext
+     { version' = version'
+     , network' = network'
+     , writerChan = writerChan
+     }) = connectionContext
+    getHeadersMessage = Message
+        (GetHeadersMessage version' [genesisHash network'] (BlockHash . fst . decode $ "0000000000000000000000000000000000000000000000000000000000000000"))
+        (MessageContext network')
+  State.lift $ do
+    writeTBMChan writerChan getHeadersMessage
   

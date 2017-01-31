@@ -6,7 +6,7 @@ import Data.Time.Clock.POSIX (POSIXTime)
 import Data.Binary.Put (Put, putWord32le, putWord32be, putWord64le, putByteString, putWord8)
 import Data.Binary.Get (Get(..), getWord32le, getByteString, getWord8)
 import Data.Binary (Binary(..))
-import Data.ByteString.Base16 (decode)
+import Data.ByteString.Base16 (decode, encode)
 ------
 import Test.QuickCheck.Arbitrary (Arbitrary(..))
 import Test.QuickCheck.Gen (choose, suchThat, vectorOf, elements, oneof, listOf, Gen)
@@ -22,19 +22,31 @@ data BlockVersion = BlockVersion Int
 type PrevBlockHash = BlockHash
 
 data BlockHash = BlockHash ByteString
-  deriving (Eq, Show)
+  deriving (Eq)
+
+instance Show BlockHash where
+  show (BlockHash bs) = "BlockHash " ++ (show . encode $ bs)
 
 data MerkleRoot = MerkleRoot ByteString
-  deriving (Eq, Show)
+  deriving (Eq)
+
+instance Show MerkleRoot where
+  show (MerkleRoot bs) = "MerkleRoot " ++ (show . encode $ bs)
 
 data Timestamp = Timestamp POSIXTime
   deriving (Eq, Show)
 
-data Difficulty = Difficulty ByteString -- We could make this an Int? or something else?
-  deriving (Eq, Show)
+data Difficulty = Difficulty ByteString
+  deriving (Eq)
+
+instance Show Difficulty where
+  show (Difficulty bs) = "Difficulty " ++ (show . encode $ bs)
 
 data Nonce = Nonce ByteString
-  deriving (Eq, Show)
+  deriving (Eq)
+
+instance Show Nonce where
+  show (Nonce bs) = "Nonce " ++ (show . encode $ bs)
 
 data TxCount = TxCount Int -- Always 0 for block headers
   deriving (Eq, Show)
@@ -78,10 +90,10 @@ instance Binary BlockVersion where
 
 putBlockHash :: BlockHash -> Put
 putBlockHash (BlockHash bs) =
-  putByteString bs
+  putByteString . BS.reverse $ bs
 
 getBlockHash :: Get BlockHash
-getBlockHash = BlockHash <$> getByteString 32
+getBlockHash = BlockHash . BS.reverse <$> getByteString 32
 
 instance Binary BlockHash where
   put = putBlockHash
