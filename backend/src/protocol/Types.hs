@@ -13,6 +13,7 @@ import Data.Tuple (swap)
 import Data.ByteString.Base16 (decode, encode)
 import Data.Binary.Get (Get(..), getByteString)
 import BlockHeaders (BlockHash(..))
+import Util (VarInt(..))
 
 data Addr = Addr IP Port
   deriving (Show, Eq)
@@ -102,7 +103,6 @@ getCommand UnknownMessage = UnknownCommand
 
 data MessageContext = MessageContext
   { network :: Network
-  -- , time    :: POSIXTime 
   } deriving (Show, Eq)
 
 data Network = TestNet3 | MainNet

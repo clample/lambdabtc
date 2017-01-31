@@ -19,8 +19,7 @@ module Util
   , parsePayload
   , showBool
   , parseBool
-  , getVarInt
-  , putVarInt) where
+  , VarInt(..)) where
 
 import Prelude hiding (take)
 
@@ -39,6 +38,7 @@ import Numeric (showHex, readHex)
 import Text.Megaparsec (Parsec, Dec, count, hexDigitChar)
 import Data.Word (Word32)
 import Data.ByteArray (convert)
+import Data.Binary (Binary(..))
 import Data.Binary.Get(Get(..), getWord8, getWord16le, getWord32le, getWord64le)
 import Data.Binary.Put (Put(..), putWord8, putWord16le, putWord32le, putWord64le)
 
@@ -140,11 +140,16 @@ showBool :: Bool -> ByteString
 showBool True  = "01"
 showBool False = "00"
 
+newtype VarInt = VarInt Int
 
-getVarInt :: Get Int
+instance Binary VarInt where
+  get = getVarInt
+  put = putVarInt
+
+getVarInt :: Get VarInt
 getVarInt = do
   firstByte <- fromIntegral <$> getWord8
-  varInt firstByte
+  VarInt <$> varInt firstByte
   where
     varInt firstByte
       | firstByte < 0xFD  = return firstByte
@@ -152,8 +157,8 @@ getVarInt = do
       | firstByte == 0xFE = fromIntegral <$> getWord32le 
       | firstByte == 0xFF = fromIntegral <$> getWord64le
 
-putVarInt :: Int -> Put
-putVarInt i
+putVarInt :: VarInt -> Put
+putVarInt (VarInt i)
   | i < 0xFD =
       putWord8 . fromIntegral $ i
   | i <= 0xFFFF =  do

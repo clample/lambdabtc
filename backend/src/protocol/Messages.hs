@@ -6,7 +6,7 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as Char8
 import qualified Data.Text.Encoding as T
-import Util (checkSum, putVarInt)
+import Util (checkSum, VarInt(..))
 import Data.ByteString.Base16 (decode, encode)
 import Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
 import Control.Lens (over, mapped)
@@ -56,7 +56,7 @@ putMessageBody (VersionMessage version randInt blockN senderAddr peerAddr relay 
 
 putMessageBody (GetHeadersMessage version blockLocatorHashes hashStop) = do
   putWord32le (fromIntegral version)
-  putVarInt . length $ blockLocatorHashes
+  put (VarInt . length $ blockLocatorHashes)
   mapM_ put blockLocatorHashes
   put hashStop
 

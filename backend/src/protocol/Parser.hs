@@ -11,7 +11,7 @@ import Data.ByteString (ByteString)
 import Control.Monad (replicateM)
 import BlockHeaders (BlockHash(..))
 import Data.Binary (Binary(..))
-import Util (getVarInt)
+import Util (VarInt(..))
 
 parseMessage :: Get Message
 parseMessage = do
@@ -80,8 +80,8 @@ parseMessageBody expectedLength GetDataCommand =
 
 parseMessageBody expectedLength GetHeadersCommand = do
   version            <- fromIntegral <$> getWord32le
-  varInt             <- getVarInt
-  blockLocatorHashes <- replicateM varInt get
+  (VarInt nHashes)   <- get
+  blockLocatorHashes <- replicateM nHashes get
   hashStop           <- get
   return $ GetHeadersMessage version blockLocatorHashes hashStop
   
