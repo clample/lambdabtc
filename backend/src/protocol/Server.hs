@@ -42,8 +42,8 @@ import qualified Data.ByteString.Lazy as BL
 import Data.ByteString.Base16 (decode)
 import BlockHeaders (BlockHash(..), encodeBlockHeader)
 import Server.Config (ConfigM(..), Config(..), developmentConfig)
-import Database.Persist.Sql (insertMany_)
-import Persistence (runDB)
+import Database.Persist.Sql (insertMany_, count, runSqlPool, Filter)
+import Persistence (runDB, PersistentBlockHeader)
 import Data.List.Split (chunksOf)
 
 data ConnectionContext = ConnectionContext
@@ -71,21 +71,19 @@ runConnection connection state config =
   runReaderT (runConfigM (runStateT connection state)) config
 
 -- Find testnet hosts with `nslookup testnet-seed.bitcoin.petertodd.org`
-connectTestnet :: Int -> Config -> IO () 
-connectTestnet n config = do
-  addrInfo <- (!! n) <$> getAddrInfo Nothing (Just "testnet-seed.bitcoin.petertodd.org") (Just "18333")
-  peerSocket <- socket (addrFamily addrInfo) Stream defaultProtocol
-  setSocketOption peerSocket KeepAlive 1
-  connect peerSocket (addrAddress addrInfo)
+connectTestnet :: Config -> IO () 
+connectTestnet config = do
+  peer@(Peer peerSocket _) <- connectToPeer 1
   writeChan <- atomically $ newTBMChan 16
   listenChan <- atomically $ newTBMChan 16
   time' <- getPOSIXTime
   randGen' <- getStdGen
+  lastBlock <- fromIntegral <$> getLastBlock config
   let context = ConnectionContext
         { version' = 60002
-        , lastBlock' = 1
+        , lastBlock' = lastBlock
         , myAddr' = Addr (0, 0, 0, 0) 18333 
-        , peer' = Peer peerSocket (getAddr $ addrAddress addrInfo)
+        , peer' = peer
         , relay' = False 
         , network' = TestNet3
         , writerChan = writeChan
@@ -99,6 +97,19 @@ connectTestnet n config = do
   runConnection connection context config
   return ()
   
+connectToPeer :: Int -> IO (Peer)
+connectToPeer n = do
+  addrInfo <- (!! n) <$> getAddrInfo Nothing (Just "testnet-seed.bitcoin.petertodd.org") (Just "18333")
+  peerSocket <- socket (addrFamily addrInfo) Stream defaultProtocol
+  setSocketOption peerSocket KeepAlive 1
+  connect peerSocket (addrAddress addrInfo)
+  return $ Peer peerSocket (getAddr $ addrAddress addrInfo)
+
+getLastBlock :: Config -> IO Int
+getLastBlock Config {pool = pool} =
+  runSqlPool lastBlockQuery pool
+  where lastBlockQuery = count allBlocksFilter
+        allBlocksFilter = [] :: [Filter PersistentBlockHeader]
 
 instance Binary Message where
   put = putMessage

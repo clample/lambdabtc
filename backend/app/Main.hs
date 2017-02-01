@@ -10,5 +10,5 @@ main :: IO ()
 main = do
   config <- developmentConfig
   migrateSchema config
-  forkIO $ connectTestnet 1 config
+  forkIO $ connectTestnet config
   runApplication config
