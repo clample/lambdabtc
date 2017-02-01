@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Protocol.Server where
@@ -24,9 +25,13 @@ import Data.Binary (Binary(..))
 import Data.ByteString.Base16 (decode)
 import BlockHeaders (BlockHash(..), encodeBlockHeader)
 import Server.Config (ConfigM(..), Config(..), developmentConfig)
-import Database.Persist.Sql (insertMany_, count, runSqlPool, Filter)
-import Persistence (runDB, PersistentBlockHeader)
+import Database.Persist.Sql (insertMany_, count, runSqlPool, Filter, toSqlKey)
+import qualified Database.Persist.Sql as DB
+import Persistence (runDB, PersistentBlockHeader(..))
 import Data.List.Split (chunksOf)
+import BlockHeaders (BlockHeader(..), decodeBlockHeader)
+import Data.Maybe (catMaybes)
+
 
 data ConnectionContext = ConnectionContext
   { version' :: Int
@@ -57,7 +62,8 @@ connectTestnet config = do
       Peer peerSocket _ = peer' context
   forkIO $ listener listenChan' peerSocket
   forkIO $ writer writerChan' peerSocket
-  runConnection connection context config
+  getBlockLocatorHashes 160 config >>= print
+  -- runConnection connection context config
   return ()
 
 getConnectionContext :: Config -> IO ConnectionContext
@@ -191,4 +197,23 @@ getHeaders = do
         (GetHeadersMessage version' [genesisHash network'] (BlockHash . fst . decode $ "0000000000000000000000000000000000000000000000000000000000000000"))
         (MessageContext network')
   liftIO . atomically $ writeTBMChan writerChan getHeadersMessage
+
+
+getBlockLocatorHashes :: Int -> Config -> IO [BlockHash]
+getBlockLocatorHashes i c = (++ [genesisHash TestNet3]) <$> blockHashes 
+  where blockHashes = map (headerToHash . decodeBlockHeader) . catMaybes <$> queryBlockLocatorHeaders i c
+        headerToHash (BlockHeader _ blockHash _ _ _ _ _) = blockHash
   
+queryBlockLocatorHeaders :: Int -> Config -> IO [Maybe PersistentBlockHeader]
+queryBlockLocatorHeaders lastBlock (Config {pool=pool}) = do
+  mapM queryBlockHash (blockLocatorIndices lastBlock)
+  where
+    queryBlockHash i = runSqlPool (DB.get (toSqlKey . fromIntegral $  i)) pool
+
+blockLocatorIndices :: Int -> [Int]
+blockLocatorIndices lastBlock = reverse $ blockLocatorIndicesStep 10 1 [lastBlock]
+
+blockLocatorIndicesStep c step (i:is)
+  | c > 0 && i > 0 = blockLocatorIndicesStep (c - 1) (step) ((i - 1):i:is)
+  | i - step > 0 = blockLocatorIndicesStep c (step * 2) ((i - step):i:is)
+  | otherwise = i:is
