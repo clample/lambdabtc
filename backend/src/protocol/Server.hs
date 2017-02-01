@@ -25,6 +25,7 @@ import Network.Socket (connect
                       , Socket)
 import Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
 import Control.Monad.State.Lazy (StateT(..), runStateT, liftIO)
+import Control.Monad.Reader (runReaderT)
 import qualified Control.Monad.State.Lazy as State
 import System.Random (randomR, StdGen, getStdGen)
 import Conduit (Producer(..), runConduit, (.|), mapC, mapMC)
@@ -41,6 +42,7 @@ import Data.Binary (Binary(..))
 import qualified Data.ByteString.Lazy as BL
 import Data.ByteString.Base16 (decode)
 import BlockHeaders (BlockHash(..))
+import Server.Config (ConfigM(..), Config(..), developmentConfig)
 
 data ConnectionContext = ConnectionContext
   { version' :: Int
@@ -60,16 +62,15 @@ data ConnectionContext = ConnectionContext
 data Peer = Peer Socket Addr
   deriving (Show, Eq)
 
+type Connection a = StateT ConnectionContext ConfigM a
 
-type Connection a = StateT ConnectionContext STM a
-
-runConnection :: Connection a -> ConnectionContext -> STM (a, ConnectionContext)
-runConnection connection state = runStateT connection state
+runConnection :: Connection a -> ConnectionContext -> Config -> IO (a, ConnectionContext)
+runConnection connection state config =
+  runReaderT (runConfigM (runStateT connection state)) config
 
 -- Find testnet hosts with `nslookup testnet-seed.bitcoin.petertodd.org`
-
-connectTestnet :: Int -> IO () 
-connectTestnet n = do
+connectTestnet :: Int -> Config -> IO () 
+connectTestnet n config = do
   addrInfo <- (!! n) <$> getAddrInfo Nothing (Just "testnet-seed.bitcoin.petertodd.org") (Just "18333")
   peerSocket <- socket (addrFamily addrInfo) Stream defaultProtocol
   setSocketOption peerSocket KeepAlive 1
@@ -93,7 +94,8 @@ connectTestnet n = do
   -- Fork listener then writer
   forkIO $ listener listenChan peerSocket
   forkIO $ writer writeChan peerSocket
-  connection context
+  runConnection connection context config
+  return ()
   
 
 instance Binary Message where
@@ -124,20 +126,20 @@ logMessages context =
           putStrLn $ context ++ " " ++ show message
           return message
 
-connection :: ConnectionContext -> IO ()
-connection context = do
-  atomically $ runConnection sendVersion context
-  atomically $ runConnection getHeaders context
-  connectionLoop context
+connection :: Connection ()
+connection = do
+  sendVersion
+  getHeaders
+  connectionLoop
 
-connectionLoop :: ConnectionContext -> IO ()
-connectionLoop context = do
-  atomically $ flip runConnection context $ do
-    mResponse <-  State.lift $ readTBMChan (listenChan context)
-    case mResponse of
-      Nothing -> fail "listenChan is closed and empty"
-      Just response -> handleResponse response
-  connectionLoop context
+connectionLoop :: Connection ()
+connectionLoop = do
+  chan <- State.gets listenChan
+  mResponse <-  liftIO . atomically . readTBMChan $ chan
+  case mResponse of
+    Nothing -> fail "listenChan is closed and empty"
+    Just response -> (handleResponse response)
+  connectionLoop
   
 handleResponse :: Message -> Connection ()
 
@@ -147,7 +149,7 @@ handleResponse (Message (VersionMessage {}) _) = do
     network = network' connectionContext
     writerChan' = writerChan connectionContext
     verackMessage = Message VerackMessage (MessageContext network)
-  State.lift $ writeTBMChan writerChan' verackMessage
+  liftIO . atomically $ writeTBMChan writerChan' verackMessage
 
 handleResponse (Message PingMessage _) = do
   connectionContext <- State.get
@@ -155,7 +157,7 @@ handleResponse (Message PingMessage _) = do
     network = network' connectionContext
     writerChan' = writerChan connectionContext
     pongMessage = Message PongMessage (MessageContext network)
-  State.lift $ writeTBMChan writerChan' pongMessage
+  liftIO . atomically $ writeTBMChan writerChan' pongMessage
 
 handleResponse _ = do
   return ()
@@ -178,8 +180,7 @@ sendVersion = do
       versionMessage = Message
           (VersionMessage version' nonce' lastBlock' peerAddr' myAddr' relay' time)
           (MessageContext network')
-  State.lift $ do
-    writeTBMChan writerChan versionMessage
+  liftIO . atomically $ writeTBMChan writerChan versionMessage
 
 getHeaders :: Connection ()
 getHeaders = do
@@ -193,6 +194,5 @@ getHeaders = do
     getHeadersMessage = Message
         (GetHeadersMessage version' [genesisHash network'] (BlockHash . fst . decode $ "0000000000000000000000000000000000000000000000000000000000000000"))
         (MessageContext network')
-  State.lift $ do
-    writeTBMChan writerChan getHeadersMessage
+  liftIO . atomically $ writeTBMChan writerChan getHeadersMessage
   
