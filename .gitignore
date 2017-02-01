@@ -1,10 +1,10 @@
 .stack-work
 node_modules
 /frontend/resources/*
+/backend/resources/*
 !.gitkeep
 .DS_STORE
 .psc-ide-port
 output/
 npm-debug.log
 bower_components/
-sqlite3*
