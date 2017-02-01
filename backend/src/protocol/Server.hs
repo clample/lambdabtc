@@ -32,7 +32,7 @@ import Conduit (Producer(..), runConduit, (.|), mapC, mapMC)
 import Data.Conduit.Combinators (encodeBase16, stdout)
 import Data.Conduit.Network (sourceSocket, sinkSocket)
 import Data.Conduit.Serialization.Binary (conduitGet, conduitPut)
-import Data.Conduit.TMChan (sourceTBMChan, sinkTBMChan, newTBMChan, TBMChan, writeTBMChan, readTBMChan, tryReadTBMChan)
+import Data.Conduit.TMChan (sourceTBMChan, sinkTBMChan, newTBMChan, TBMChan, writeTBMChan, readTBMChan)
 import Control.Concurrent.STM (atomically, STM(..))
 import Control.Concurrent (forkIO)
 import Data.ByteString (ByteString)
@@ -129,22 +129,17 @@ logMessages context =
 connection :: Connection ()
 connection = do
   sendVersion
-  connectionLoop
   getHeaders
   connectionLoop
 
 connectionLoop :: Connection ()
 connectionLoop = do
   chan <- State.gets listenChan
-  mmResponse <-  liftIO . atomically . tryReadTBMChan $ chan
-  case mmResponse of
+  mResponse <-  liftIO . atomically . readTBMChan $ chan
+  case mResponse of
     Nothing -> fail "listenChan is closed and empty"
-    Just mResponse ->
-      case mResponse of
-        Nothing -> return() -- no responses
-        Just response -> do
-          (handleResponse response)
-          connectionLoop
+    Just response -> (handleResponse response)
+  connectionLoop
   
 handleResponse :: Message -> Connection ()
 
@@ -200,3 +195,4 @@ getHeaders = do
         (GetHeadersMessage version' [genesisHash network'] (BlockHash . fst . decode $ "0000000000000000000000000000000000000000000000000000000000000000"))
         (MessageContext network')
   liftIO . atomically $ writeTBMChan writerChan getHeadersMessage
+  
