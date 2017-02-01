@@ -3,28 +3,12 @@
 module Protocol.Server where
 
 import Protocol.Parser (parseMessage)
-import Messages (getAddr, putMessage)
+import Protocol.Messages (getAddr, putMessage)
 import Protocol.Types (Network(..), Addr(..), MessageContext(..), Message(..), MessageBody(..), genesisHash)
-import Network.Socket (connect
-                      , socket
-                      , Family(..)
-                      , SocketType(..)
-                      , defaultProtocol
-                      , connect
-                      , SockAddr(..)
-                      , tupleToHostAddress
-                      , getAddrInfo
-                      , AddrInfo(..)
-                      , iNADDR_ANY
-                      , bind
-                      , defaultHints
-                      , AddrInfoFlag(..)
-                      , setSocketOption
-                      , SocketOption(..)
-                      , hostAddressToTuple
-                      , Socket)
+import Network.Socket (Socket)
+import Protocol.Network (Peer(..), connectToPeer)
 import Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
-import Control.Monad.State.Lazy (StateT(..), runStateT, liftIO)
+import Control.Monad.State.Lazy (StateT(..), runStateT, liftIO, get, gets)
 import Control.Monad.Reader (runReaderT)
 import qualified Control.Monad.State.Lazy as State
 import System.Random (randomR, StdGen, getStdGen)
@@ -35,10 +19,8 @@ import Data.Conduit.Serialization.Binary (conduitGet, conduitPut)
 import Data.Conduit.TMChan (sourceTBMChan, sinkTBMChan, newTBMChan, TBMChan, writeTBMChan, readTBMChan)
 import Control.Concurrent.STM (atomically, STM(..))
 import Control.Concurrent (forkIO)
-import Data.ByteString (ByteString)
 import Data.Binary.Put (runPut)
 import Data.Binary (Binary(..))
-import qualified Data.ByteString.Lazy as BL
 import Data.ByteString.Base16 (decode)
 import BlockHeaders (BlockHash(..), encodeBlockHeader)
 import Server.Config (ConfigM(..), Config(..), developmentConfig)
@@ -61,16 +43,12 @@ data ConnectionContext = ConnectionContext
   , randGen :: StdGen
   } 
 
-data Peer = Peer Socket Addr
-  deriving (Show, Eq)
-
 type Connection a = StateT ConnectionContext ConfigM a
 
 runConnection :: Connection a -> ConnectionContext -> Config -> IO (a, ConnectionContext)
 runConnection connection state config =
   runReaderT (runConfigM (runStateT connection state)) config
 
--- Find testnet hosts with `nslookup testnet-seed.bitcoin.petertodd.org`
 connectTestnet :: Config -> IO () 
 connectTestnet config = do
   context <- getConnectionContext config
@@ -81,14 +59,6 @@ connectTestnet config = do
   forkIO $ writer writerChan' peerSocket
   runConnection connection context config
   return ()
-  
-connectToPeer :: Int -> IO (Peer)
-connectToPeer n = do
-  addrInfo <- (!! n) <$> getAddrInfo Nothing (Just "testnet-seed.bitcoin.petertodd.org") (Just "18333")
-  peerSocket <- socket (addrFamily addrInfo) Stream defaultProtocol
-  setSocketOption peerSocket KeepAlive 1
-  connect peerSocket (addrAddress addrInfo)
-  return $ Peer peerSocket (getAddr $ addrAddress addrInfo)
 
 getConnectionContext :: Config -> IO ConnectionContext
 getConnectionContext config = do

@@ -156,33 +156,3 @@ derSignature signature = BS.concat
     
 sighashAll :: ByteString
 sighashAll = "01"
-
-------------- EXAMPLE
-exampleUTXO :: UTXO
-exampleUTXO = UTXO
-  { outTxHash = "eccf7e3034189b851985d871f91384b8ee357cd47c3024736e5676eb2debb3f2"
-  , outIndex = 1
-  }
-
-examplePubKeyRep :: PublicKeyRep
-examplePubKeyRep = Uncompressed 
-  "0450863AD64A87AE8A2FE83C1AF1A8403CB53F53E486D8511DAD8A04887E5B23522CD470243453A299FA9E77237716103ABC11A1DF38855ED6F2EE187E9C582BA6"
-
-exampleTxOutput :: TxOutput
-exampleTxOutput = TxOutput {value = Satoshis 99900000, pubKeyRep = examplePubKeyRep}
-
-examplePrivKey :: PrivateKey
-examplePrivKey = PrivateKey {private_curve = btcCurve, private_d = 4167233851084631310712071883598278467110431420085937463079548684279652237141}
-
-exampleTransaction :: Transaction
-exampleTransaction = 
-  Transaction
-    { __inputs = [ ( exampleUTXO
-                 , examplePrivKey)]
-    , __outputs = [exampleTxOutput]
-    , __version = defaultVersion }
-
-rawExample :: IO ()
-rawExample =
-  putStrLn . show . signedTransaction $ exampleTransaction
------------------------

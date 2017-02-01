@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Messages where
+module Protocol.Messages where
 
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS

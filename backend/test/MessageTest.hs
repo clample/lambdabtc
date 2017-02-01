@@ -1,7 +1,7 @@
 module MessageTest where
 
 import TestUtil
-import Messages (putMessage)
+import Protocol.Messages (putMessage)
 import Protocol.Types (Command(..), commandTable, Network(..), networkTable, Header(..), Addr(..), MessageBody(..), MessageContext(..), Message(..))
 import Protocol.Parser (parseMessage)
 import qualified Data.ByteString.Char8 as Char8

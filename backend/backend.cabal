@@ -26,10 +26,11 @@ library
                      , Util
                      , Transaction
                      , Transaction.Parser
-                     , Messages
+                     , Protocol.Messages
                      , Protocol.Parser
                      , Protocol.Server
                      , Protocol.Types
+                     , Protocol.Network
                      , BlockHeaders
   build-depends:       base >= 4.7 && < 5
                      , QuickCheck
