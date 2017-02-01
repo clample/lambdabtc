@@ -36,7 +36,6 @@ import Data.Conduit.TMChan (sourceTBMChan, sinkTBMChan, newTBMChan, TBMChan, wri
 import Control.Concurrent.STM (atomically, STM(..))
 import Control.Concurrent (forkIO)
 import Data.ByteString (ByteString)
-import Data.Binary.Get ()
 import Data.Binary.Put (runPut)
 import Data.Binary (Binary(..))
 import qualified Data.ByteString.Lazy as BL

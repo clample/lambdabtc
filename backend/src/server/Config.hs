@@ -25,7 +25,7 @@ developmentConfig :: IO Config
 developmentConfig = do
   let env = Development
   pool <- runStdoutLoggingT $
-    createSqlitePool ":memory:" (getConnectionSize env)
+    createSqlitePool "sqlite3.db" (getConnectionSize env)
   return $ Config Development 49535 pool
 
 getConnectionSize :: Environment -> Int
