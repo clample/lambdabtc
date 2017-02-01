@@ -73,13 +73,32 @@ runConnection connection state config =
 -- Find testnet hosts with `nslookup testnet-seed.bitcoin.petertodd.org`
 connectTestnet :: Config -> IO () 
 connectTestnet config = do
-  peer@(Peer peerSocket _) <- connectToPeer 1
+  context <- getConnectionContext config
+  let listenChan' = listenChan context
+      writerChan' = writerChan context
+      Peer peerSocket _ = peer' context
+  forkIO $ listener listenChan' peerSocket
+  forkIO $ writer writerChan' peerSocket
+  runConnection connection context config
+  return ()
+  
+connectToPeer :: Int -> IO (Peer)
+connectToPeer n = do
+  addrInfo <- (!! n) <$> getAddrInfo Nothing (Just "testnet-seed.bitcoin.petertodd.org") (Just "18333")
+  peerSocket <- socket (addrFamily addrInfo) Stream defaultProtocol
+  setSocketOption peerSocket KeepAlive 1
+  connect peerSocket (addrAddress addrInfo)
+  return $ Peer peerSocket (getAddr $ addrAddress addrInfo)
+
+getConnectionContext :: Config -> IO ConnectionContext
+getConnectionContext config = do
+  peer <- connectToPeer 1
   writeChan <- atomically $ newTBMChan 16
   listenChan <- atomically $ newTBMChan 16
   time' <- getPOSIXTime
   randGen' <- getStdGen
   lastBlock <- fromIntegral <$> getLastBlock config
-  let context = ConnectionContext
+  return ConnectionContext
         { version' = 60002
         , lastBlock' = lastBlock
         , myAddr' = Addr (0, 0, 0, 0) 18333 
@@ -91,19 +110,6 @@ connectTestnet config = do
         , time = time'
         , randGen = randGen'
         }
-  -- Fork listener then writer
-  forkIO $ listener listenChan peerSocket
-  forkIO $ writer writeChan peerSocket
-  runConnection connection context config
-  return ()
-  
-connectToPeer :: Int -> IO (Peer)
-connectToPeer n = do
-  addrInfo <- (!! n) <$> getAddrInfo Nothing (Just "testnet-seed.bitcoin.petertodd.org") (Just "18333")
-  peerSocket <- socket (addrFamily addrInfo) Stream defaultProtocol
-  setSocketOption peerSocket KeepAlive 1
-  connect peerSocket (addrAddress addrInfo)
-  return $ Peer peerSocket (getAddr $ addrAddress addrInfo)
 
 getLastBlock :: Config -> IO Int
 getLastBlock Config {pool = pool} =
