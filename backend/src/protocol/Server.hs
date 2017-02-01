@@ -41,8 +41,11 @@ import Data.Binary.Put (runPut)
 import Data.Binary (Binary(..))
 import qualified Data.ByteString.Lazy as BL
 import Data.ByteString.Base16 (decode)
-import BlockHeaders (BlockHash(..))
+import BlockHeaders (BlockHash(..), encodeBlockHeader)
 import Server.Config (ConfigM(..), Config(..), developmentConfig)
+import Database.Persist.Sql (insertMany_)
+import Persistence (runDB)
+import Data.List.Split (chunksOf)
 
 data ConnectionContext = ConnectionContext
   { version' :: Int
@@ -158,6 +161,13 @@ handleResponse (Message PingMessage _) = do
     writerChan' = writerChan connectionContext
     pongMessage = Message PongMessage (MessageContext network)
   liftIO . atomically $ writeTBMChan writerChan' pongMessage
+
+handleResponse (Message (HeadersMessage headers) _) = do
+  let persistentHeaders = map encodeBlockHeader headers
+      chunkedPersistentHeaders = chunksOf 100 persistentHeaders
+      -- Headers are inserted in chunks
+      -- sqlite rejects if we insert all at once
+  runDB $ mapM_ insertMany_ chunkedPersistentHeaders
 
 handleResponse _ = do
   return ()
