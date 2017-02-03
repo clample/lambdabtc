@@ -59,6 +59,7 @@ tests =
       ],
     testGroup "QuickCheck BlockHeader Tests" [
       blockHeaderInvertible,
+      validHeadersVerify,
       testCase "Check genesis block hash" genesisBlockHash,
       testCase "Check genesis block testnet hash" genesisBlockTestnetHash
       ]

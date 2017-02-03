@@ -20,6 +20,10 @@ data BlockHeader =
   BlockHeader BlockVersion PrevBlockHash MerkleRoot Timestamp Difficulty Nonce TxCount
   deriving (Eq, Show)
 
+-- TODO: Just make BlockHeader a record? use lenses?
+prevBlockHash :: BlockHeader -> BlockHash
+prevBlockHash (BlockHeader _ hash _ _ _ _ _) = hash
+
 data BlockVersion = BlockVersion Int
   deriving (Eq, Show)
 
@@ -208,6 +212,15 @@ getTxCount :: Get TxCount
 getTxCount =
   TxCount <$> get
 
+-- We will assume that incoming headers are sorted [oldest ... newest]
+-- TODO: try take any order headers and sort them if needed
+verifyHeaders :: [BlockHeader] -> Bool
+verifyHeaders (newest:[]) = True
+verifyHeaders (old:new:rest) =
+  if (hashBlock old == prevBlockHash new)
+  then verifyHeaders (new:rest)
+  else False
+
 instance Binary TxCount where
   put = putTxCount
   get = getTxCount
@@ -246,7 +259,7 @@ instance Arbitrary TxCount where
   arbitrary = TxCount . VarInt <$> choose (0, maxCount)
     where maxCount = 0xff -- 1 byte
 
--- The genesis blocks were determined by hand referencing
+-- The genesis blocks were determined by hand, referencing
 -- https://github.com/bitcoin/bitcoin/blob/812714fd80e96e28cd288c553c83838cecbfc2d9/src/chainparams.cpp
 genesisBlockMain :: BlockHeader
 genesisBlockMain = BlockHeader

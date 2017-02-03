@@ -30,3 +30,34 @@ genesisBlockTestnetHash = assertEqual
   "Genesis block for testnet should have the correct hash"
   (hashBlock genesisBlockTestnet)
   (BlockHash . fst . decode $ "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943")
+
+validHeadersVerify = testProperty
+  "ValidHeaders (checksums guaranteed to match) should pass verifyHeaders"
+  prop_validHeadersVerify
+
+prop_validHeadersVerify :: ValidHeaders -> Bool
+prop_validHeadersVerify (ValidHeaders headers) =
+  verifyHeaders headers
+
+newtype ValidHeaders = ValidHeaders [BlockHeader]
+  deriving (Show)
+
+instance Arbitrary ValidHeaders where
+  arbitrary = do
+    oldestHeader <- arbitrary :: Gen BlockHeader
+    let header1 = oldestHeader
+    header2 <- nextHeader header1
+    header3 <- nextHeader header2
+    header4 <- nextHeader header3
+    let validHeaders = [header1, header2, header3, header4]
+    return $ ValidHeaders validHeaders
+    where
+      nextHeader h =
+        BlockHeader
+        <$> arbitrary
+        <*> pure (hashBlock h)
+        <*> arbitrary
+        <*> arbitrary
+        <*> arbitrary
+        <*> arbitrary
+        <*> arbitrary

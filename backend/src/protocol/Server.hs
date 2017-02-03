@@ -29,9 +29,8 @@ import Database.Persist.Sql (insertMany_, count, runSqlPool, Filter, toSqlKey, i
 import qualified Database.Persist.Sql as DB
 import Persistence (runDB, PersistentBlockHeader(..))
 import Data.List.Split (chunksOf)
-import BlockHeaders (BlockHeader(..), decodeBlockHeader, hashBlock, genesisBlockTestnet)
+import BlockHeaders (BlockHeader(..), decodeBlockHeader, hashBlock, genesisBlockTestnet, verifyHeaders)
 import Data.Maybe (fromJust)
-
 
 data ConnectionContext = ConnectionContext
   { version' :: Int
@@ -192,9 +191,6 @@ getMostRecentHeader = do
   case mlastBlockHeader of
     Nothing -> fail "Unable to get most recent block header. This should never happen"
     Just lastBlockHeader -> return (decodeBlockHeader lastBlockHeader)
-
-verifyHeaders :: [BlockHeader] -> Bool
-verifyHeaders _ = True
 
 sendVersion :: Connection ()
 sendVersion = do
