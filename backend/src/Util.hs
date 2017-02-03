@@ -19,7 +19,8 @@ module Util
   , parsePayload
   , showBool
   , parseBool
-  , VarInt(..)) where
+  , VarInt(..)
+  , doubleSHA) where
 
 import Prelude hiding (take)
 
@@ -41,6 +42,7 @@ import Data.ByteArray (convert)
 import Data.Binary (Binary(..))
 import Data.Binary.Get(Get(..), getWord8, getWord16le, getWord32le, getWord64le)
 import Data.Binary.Put (Put(..), putWord8, putWord16le, putWord32le, putWord64le)
+import Data.Memory.Endian (getSystemEndianness, Endianness(..)) 
 
 data Payload = Payload ByteString
   deriving (Show, Eq)
@@ -62,8 +64,12 @@ maybeRead :: Read a => String -> Maybe a
 maybeRead = fmap fst . listToMaybe . reads
 
 checkSum :: ByteString -> ByteString
-checkSum = (take 4) . convert . hashWith SHA256 . hashWith SHA256
+checkSum = (take 4) . doubleSHA
 
+-- 
+doubleSHA :: ByteString -> ByteString
+doubleSHA = convert . hashWith SHA256 . hashWith SHA256
+  
 -- https://github.com/bitcoinbook/bitcoinbook/blob/first_edition/ch04.asciidoc#base58-and-base58check-encoding
 encodeBase58Check :: Prefix -> Payload -> T.Text
 encodeBase58Check (Prefix prefix) (Payload payload) =

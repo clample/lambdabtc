@@ -3,16 +3,18 @@ module BlockHeaders where
 
 import Data.ByteString (ByteString(..))
 import Data.Time.Clock.POSIX (POSIXTime)
-import Data.Binary.Put (Put, putWord32le, putWord32be, putWord64le, putByteString, putWord8)
+import Data.Binary.Put (Put, putWord32le, putWord32be, putWord64le, putByteString, putWord8, runPut)
 import Data.Binary.Get (Get(..), getWord32le, getByteString, getWord8)
 import Data.Binary (Binary(..))
 import Data.ByteString.Base16 (decode, encode)
-import Util (VarInt(..))
+import Util (VarInt(..), doubleSHA)
 import Persistence
 ------
 import Test.QuickCheck.Arbitrary (Arbitrary(..))
 import Test.QuickCheck.Gen (choose, suchThat, vectorOf, elements, oneof, listOf, Gen)
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString.Char8 as Char8
 
 data BlockHeader =
   BlockHeader BlockVersion PrevBlockHash MerkleRoot Timestamp Difficulty Nonce TxCount
@@ -23,6 +25,7 @@ data BlockVersion = BlockVersion Int
 
 type PrevBlockHash = BlockHash
 
+-- BlockHash is binary encoded but we show it as hex encoded
 data BlockHash = BlockHash ByteString
   deriving (Eq)
 
@@ -52,6 +55,11 @@ instance Show Nonce where
 
 data TxCount = TxCount VarInt -- Always 0 for block headers
   deriving (Eq, Show)
+
+hashBlock :: BlockHeader -> BlockHash
+hashBlock blockHeader = BlockHash $
+  BS.reverse . doubleSHA . BL.toStrict . runPut $ putBlockHeaderWithoutTxCount blockHeader
+  -- HELP: Why do we need reverse here?
 
 decodeBlockHeader :: PersistentBlockHeader -> BlockHeader
 decodeBlockHeader
@@ -91,14 +99,19 @@ encodeBlockHeader
     nonce
     txCount)
 
-putBlockHeader :: BlockHeader -> Put
-putBlockHeader (BlockHeader version prevHash merkleRoot time difficulty nonce txCount) = do
+putBlockHeaderWithoutTxCount :: BlockHeader -> Put
+putBlockHeaderWithoutTxCount (BlockHeader version prevHash merkleRoot time difficulty nonce _) = do
   put version
   put prevHash
   put merkleRoot
   put time
   put difficulty
   put nonce
+
+
+putBlockHeader :: BlockHeader -> Put
+putBlockHeader blockHeader@(BlockHeader version prevHash merkleRoot time difficulty nonce txCount) = do
+  putBlockHeaderWithoutTxCount blockHeader
   put txCount
 
 getBlockHeader :: Get BlockHeader
@@ -232,3 +245,25 @@ instance Arbitrary Nonce where
 instance Arbitrary TxCount where
   arbitrary = TxCount . VarInt <$> choose (0, maxCount)
     where maxCount = 0xff -- 1 byte
+
+-- The genesis blocks were determined by hand referencing
+-- https://github.com/bitcoin/bitcoin/blob/812714fd80e96e28cd288c553c83838cecbfc2d9/src/chainparams.cpp
+genesisBlockMain :: BlockHeader
+genesisBlockMain = BlockHeader
+  (BlockVersion 1)
+  (BlockHash . fst . decode $ "0000000000000000000000000000000000000000000000000000000000000000" )
+  (MerkleRoot . fst . decode $ "3BA3EDFD7A7B12B27AC72C3E67768F617FC81BC3888A51323A9FB8AA4B1E5E4A")
+  (Timestamp . fromIntegral $ 1231006505)
+  (Difficulty . fst . decode $ "FFFF001D")
+  (Nonce . fst . decode . Char8.pack $ "1DAC2B7C")
+  (TxCount . VarInt $ 1)
+
+genesisBlockTestnet :: BlockHeader
+genesisBlockTestnet = BlockHeader
+  (BlockVersion 1)
+  (BlockHash . fst . decode $ "0000000000000000000000000000000000000000000000000000000000000000" )
+  (MerkleRoot . fst . decode $ "3BA3EDFD7A7B12B27AC72C3E67768F617FC81BC3888A51323A9FB8AA4B1E5E4A")
+  (Timestamp . fromIntegral $ 1296688602)
+  (Difficulty . fst . decode $ "FFFF001D")
+  (Nonce . fst . decode $ "1aa4ae18")
+  (TxCount . VarInt $ 1)

@@ -10,7 +10,7 @@ import Network.Socket (Socket)
 import Protocol.Network (Peer(..), connectToPeer)
 import Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
 import Control.Monad.State.Lazy (StateT(..), runStateT, liftIO, get, gets)
-import Control.Monad.Reader (runReaderT)
+import Control.Monad.Reader (runReaderT, ask)
 import qualified Control.Monad.State.Lazy as State
 import System.Random (randomR, StdGen, getStdGen)
 import Conduit (Producer(..), runConduit, (.|), mapC, mapMC)
@@ -25,12 +25,12 @@ import Data.Binary (Binary(..))
 import Data.ByteString.Base16 (decode)
 import BlockHeaders (BlockHash(..), encodeBlockHeader)
 import Server.Config (ConfigM(..), Config(..), developmentConfig)
-import Database.Persist.Sql (insertMany_, count, runSqlPool, Filter, toSqlKey)
+import Database.Persist.Sql (insertMany_, count, runSqlPool, Filter, toSqlKey, insert_)
 import qualified Database.Persist.Sql as DB
 import Persistence (runDB, PersistentBlockHeader(..))
 import Data.List.Split (chunksOf)
-import BlockHeaders (BlockHeader(..), decodeBlockHeader)
-import Data.Maybe (catMaybes)
+import BlockHeaders (BlockHeader(..), decodeBlockHeader, hashBlock, genesisBlockTestnet)
+import Data.Maybe (fromJust)
 
 
 data ConnectionContext = ConnectionContext
@@ -56,14 +56,14 @@ runConnection connection state config =
 
 connectTestnet :: Config -> IO () 
 connectTestnet config = do
+  persistGenesisBlock config
   context <- getConnectionContext config
   let listenChan' = listenChan context
       writerChan' = writerChan context
       Peer peerSocket _ = peer' context
   forkIO $ listener listenChan' peerSocket
   forkIO $ writer writerChan' peerSocket
-  getBlockLocatorHashes 160 config >>= print
-  -- runConnection connection context config
+  runConnection connection context config
   return ()
 
 getConnectionContext :: Config -> IO ConnectionContext
@@ -89,9 +89,16 @@ getConnectionContext config = do
 
 getLastBlock :: Config -> IO Int
 getLastBlock Config {pool = pool} =
-  runSqlPool lastBlockQuery pool
+  ((+) (-1)) <$> runSqlPool lastBlockQuery pool
   where lastBlockQuery = count allBlocksFilter
         allBlocksFilter = [] :: [Filter PersistentBlockHeader]
+
+persistGenesisBlock :: Config -> IO ()
+persistGenesisBlock config@(Config {pool = pool}) = do
+  lastBlock <- getLastBlock config
+  if (lastBlock == -1)
+    then runSqlPool (insert_ $ encodeBlockHeader genesisBlockTestnet) pool
+    else return ()
 
 instance Binary Message where
   put = putMessage
@@ -124,7 +131,6 @@ logMessages context =
 connection :: Connection ()
 connection = do
   sendVersion
-  getHeaders
   connectionLoop
 
 connectionLoop :: Connection ()
@@ -135,16 +141,21 @@ connectionLoop = do
     Nothing -> fail "listenChan is closed and empty"
     Just response -> (handleResponse response)
   connectionLoop
+
   
 handleResponse :: Message -> Connection ()
 
-handleResponse (Message (VersionMessage {}) _) = do
+handleResponse (Message (VersionMessage {lastBlockN = lastBlockPeer}) _) = do
   connectionContext <- State.get
   let
     network = network' connectionContext
     writerChan' = writerChan connectionContext
+    lastBlock = lastBlock' connectionContext
     verackMessage = Message VerackMessage (MessageContext network)
   liftIO . atomically $ writeTBMChan writerChan' verackMessage
+  if (lastBlockPeer > lastBlock)
+    then synchronizeHeaders lastBlockPeer
+    else return ()
 
 handleResponse (Message PingMessage _) = do
   connectionContext <- State.get
@@ -159,10 +170,31 @@ handleResponse (Message (HeadersMessage headers) _) = do
       chunkedPersistentHeaders = chunksOf 100 persistentHeaders
       -- Headers are inserted in chunks
       -- sqlite rejects if we insert all at once
-  runDB $ mapM_ insertMany_ chunkedPersistentHeaders
-
+  config <- ask
+  mostRecentHeader <- getMostRecentHeader
+  let isValid = verifyHeaders (mostRecentHeader:headers)
+  if isValid
+    then do
+    runDB $ mapM_ insertMany_ chunkedPersistentHeaders
+    State.modify (\context@(ConnectionContext {lastBlock' = lastBlock})
+                 -> context {lastBlock' = lastBlock + (fromIntegral .length) headers})
+    else fail "We recieved invalid headers"
+    
 handleResponse _ = do
   return ()
+
+getMostRecentHeader :: Connection BlockHeader
+getMostRecentHeader = do
+  config <- ask
+  blockHeaderCount <- liftIO $ fromIntegral <$> getLastBlock config
+  mlastBlockHeader <- runDB $ DB.get (toSqlKey . fromIntegral $ blockHeaderCount + 1)
+  -- NOTE: we query by i + 1 since the genesis block (block 0) is in the db at index 1
+  case mlastBlockHeader of
+    Nothing -> fail "Unable to get most recent block header. This should never happen"
+    Just lastBlockHeader -> return (decodeBlockHeader lastBlockHeader)
+
+verifyHeaders :: [BlockHeader] -> Bool
+verifyHeaders _ = True
 
 sendVersion :: Connection ()
 sendVersion = do
@@ -184,34 +216,58 @@ sendVersion = do
           (MessageContext network')
   liftIO . atomically $ writeTBMChan writerChan versionMessage
 
+synchronizeHeaders :: Integer -> Connection ()
+synchronizeHeaders lastBlockPeer = do
+  lastBlock <- State.gets lastBlock'
+  if (lastBlock < lastBlockPeer)
+    then do
+      getHeaders
+      handleMessages
+      synchronizeHeaders lastBlockPeer
+    else return ()
+  where
+    -- Keep reading messages until we get a headers message
+    handleMessages = do
+      chan <- State.gets listenChan
+      mResponse <-  liftIO . atomically . readTBMChan $ chan
+      case mResponse of
+        Nothing -> fail "listenChan is closed and empty"
+        Just response@(Message (HeadersMessage _) _) -> (handleResponse response)
+        Just response -> (handleResponse response) >> handleMessages
+      
+
 getHeaders :: Connection ()
 getHeaders = do
   connectionContext <- State.get
+  config <- ask
   let
     (ConnectionContext
      { version' = version'
      , network' = network'
      , writerChan = writerChan
+     , lastBlock' = lastBlock
      }) = connectionContext
-    getHeadersMessage = Message
-        (GetHeadersMessage version' [genesisHash network'] (BlockHash . fst . decode $ "0000000000000000000000000000000000000000000000000000000000000000"))
+    getHeadersMessage lastBlock = do
+      blockLocatorHashes <- queryBlockLocatorHashes lastBlock config
+      return $ Message
+        (GetHeadersMessage version' blockLocatorHashes
+         (BlockHash . fst . decode $ "0000000000000000000000000000000000000000000000000000000000000000"))
         (MessageContext network')
-  liftIO . atomically $ writeTBMChan writerChan getHeadersMessage
+  message <- liftIO $ getHeadersMessage (fromIntegral lastBlock)
+  liftIO . atomically $ writeTBMChan writerChan message
 
 
-getBlockLocatorHashes :: Int -> Config -> IO [BlockHash]
-getBlockLocatorHashes i c = (++ [genesisHash TestNet3]) <$> blockHashes 
-  where blockHashes = map (headerToHash . decodeBlockHeader) . catMaybes <$> queryBlockLocatorHeaders i c
-        headerToHash (BlockHeader _ blockHash _ _ _ _ _) = blockHash
-  
-queryBlockLocatorHeaders :: Int -> Config -> IO [Maybe PersistentBlockHeader]
-queryBlockLocatorHeaders lastBlock (Config {pool=pool}) = do
+queryBlockLocatorHashes :: Int -> Config -> IO [BlockHash]
+queryBlockLocatorHashes lastBlock (Config {pool=pool}) = do
   mapM queryBlockHash (blockLocatorIndices lastBlock)
   where
-    queryBlockHash i = runSqlPool (DB.get (toSqlKey . fromIntegral $  i)) pool
+    queryBlockHash i = (hashBlock . decodeBlockHeader . fromJust) <$> runSqlPool (DB.get (toSqlKey . fromIntegral $  i + 1)) pool
+    -- NOTE: we query by i + 1 since the genesis block (block 0) is in the db at index 1
 
 blockLocatorIndices :: Int -> [Int]
-blockLocatorIndices lastBlock = reverse $ blockLocatorIndicesStep 10 1 [lastBlock]
+blockLocatorIndices lastBlock = reverse . addGenesisIndiceIfNeeded $ blockLocatorIndicesStep 10 1 [lastBlock]
+  where addGenesisIndiceIfNeeded (0:xs) = 0:xs
+        addGenesisIndiceIfNeeded (xs)   = 0:xs
 
 blockLocatorIndicesStep c step (i:is)
   | c > 0 && i > 0 = blockLocatorIndicesStep (c - 1) (step) ((i - 1):i:is)

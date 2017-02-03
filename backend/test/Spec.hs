@@ -58,7 +58,9 @@ tests =
       messageInvertible
       ],
     testGroup "QuickCheck BlockHeader Tests" [
-      blockHeaderInvertible
+      blockHeaderInvertible,
+      testCase "Check genesis block hash" genesisBlockHash,
+      testCase "Check genesis block testnet hash" genesisBlockTestnetHash
       ]
   ]
 
@@ -75,6 +77,7 @@ pubKeyHashTest pubKeyRep = assertEqual
   (stringToHexByteString "010966776006953D5567439E5E39F86A0D273BEE")
   (pubKeyHash pubKeyRep)
 
+-- See https://en.bitcoin.it/wiki/Technical_background_of_version_1_Bitcoin_addresses
 addressTest :: PublicKeyRep -> Assertion
 addressTest pubKeyRep = assertEqual
   "We should derive the correct address from a given public key"
