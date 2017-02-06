@@ -13,6 +13,7 @@ import qualified Data.ByteString as B
 import Data.ByteString.Base16 (encode, decode)
 import BlockHeaders
 import BloomFilter
+import Inventory
 
 instance Arbitrary Message where
   arbitrary = Message <$> arbitrary <*> arbitrary
@@ -23,6 +24,7 @@ instance Arbitrary MessageBody where
     , arbitraryGetHeadersMessage
     , arbitraryGetHeadersMessage
     , arbitraryFilterloadMessage
+    , arbitraryInvMessage
     , return VerackMessage ]
 
 instance Arbitrary MessageContext where
@@ -67,6 +69,16 @@ arbitraryFilterloadMessage = do
     maxNHashFuncs = 0xffffffff -- 4 bytes
     maxNTweak     = 0xffffffff -- 4 bytes
 
+arbitraryInvMessage = 
+  InvMessage <$> arbitrary
+  
+instance Arbitrary InventoryVector where
+  arbitrary = do
+    objType <- arbitraryBoundedEnum
+    objHash <- ObjectHash . Char8.pack <$> vector 32
+    return $ InventoryVector objType objHash
+
+  
 instance Arbitrary Network where
   arbitrary = do
     let networks = map fst networkTable

@@ -14,6 +14,7 @@ import Data.ByteString.Base16 (decode, encode)
 import Data.Binary.Get (Get(..), getByteString)
 import BlockHeaders (BlockHash(..), BlockHeader(..))
 import BloomFilter (Filter(..), Tweak(..), NFlags(..))
+import Inventory (InventoryVector(..))
 import Util (VarInt(..))
 
 data Addr = Addr IP Port
@@ -44,6 +45,7 @@ data MessageBody
   | PingMessage
   | PongMessage
   | InvMessage
+    { invVectors :: [InventoryVector]}
   | GetDataMessage
   | NotFoundMessage
   | GetBlocksMessage
@@ -84,7 +86,7 @@ getCommand TxMessage = TxCommand
 getCommand RejectMessage = RejectCommand
 getCommand PingMessage = PingCommand
 getCommand PongMessage = PongCommand
-getCommand InvMessage = InvCommand
+getCommand (InvMessage {}) = InvCommand
 getCommand GetDataMessage = GetDataCommand
 getCommand NotFoundMessage = NotFoundCommand
 getCommand GetBlocksMessage = GetBlocksCommand

@@ -66,13 +66,17 @@ putMessageBody (HeadersMessage blockHeaders) = do
   mapM_ put blockHeaders
 
 putMessageBody (FilterloadMessage (Filter filter) nHashFuncs (Tweak nTweak) nFlags) = do
-  put (VarInt . BS.length $ filter)
+  put . VarInt . BS.length $ filter
   putByteString filter
   putWord32le (fromIntegral nHashFuncs)
   putWord32le (fromIntegral nTweak)
     -- TODO: It's not clear if nTweak should be litle or big endian
     --       This won't be a problem when nTweak is 0, but it may cause bugs later
   (putWord8 . fromIntegral . fromEnum) nFlags
+
+putMessageBody (InvMessage invVectors) = do
+  put . VarInt . length $ invVectors
+  mapM_ put invVectors
 
 putMessageBody _ = putByteString ""
 

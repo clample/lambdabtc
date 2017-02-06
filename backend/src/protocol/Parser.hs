@@ -74,8 +74,12 @@ parseMessageBody expectedLength PingCommand =
   parseRemaining expectedLength >> return PingMessage
 parseMessageBody expectedLength PongCommand =
   parseRemaining expectedLength >> return PongMessage
-parseMessageBody expectedLength InvCommand =
-  parseRemaining expectedLength >> return InvMessage
+  
+parseMessageBody _ InvCommand = do
+   VarInt count <- get
+   inventoryVectors <- replicateM count get
+   return $ InvMessage inventoryVectors
+  
 parseMessageBody expectedLength GetDataCommand =
   parseRemaining expectedLength >> return GetDataMessage
 

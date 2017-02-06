@@ -33,6 +33,7 @@ library
                      , Protocol.Network
                      , BlockHeaders
                      , BloomFilter
+                     , Inventory
   build-depends:       base >= 4.7 && < 5
                      , QuickCheck
                      , bytestring >= 0.10 && < 0.11
