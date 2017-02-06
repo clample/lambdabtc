@@ -1,5 +1,17 @@
 {-# Language OverloadedStrings #-}
-module BloomFilter where
+module BloomFilter
+  ( Filter(..)
+  , Tweak(..)
+  , NFlags(..)
+  , probability
+  , maxFilterBytes
+  , numberHashFunctions
+  , filterSize
+  , pDefault
+  , blankFilter
+  , updateFilter
+  , hardcodedTweak
+  )where
 
 import Data.Hash.Murmur (murmur3)
 import Data.Word (Word32)
@@ -40,8 +52,8 @@ maxHashFuncs :: Int
 maxHashFuncs = 50
 
 -- TODO: This should be random, not hardcoded
-nTweak :: Tweak
-nTweak = Tweak 0
+hardcodedTweak :: Tweak
+hardcodedTweak = Tweak 0
 
 pDefault :: Probability
 pDefault = probability 0.0001
@@ -60,20 +72,35 @@ filterSize n (Probability p) =
     denominator = ((log 2) ^ 2) * 8
     
   
--- s: filterSize
+-- s: filterSize (Bytes)
+numberHashFunctions :: Int -> Int -> Int
 numberHashFunctions s n = min calculatedHashFunctions maxHashFuncs
-  where calculatedHashFunctions = floor $ (s * 8) / (n * (log 2))
+  where calculatedHashFunctions = floor $ ((fromIntegral s) * 8) / ((fromIntegral n) * (log 2))
 
-bloomHash :: Int -> Tweak -> ByteString -> Int -> Probability -> Int
-bloomHash hashNum tweak hashData n p =
+updateFilter :: Int -> Tweak -> ByteString -> Filter -> Filter
+updateFilter numberHashes tweak hashData filter =
+  foldl (\f updateFunc -> updateFunc f) filter updateFuncs
+  where
+    updateFuncs = map
+      (\hashNum -> updateFilterStep hashNum tweak hashData)
+      [0..(numberHashes - 1)]
+
+updateFilterStep :: Int -> Tweak -> ByteString -> Filter -> Filter
+updateFilterStep hashNum tweak hashData (Filter filter) =
+    Filter $ setBit filter index
+    where
+      filterLengthBits = (B.length filter) * 8
+      index = bloomHash hashNum tweak hashData filterLengthBits
+
+bloomHash :: Int -> Tweak -> ByteString -> Int -> Int
+bloomHash hashNum tweak hashData filterLengthBits =
   hash `mod` filterLengthBits
   where
     hash = (fromIntegral $ murmur3 seedValue hashData)
-    seedValue = seed hashNum tweak
-    filterLengthBits = (filterSize n p) * 8
+    seedValue = seed hashNum tweak      
 
-updateFilter :: Filter -> Int -> Filter
-updateFilter (Filter filter) index = Filter $ setBit filter index
+blankFilter :: Int -> Probability -> Filter
+blankFilter n p = Filter . B.pack . replicate (filterSize n p) $ fromIntegral 0
 
 {--
 hashTest :: IO ()

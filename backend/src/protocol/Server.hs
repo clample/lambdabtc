@@ -31,6 +31,7 @@ import Persistence (runDB, PersistentBlockHeader(..))
 import Data.List.Split (chunksOf)
 import BlockHeaders (BlockHeader(..), decodeBlockHeader, hashBlock, genesisBlockTestnet, verifyHeaders)
 import Data.Maybe (fromJust)
+import BloomFilter (pDefault, blankFilter, updateFilter, numberHashFunctions, filterSize, hardcodedTweak, NFlags(..))
 
 data ConnectionContext = ConnectionContext
   { version' :: Int
@@ -130,6 +131,7 @@ logMessages context =
 connection :: Connection ()
 connection = do
   sendVersion
+  setFilter
   connectionLoop
 
 connectionLoop :: Connection ()
@@ -211,6 +213,23 @@ sendVersion = do
           (VersionMessage version' nonce' lastBlock' peerAddr' myAddr' relay' time)
           (MessageContext network')
   liftIO . atomically $ writeTBMChan writerChan versionMessage
+
+
+setFilter :: Connection ()
+setFilter = do
+ writerChan <- State.gets writerChan
+ network' <- State.gets network'
+ let
+   blank = blankFilter 1 pDefault
+   s = filterSize 1 pDefault
+   nHashFuncs = numberHashFunctions s 1
+   txId = fst . decode $ "b73619d208b4f7b91cc93185b1e2f5057bacbe9b5c0b63c36159e0354be0a77f"
+   filter' = updateFilter nHashFuncs hardcodedTweak txId blank
+   filterloadMessage = Message
+     (FilterloadMessage filter' nHashFuncs hardcodedTweak BLOOM_UPDATE_NONE)
+     (MessageContext network')
+ liftIO . atomically $ writeTBMChan writerChan filterloadMessage
+
 
 synchronizeHeaders :: Integer -> Connection ()
 synchronizeHeaders lastBlockPeer = do

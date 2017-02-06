@@ -12,4 +12,3 @@ main = do
   migrateSchema config
   forkIO $ connectTestnet config
   runApplication config
-
