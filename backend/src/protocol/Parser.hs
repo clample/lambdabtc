@@ -10,6 +10,7 @@ import Foreign.Marshal.Utils (toBool)
 import Data.ByteString (ByteString)
 import Control.Monad (replicateM)
 import BlockHeaders (BlockHash(..))
+import BloomFilter (Filter(..), Tweak(..), NFlags(..))
 import Data.Binary (Binary(..))
 import Util (VarInt(..))
 
@@ -48,7 +49,7 @@ parseRemaining expectedLength = do
 
 parseMessageBody :: Int -> Command -> Get MessageBody
 
-parseMessageBody expectedLength VersionCommand = do
+parseMessageBody _ VersionCommand = do
   version     <- fromIntegral <$> getWord32le
   services    <- getWord64be
   timestamp   <- fromIntegral <$> getWord64le
@@ -78,7 +79,7 @@ parseMessageBody expectedLength InvCommand =
 parseMessageBody expectedLength GetDataCommand =
   parseRemaining expectedLength >> return GetDataMessage
 
-parseMessageBody expectedLength GetHeadersCommand = do
+parseMessageBody _ GetHeadersCommand = do
   version            <- fromIntegral <$> getWord32le
   VarInt nHashes     <- get
   blockLocatorHashes <- replicateM nHashes get
@@ -101,8 +102,15 @@ parseMessageBody expectedLength CheckorderCommand =
   parseRemaining expectedLength >> return CheckorderMessage
 parseMessageBody expectedLength SubmitorderCommand =
   parseRemaining expectedLength >> return SubmitorderMessage
-parseMessageBody expectedLength FilterloadCommand =
-  parseRemaining expectedLength >> return FilterloadMessage
+  
+parseMessageBody _ FilterloadCommand = do
+  VarInt lengthFilter <- get
+  filter <- Filter <$> getByteString lengthFilter
+  nHashFuncs <- fromIntegral <$> getWord32le
+  nTweak     <- Tweak . fromIntegral <$> getWord32le
+  nFlags <- toEnum . fromIntegral <$> getWord8
+  return $ FilterloadMessage filter nHashFuncs nTweak nFlags
+  
 parseMessageBody expectedLength FilteraddCommand =
   parseRemaining expectedLength >> return FilteraddMessage
 parseMessageBody expectedLength FilterclearCommand =

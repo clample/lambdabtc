@@ -13,6 +13,7 @@ import Data.Tuple (swap)
 import Data.ByteString.Base16 (decode, encode)
 import Data.Binary.Get (Get(..), getByteString)
 import BlockHeaders (BlockHash(..), BlockHeader(..))
+import BloomFilter (Filter(..), Tweak(..), NFlags(..))
 import Util (VarInt(..))
 
 data Addr = Addr IP Port
@@ -58,6 +59,11 @@ data MessageBody
   | CheckorderMessage
   | SubmitorderMessage
   | FilterloadMessage
+    { filter :: Filter
+    , nHashFuncs :: Int
+    , nTweak :: Tweak
+    , nFlags :: NFlags
+    }
   | FilteraddMessage
   | FilterclearMessage
   | MerkleblockMessage
@@ -89,7 +95,7 @@ getCommand GetAddrMessage = GetAddrCommand
 getCommand MempoolMessage = MempoolCommand
 getCommand CheckorderMessage = CheckorderCommand
 getCommand SubmitorderMessage = SubmitorderCommand
-getCommand FilterloadMessage = FilterloadCommand
+getCommand (FilterloadMessage {}) = FilterloadCommand
 getCommand FilteraddMessage = FilteraddCommand
 getCommand FilterclearMessage = FilterclearCommand
 getCommand MerkleblockMessage = MerkleblockCommand

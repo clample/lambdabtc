@@ -12,6 +12,7 @@ import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString as B
 import Data.ByteString.Base16 (encode, decode)
 import BlockHeaders
+import BloomFilter
 
 instance Arbitrary Message where
   arbitrary = Message <$> arbitrary <*> arbitrary
@@ -21,6 +22,7 @@ instance Arbitrary MessageBody where
     [ arbitraryVersionMessage
     , arbitraryGetHeadersMessage
     , arbitraryGetHeadersMessage
+    , arbitraryFilterloadMessage
     , return VerackMessage ]
 
 instance Arbitrary MessageContext where
@@ -54,6 +56,16 @@ arbitraryHeadersMessage = do
   n            <- choose (0, 2000) -- A headers message contains at most 2000 block headers
   blockHeaders <- vectorOf n arbitrary
   return $ HeadersMessage blockHeaders
+
+arbitraryFilterloadMessage = do
+  filter <- Filter . Char8.pack <$> arbitrary
+  nHashFuncs <- choose (0, maxNHashFuncs)
+  nTweak <- Tweak <$> choose (0, maxNTweak)
+  nFlags <- arbitraryBoundedEnum
+  return $ FilterloadMessage filter nHashFuncs nTweak nFlags
+  where
+    maxNHashFuncs = 0xffffffff -- 4 bytes
+    maxNTweak     = 0xffffffff -- 4 bytes
 
 instance Arbitrary Network where
   arbitrary = do

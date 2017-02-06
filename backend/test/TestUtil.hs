@@ -11,10 +11,11 @@ module TestUtil
   , testProperty
   , Assertion
   , assertEqual
-  , testCase) where
+  , testCase
+  , arbitraryBoundedEnum) where
 
 import Test.Framework.Providers.QuickCheck2 (testProperty)
-import Test.QuickCheck.Arbitrary (Arbitrary(..))
+import Test.QuickCheck.Arbitrary (Arbitrary(..), arbitraryBoundedEnum)
 import Test.QuickCheck.Gen (choose, suchThat, vectorOf, elements, oneof, listOf, Gen)
 import Test.Framework.Providers.HUnit (testCase)
 import Test.HUnit (assertEqual, Assertion)
