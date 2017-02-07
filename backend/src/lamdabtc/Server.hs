@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Server (runApplication, developmentConfig) where
+module LamdaBTC.Server (runApplication, developmentConfig) where
 
 import Data.Text (unpack, Text)
 import Persistence
@@ -17,8 +17,8 @@ import Web.Scotty.Trans ( ScottyT
                         , json)
 import Control.Monad.Reader (ReaderT, runReaderT, MonadReader)
 import qualified Data.Text.Lazy as LT
-import Server.Handlers 
-import Server.Config
+import LamdaBTC.Handlers 
+import LamdaBTC.Config
 
 runApplication :: Config -> IO ()
 runApplication c = do

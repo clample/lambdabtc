@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveGeneric #-}
 
-module Server.Handlers
+module LamdaBTC.Handlers
   ( defaultH
   , postFundRequestsH
   , getFundRequestsH
@@ -16,7 +16,7 @@ import Data.Aeson ( object
                   , toEncoding
                   , genericToEncoding
                   , defaultOptions)
-import Server.Config
+import LamdaBTC.Config
 import Web.Scotty.Trans (status, showError, json, jsonData)
 import GHC.Generics
 import Util (maybeRead)

@@ -1,7 +1,7 @@
 {-# Language OverloadedStrings #-}
 module Main where
 
-import Server (developmentConfig, runApplication)
+import LamdaBTC.Server (developmentConfig, runApplication)
 import Persistence (migrateSchema)
 import Protocol.Server (connectTestnet)
 import Control.Concurrent (forkIO)

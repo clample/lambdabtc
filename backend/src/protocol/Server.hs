@@ -24,7 +24,7 @@ import Data.Binary.Put (runPut)
 import Data.Binary (Binary(..))
 import Data.ByteString.Base16 (decode)
 import BitcoinCore.BlockHeaders (BlockHash(..), encodeBlockHeader)
-import Server.Config (ConfigM(..), Config(..), developmentConfig)
+import LamdaBTC.Config (ConfigM(..), Config(..), developmentConfig)
 import Database.Persist.Sql (insertMany_, count, runSqlPool, Filter, toSqlKey, insert_)
 import qualified Database.Persist.Sql as DB
 import Persistence (runDB, PersistentBlockHeader(..))

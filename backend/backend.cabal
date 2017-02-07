@@ -13,14 +13,11 @@ cabal-version:       >=1.10
 
 library
   hs-source-dirs:      src
-                     , src/server
-                     , src/protocol
-                     , src/BitcoinCore
   exposed-modules:     BitcoinCore.Keys
                      , Persistence
-                     , Server
-                     , Server.Config
-                     , Server.Handlers
+                     , LamdaBTC.Server
+                     , LamdaBTC.Config
+                     , LamdaBTC.Handlers
                      , BitcoinCore.Transaction.Script
                      , BitcoinCore.Transaction.Optcodes
                      , Util

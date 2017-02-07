@@ -1,7 +1,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Server.Config where
+module LamdaBTC.Config where
 
 import Control.Monad.Reader (ReaderT, runReaderT, MonadReader)
 import Control.Monad.IO.Class (MonadIO)

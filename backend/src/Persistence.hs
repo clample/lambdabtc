@@ -20,7 +20,7 @@ import Data.Conduit (($$))
 import Data.Conduit.List as CL
 import Control.Monad.IO.Class (liftIO, MonadIO)
 import Control.Monad.Trans.Class (MonadTrans, lift)
-import Server.Config (ConfigM, Config(..))
+import LamdaBTC.Config (ConfigM, Config(..))
 import Control.Monad.Reader (asks)
 import Data.ByteString (ByteString)
 
