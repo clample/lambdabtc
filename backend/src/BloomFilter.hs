@@ -13,7 +13,6 @@ module BloomFilter
   , hardcodedTweak
   , unroll
   , roll
-  , setFilterTest
   , serializeFilter
   , deserializeFilter
   )where
