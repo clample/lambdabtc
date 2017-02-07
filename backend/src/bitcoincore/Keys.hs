@@ -1,5 +1,5 @@
 {-# Language OverloadedStrings #-}
-module Keys
+module BitcoinCore.Keys
   ( PublicKeyRep(..)
   , PrivateKeyRep(..)
   , Address(..)

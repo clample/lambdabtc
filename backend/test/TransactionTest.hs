@@ -1,13 +1,13 @@
 module TransactionTest where
 
-import Transaction
+import BitcoinCore.Transaction.Transactions
 import KeyTest 
-import Keys (compressed)
-import Transaction.Script (Value(..), Script(..), ScriptComponent(..), CompiledScript(..), compile)
-import Transaction.Optcodes (OPCODE(..), opcodeTable)
+import BitcoinCore.Keys (compressed)
+import BitcoinCore.Transaction.Script (Value(..), Script(..), ScriptComponent(..), CompiledScript(..), compile)
+import BitcoinCore.Transaction.Optcodes (OPCODE(..), opcodeTable)
 import Crypto.PubKey.ECC.ECDSA (Signature(..))
 import Text.Megaparsec (runParser, parseMaybe)
-import Transaction.Parser (parseDerSignature, parseTransaction, ParsedTransaction(..), parseScript)
+import BitcoinCore.Transaction.Parser (parseDerSignature, parseTransaction, ParsedTransaction(..), parseScript)
 import qualified Data.ByteString.Char8 as Char8
 import Data.ByteString (ByteString)
 import TestUtil

@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module BlockHeaders where
+module BitcoinCore.BlockHeaders where
 
 import Data.ByteString (ByteString(..))
 import Data.Time.Clock.POSIX (POSIXTime)

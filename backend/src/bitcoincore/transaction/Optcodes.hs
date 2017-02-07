@@ -1,4 +1,4 @@
-module Transaction.Optcodes (OPCODE(..), opcodeTable) where
+module BitcoinCore.Transaction.Optcodes (OPCODE(..), opcodeTable) where
 
 import Data.Maybe (fromJust)
 import Data.Tuple (swap)

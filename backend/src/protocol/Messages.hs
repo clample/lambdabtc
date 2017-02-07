@@ -13,7 +13,7 @@ import Control.Lens (over, mapped)
 import Data.Maybe (fromJust)
 import Data.List (lookup)
 import Data.Tuple (swap)
-import Transaction (Transaction(..), signedTransaction)
+import BitcoinCore.Transaction.Transactions (Transaction(..), signedTransaction)
 import Network.Socket (SockAddr(..), hostAddressToTuple)
 import Text.Megaparsec (Parsec, Dec)
 import Data.Char (toUpper)
@@ -21,7 +21,7 @@ import Control.Lens (over, _2, mapped)
 import Protocol.Types (getCommand', getNetwork', Network(..), Addr(..), Header(..), Command(..), Message(..), MessageContext(..), getCommand, MessageBody (..))
 import Data.Binary.Put (Put, putWord16be, putWord32le, putWord32be, putWord64le, putWord64be, putWord8, putByteString, runPut)
 import Data.Binary (Binary(..))
-import BloomFilter (Filter(..), Tweak(..), serializeFilter)
+import BitcoinCore.BloomFilter (Filter(..), Tweak(..), serializeFilter)
 import qualified Data.ByteString.Lazy as BL
 
 putMessage :: Message -> Put

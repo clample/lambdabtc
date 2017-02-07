@@ -23,15 +23,15 @@ import Control.Concurrent (forkIO)
 import Data.Binary.Put (runPut)
 import Data.Binary (Binary(..))
 import Data.ByteString.Base16 (decode)
-import BlockHeaders (BlockHash(..), encodeBlockHeader)
+import BitcoinCore.BlockHeaders (BlockHash(..), encodeBlockHeader)
 import Server.Config (ConfigM(..), Config(..), developmentConfig)
 import Database.Persist.Sql (insertMany_, count, runSqlPool, Filter, toSqlKey, insert_)
 import qualified Database.Persist.Sql as DB
 import Persistence (runDB, PersistentBlockHeader(..))
 import Data.List.Split (chunksOf)
-import BlockHeaders (BlockHeader(..), decodeBlockHeader, hashBlock, genesisBlockTestnet, verifyHeaders)
+import BitcoinCore.BlockHeaders (BlockHeader(..), decodeBlockHeader, hashBlock, genesisBlockTestnet, verifyHeaders)
 import Data.Maybe (fromJust)
-import BloomFilter (pDefault, blankFilter, updateFilter, numberHashFunctions, filterSize, hardcodedTweak, NFlags(..))
+import BitcoinCore.BloomFilter (pDefault, blankFilter, updateFilter, numberHashFunctions, filterSize, hardcodedTweak, NFlags(..))
 
 data ConnectionContext = ConnectionContext
   { version' :: Int

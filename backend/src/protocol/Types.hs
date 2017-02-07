@@ -12,9 +12,9 @@ import Data.Char (toUpper)
 import Data.Tuple (swap)
 import Data.ByteString.Base16 (decode, encode)
 import Data.Binary.Get (Get(..), getByteString)
-import BlockHeaders (BlockHash(..), BlockHeader(..))
-import BloomFilter (Filter(..), Tweak(..), NFlags(..))
-import Inventory (InventoryVector(..))
+import BitcoinCore.BlockHeaders (BlockHash(..), BlockHeader(..))
+import BitcoinCore.BloomFilter (Filter(..), Tweak(..), NFlags(..))
+import BitcoinCore.Inventory (InventoryVector(..))
 import Util (VarInt(..))
 
 data Addr = Addr IP Port

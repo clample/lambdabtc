@@ -1,9 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Transaction.Script where
+module BitcoinCore.Transaction.Script where
 
 import Util
-import Transaction.Optcodes (OPCODE(..))
-import Keys
+import BitcoinCore.Transaction.Optcodes (OPCODE(..))
+import BitcoinCore.Keys
 
 import Prelude hiding (concat, reverse, sequence)
 

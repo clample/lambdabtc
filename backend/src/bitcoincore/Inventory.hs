@@ -1,4 +1,4 @@
-module Inventory where
+module BitcoinCore.Inventory where
 
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS

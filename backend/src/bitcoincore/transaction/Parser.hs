@@ -1,8 +1,8 @@
-module Transaction.Parser where
+module BitcoinCore.Transaction.Parser where
 
 import Text.Megaparsec (Parsec, Dec, count, hexDigitChar, eof, many)
-import Transaction (Transaction(..), TxVersion,  UTXO(..), TxOutput(..))
-import Transaction.Script (Value(..), CompiledScript(..), ScriptComponent(..), Script(..))
+import BitcoinCore.Transaction.Transactions (Transaction(..), TxVersion,  UTXO(..), TxOutput(..))
+import BitcoinCore.Transaction.Script (Value(..), CompiledScript(..), ScriptComponent(..), Script(..))
 import qualified Data.ByteString.Char8 as Char8
 import Data.ByteString (ByteString)
 import Numeric (readHex)

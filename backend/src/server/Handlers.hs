@@ -20,7 +20,7 @@ import Server.Config
 import Web.Scotty.Trans (status, showError, json, jsonData)
 import GHC.Generics
 import Util (maybeRead)
-import Keys
+import BitcoinCore.Keys
 import Control.Monad.IO.Class (liftIO)
 import qualified Data.Text as T 
 import Persistence

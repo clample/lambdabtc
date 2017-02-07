@@ -14,26 +14,26 @@ cabal-version:       >=1.10
 library
   hs-source-dirs:      src
                      , src/server
-                     , src/transaction
                      , src/protocol
-  exposed-modules:     Keys
+                     , src/BitcoinCore
+  exposed-modules:     BitcoinCore.Keys
                      , Persistence
                      , Server
                      , Server.Config
                      , Server.Handlers
-                     , Transaction.Script
-                     , Transaction.Optcodes
+                     , BitcoinCore.Transaction.Script
+                     , BitcoinCore.Transaction.Optcodes
                      , Util
-                     , Transaction
-                     , Transaction.Parser
+                     , BitcoinCore.Transaction.Transactions
+                     , BitcoinCore.Transaction.Parser
                      , Protocol.Messages
                      , Protocol.Parser
                      , Protocol.Server
                      , Protocol.Types
                      , Protocol.Network
-                     , BlockHeaders
-                     , BloomFilter
-                     , Inventory
+                     , BitcoinCore.BlockHeaders
+                     , BitcoinCore.BloomFilter
+                     , BitcoinCore.Inventory
   build-depends:       base >= 4.7 && < 5
                      , QuickCheck
                      , bytestring >= 0.10 && < 0.11

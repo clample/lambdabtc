@@ -11,9 +11,9 @@ import Data.Binary.Put (runPut)
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString as B
 import Data.ByteString.Base16 (encode, decode)
-import BlockHeaders
-import BloomFilter
-import Inventory
+import BitcoinCore.BlockHeaders
+import BitcoinCore.BloomFilter
+import BitcoinCore.Inventory
 
 instance Arbitrary Message where
   arbitrary = Message <$> arbitrary <*> arbitrary

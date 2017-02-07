@@ -1,11 +1,11 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
-module Transaction where
+module BitcoinCore.Transaction.Transactions where
 
 import Util
-import Transaction.Script
+import BitcoinCore.Transaction.Script
 import Persistence
-import Keys
+import BitcoinCore.Keys
 
 import Prelude hiding (concat, reverse, sequence)
 

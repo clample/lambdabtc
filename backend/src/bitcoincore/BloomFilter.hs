@@ -1,5 +1,5 @@
 {-# Language OverloadedStrings #-}
-module BloomFilter
+module BitcoinCore.BloomFilter
   ( Filter(..)
   , Tweak(..)
   , NFlags(..)

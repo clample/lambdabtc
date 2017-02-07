@@ -2,7 +2,7 @@
 module BlockHeaderTest where
 
 import TestUtil
-import BlockHeaders
+import BitcoinCore.BlockHeaders
 import qualified Data.ByteString as BS
 import Data.Binary.Get (runGet)
 import Data.Binary.Put (runPut)

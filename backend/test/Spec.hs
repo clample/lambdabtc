@@ -5,10 +5,10 @@ import Prelude hiding (length)
 import Test.Framework (defaultMain, testGroup)
 import Test.Framework.Providers.HUnit (testCase)
 import Test.HUnit
-import Transaction.Script
-import Transaction.Optcodes
-import Keys
-import Transaction
+import BitcoinCore.Transaction.Script
+import BitcoinCore.Transaction.Optcodes
+import BitcoinCore.Keys
+import BitcoinCore.Transaction.Transactions
 import Crypto.PubKey.ECC.ECDSA (PublicKey(..), PrivateKey(..))
 import Crypto.PubKey.ECC.Types (Curve, getCurveByName, Point(..), CurveName(SEC_p256k1))
 import Data.ByteString (length)
