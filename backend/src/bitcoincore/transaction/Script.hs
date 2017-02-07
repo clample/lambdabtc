@@ -6,7 +6,6 @@ import BitcoinCore.Transaction.Optcodes (OPCODE(..))
 import BitcoinCore.Keys
 
 import Prelude hiding (concat, reverse, sequence)
-
 import qualified  Data.ByteString as BS
 import Data.ByteString (ByteString) 
 import Data.ByteString.Char8 (pack)

@@ -2,18 +2,20 @@
 
 module Protocol.Messages where
 
+import Util (checkSum, VarInt(..))
+import BitcoinCore.Transaction.Transactions (Transaction(..), signedTransaction)
+import BitcoinCore.BloomFilter (Filter(..), Tweak(..), serializeFilter)
+
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as Char8
 import qualified Data.Text.Encoding as T
-import Util (checkSum, VarInt(..))
 import Data.ByteString.Base16 (decode, encode)
 import Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
 import Control.Lens (over, mapped)
 import Data.Maybe (fromJust)
 import Data.List (lookup)
 import Data.Tuple (swap)
-import BitcoinCore.Transaction.Transactions (Transaction(..), signedTransaction)
 import Network.Socket (SockAddr(..), hostAddressToTuple)
 import Text.Megaparsec (Parsec, Dec)
 import Data.Char (toUpper)
@@ -21,7 +23,6 @@ import Control.Lens (over, _2, mapped)
 import Protocol.Types (getCommand', getNetwork', Network(..), Addr(..), Header(..), Command(..), Message(..), MessageContext(..), getCommand, MessageBody (..))
 import Data.Binary.Put (Put, putWord16be, putWord32le, putWord32be, putWord64le, putWord64be, putWord8, putByteString, runPut)
 import Data.Binary (Binary(..))
-import BitcoinCore.BloomFilter (Filter(..), Tweak(..), serializeFilter)
 import qualified Data.ByteString.Lazy as BL
 
 putMessage :: Message -> Put

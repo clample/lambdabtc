@@ -6,8 +6,14 @@ module Protocol.Server where
 import Protocol.Parser (parseMessage)
 import Protocol.Messages (getAddr, putMessage)
 import Protocol.Types (Network(..), Addr(..), MessageContext(..), Message(..), MessageBody(..), genesisHash)
-import Network.Socket (Socket)
 import Protocol.Network (Peer(..), connectToPeer)
+import BitcoinCore.BlockHeaders (BlockHash(..), encodeBlockHeader)
+import BitcoinCore.BlockHeaders (BlockHeader(..), decodeBlockHeader, hashBlock, genesisBlockTestnet, verifyHeaders)
+import BitcoinCore.BloomFilter (pDefault, blankFilter, updateFilter, numberHashFunctions, filterSize, hardcodedTweak, NFlags(..))
+import LamdaBTC.Config (ConfigM(..), Config(..), developmentConfig)
+import Persistence (runDB, PersistentBlockHeader(..))
+
+import Network.Socket (Socket)
 import Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
 import Control.Monad.State.Lazy (StateT(..), runStateT, liftIO, get, gets)
 import Control.Monad.Reader (runReaderT, ask)
@@ -23,15 +29,10 @@ import Control.Concurrent (forkIO)
 import Data.Binary.Put (runPut)
 import Data.Binary (Binary(..))
 import Data.ByteString.Base16 (decode)
-import BitcoinCore.BlockHeaders (BlockHash(..), encodeBlockHeader)
-import LamdaBTC.Config (ConfigM(..), Config(..), developmentConfig)
 import Database.Persist.Sql (insertMany_, count, runSqlPool, Filter, toSqlKey, insert_)
 import qualified Database.Persist.Sql as DB
-import Persistence (runDB, PersistentBlockHeader(..))
 import Data.List.Split (chunksOf)
-import BitcoinCore.BlockHeaders (BlockHeader(..), decodeBlockHeader, hashBlock, genesisBlockTestnet, verifyHeaders)
 import Data.Maybe (fromJust)
-import BitcoinCore.BloomFilter (pDefault, blankFilter, updateFilter, numberHashFunctions, filterSize, hardcodedTweak, NFlags(..))
 
 data ConnectionContext = ConnectionContext
   { version' :: Int

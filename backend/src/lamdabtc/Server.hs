@@ -1,8 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 module LamdaBTC.Server (runApplication, developmentConfig) where
 
-import Data.Text (unpack, Text)
 import Persistence
+import LamdaBTC.Handlers 
+import LamdaBTC.Config
+
+import Data.Text (unpack, Text)
 import Database.Persist.Sqlite (runSqlite, runMigration)
 import Web.Scotty.Trans ( ScottyT
                         , Options(..)
@@ -17,8 +20,6 @@ import Web.Scotty.Trans ( ScottyT
                         , json)
 import Control.Monad.Reader (ReaderT, runReaderT, MonadReader)
 import qualified Data.Text.Lazy as LT
-import LamdaBTC.Handlers 
-import LamdaBTC.Config
 
 runApplication :: Config -> IO ()
 runApplication c = do

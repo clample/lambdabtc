@@ -1,14 +1,15 @@
 {-# LANGUAGE OverloadedStrings #-}
 module BitcoinCore.BlockHeaders where
 
+import Persistence
+import Util (VarInt(..), doubleSHA)
+
 import Data.ByteString (ByteString(..))
 import Data.Time.Clock.POSIX (POSIXTime)
 import Data.Binary.Put (Put, putWord32le, putWord32be, putWord64le, putByteString, putWord8, runPut)
 import Data.Binary.Get (Get(..), getWord32le, getByteString, getWord8)
 import Data.Binary (Binary(..))
 import Data.ByteString.Base16 (decode, encode)
-import Util (VarInt(..), doubleSHA)
-import Persistence
 ------
 import Test.QuickCheck.Arbitrary (Arbitrary(..))
 import Test.QuickCheck.Gen (choose, suchThat, vectorOf, elements, oneof, listOf, Gen)

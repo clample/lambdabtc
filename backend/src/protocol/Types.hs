@@ -2,6 +2,11 @@
 
 module Protocol.Types where
 
+import BitcoinCore.BlockHeaders (BlockHash(..), BlockHeader(..))
+import BitcoinCore.BloomFilter (Filter(..), Tweak(..), NFlags(..))
+import BitcoinCore.Inventory (InventoryVector(..))
+import Util (VarInt(..))
+
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as Char8
@@ -12,10 +17,6 @@ import Data.Char (toUpper)
 import Data.Tuple (swap)
 import Data.ByteString.Base16 (decode, encode)
 import Data.Binary.Get (Get(..), getByteString)
-import BitcoinCore.BlockHeaders (BlockHash(..), BlockHeader(..))
-import BitcoinCore.BloomFilter (Filter(..), Tweak(..), NFlags(..))
-import BitcoinCore.Inventory (InventoryVector(..))
-import Util (VarInt(..))
 
 data Addr = Addr IP Port
   deriving (Show, Eq)

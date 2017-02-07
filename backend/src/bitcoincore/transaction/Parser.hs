@@ -1,13 +1,14 @@
 module BitcoinCore.Transaction.Parser where
 
-import Text.Megaparsec (Parsec, Dec, count, hexDigitChar, eof, many)
+import Util (switchEndian, readInt, parseCount, parsePayload)
 import BitcoinCore.Transaction.Transactions (Transaction(..), TxVersion,  UTXO(..), TxOutput(..))
 import BitcoinCore.Transaction.Script (Value(..), CompiledScript(..), ScriptComponent(..), Script(..))
+
+import Text.Megaparsec (Parsec, Dec, count, hexDigitChar, eof, many)
 import qualified Data.ByteString.Char8 as Char8
 import Data.ByteString (ByteString)
 import Numeric (readHex)
 import Crypto.PubKey.ECC.ECDSA (signWith, Signature(..))
-import Util (switchEndian, readInt, parseCount, parsePayload)
 
 data ParsedTransaction = ParsedTransaction
   { txVersion :: TxVersion 

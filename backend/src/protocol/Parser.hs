@@ -3,16 +3,17 @@
 module Protocol.Parser where
 
 import Protocol.Types (MessageBody(..), Header(..), readNetwork, readCommand, Network(..), Command(..), Addr(..), Message(..), getNetwork, MessageContext(..))
+import BitcoinCore.BlockHeaders (BlockHash(..))
+import BitcoinCore.BloomFilter (Filter(..), Tweak(..), NFlags(..), deserializeFilter)
+import Util (VarInt(..))
+
 import qualified Data.ByteString.Char8 as Char8
 import Data.Binary.Get (Get(..), getByteString, getWord32le, getWord64be, getWord64le, getWord8, getWord16be, isolate, bytesRead)
 import Data.ByteString.Base16 (encode, decode)
 import Foreign.Marshal.Utils (toBool)
 import Data.ByteString (ByteString)
 import Control.Monad (replicateM)
-import BitcoinCore.BlockHeaders (BlockHash(..))
-import BitcoinCore.BloomFilter (Filter(..), Tweak(..), NFlags(..), deserializeFilter)
 import Data.Binary (Binary(..))
-import Util (VarInt(..))
 
 parseMessage :: Get Message
 parseMessage = do

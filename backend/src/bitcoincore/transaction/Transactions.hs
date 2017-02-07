@@ -8,7 +8,6 @@ import Persistence
 import BitcoinCore.Keys
 
 import Prelude hiding (concat, reverse, sequence)
-
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.ByteString.Char8 (pack)

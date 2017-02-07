@@ -1,5 +1,8 @@
 module Protocol.Network where
 
+import Protocol.Types (Addr(..))
+import Protocol.Messages (getAddr)
+
 import Network.Socket ( socket
                       , Family(..)
                       , SocketType(..)
@@ -15,8 +18,6 @@ import Network.Socket ( socket
                       , setSocketOption
                       , SocketOption(..)
                       , Socket)
-import Protocol.Types (Addr(..))
-import Protocol.Messages (getAddr)
 
 data Peer = Peer Socket Addr
   deriving (Show, Eq)

@@ -19,6 +19,9 @@ module BitcoinCore.Keys
   , getPubKey
   , btcCurve) where
 
+import Persistence (KeySet(..))
+import Util
+
 import Prelude hiding (take, concat)
 import Data.ByteString (ByteString, append, take, concat)
 import Data.ByteString.Char8 (pack, unpack)
@@ -39,8 +42,6 @@ import Data.Char (toUpper)
 import Control.Monad.IO.Class (liftIO)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
-import Util
-import Persistence (KeySet(..))
 
 data PublicKeyRep =
   Compressed T.Text
