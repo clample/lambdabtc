@@ -10,7 +10,7 @@ import Foreign.Marshal.Utils (toBool)
 import Data.ByteString (ByteString)
 import Control.Monad (replicateM)
 import BlockHeaders (BlockHash(..))
-import BloomFilter (Filter(..), Tweak(..), NFlags(..))
+import BloomFilter (Filter(..), Tweak(..), NFlags(..), deserializeFilter)
 import Data.Binary (Binary(..))
 import Util (VarInt(..))
 
@@ -109,7 +109,7 @@ parseMessageBody expectedLength SubmitorderCommand =
   
 parseMessageBody _ FilterloadCommand = do
   VarInt lengthFilter <- get
-  filter <- Filter <$> getByteString lengthFilter
+  filter <- deserializeFilter <$> getByteString lengthFilter
   nHashFuncs <- fromIntegral <$> getWord32le
   nTweak     <- Tweak . fromIntegral <$> getWord32le
   nFlags <- toEnum . fromIntegral <$> getWord8

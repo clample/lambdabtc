@@ -35,8 +35,8 @@ objectHash bs =
                ++ (show . encode $ bs)
 
 instance Show ObjectHash where
-  show (ObjectHash bs) = "ObjectHash " ++ (show . encode $ bs)
-
+  show (ObjectHash bs) = "ObjectHash " ++ (show . encode . BS.reverse $ bs)
+  -- For some reason the incoming hashes seem to be reversed?
 
 putInventoryVector :: InventoryVector -> Put
 putInventoryVector (InventoryVector objType (ObjectHash objHash)) = do

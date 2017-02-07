@@ -60,11 +60,14 @@ arbitraryHeadersMessage = do
   return $ HeadersMessage blockHeaders
 
 arbitraryFilterloadMessage = do
-  filter <- Filter . Char8.pack <$> arbitrary
+  fValue <- choose (0, 0xffffffffffffffff) -- upper limit is so the value is reasonably sized
+  let minEncodingLength = B.length . unroll $ fValue
+  fLengthBytes <- choose (minEncodingLength, 2 * minEncodingLength)
+  let filter = Filter { filterLengthBytes = fLengthBytes, filterValue = fValue}
   nHashFuncs <- choose (0, maxNHashFuncs)
   nTweak <- Tweak <$> choose (0, maxNTweak)
   nFlags <- arbitraryBoundedEnum
-  return $ FilterloadMessage filter nHashFuncs nTweak nFlags
+  return $ FilterloadMessage  filter nHashFuncs nTweak nFlags
   where
     maxNHashFuncs = 0xffffffff -- 4 bytes
     maxNTweak     = 0xffffffff -- 4 bytes

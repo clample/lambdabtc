@@ -11,6 +11,11 @@ module BloomFilter
   , blankFilter
   , updateFilter
   , hardcodedTweak
+  , unroll
+  , roll
+  , setFilterTest
+  , serializeFilter
+  , deserializeFilter
   )where
 
 import Data.Hash.Murmur (murmur3)
@@ -18,12 +23,25 @@ import Data.Word (Word32)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import Data.ByteString.Base16 (encode, decode)
-import Data.Bits (setBit)
-import Data.Bits.ByteString
+import Data.Bits (setBit, shiftR, shiftL, (.|.))
+import Data.List (unfoldr)
 
 
-newtype Filter = Filter ByteString
-  deriving (Show, Eq)
+-- TODO: rewrite with lenses
+data Filter = Filter
+  { filterLengthBytes :: Int
+  , filterValue       :: Integer
+  } deriving (Eq)
+
+filterLengthBits :: Filter -> Int
+filterLengthBits f = 8 * filterLengthBytes f
+
+instance Show Filter where
+  show f =
+    "Filter { filterLengthBytes = " ++ (show . filterLengthBytes) f
+    ++ " filterValue = " ++ (show . filterValue) f
+    ++ " hexEncoded = " ++ (show . encode . serializeFilter) f
+    ++ " } "
 
 newtype Tweak = Tweak Int
   deriving (Show, Eq)
@@ -72,10 +90,10 @@ filterSize n (Probability p) =
     denominator = ((log 2) ^ 2) * 8
     
   
--- s: filterSize (Bytes)
+-- s: filter size (Bytes)
 numberHashFunctions :: Int -> Int -> Int
 numberHashFunctions s n = min calculatedHashFunctions maxHashFuncs
-  where calculatedHashFunctions = floor $ ((fromIntegral s) * 8) / ((fromIntegral n) * (log 2))
+  where calculatedHashFunctions = floor $ ((fromIntegral s) * 8 * log 2) / (fromIntegral n)
 
 updateFilter :: Int -> Tweak -> ByteString -> Filter -> Filter
 updateFilter numberHashes tweak hashData filter =
@@ -86,30 +104,56 @@ updateFilter numberHashes tweak hashData filter =
       [0..(numberHashes - 1)]
 
 updateFilterStep :: Int -> Tweak -> ByteString -> Filter -> Filter
-updateFilterStep hashNum tweak hashData (Filter filter) =
-    Filter $ setBit filter index
+updateFilterStep hashNum tweak hashData f =
+    f { filterValue = setBit  (filterValue f) index }
     where
-      filterLengthBits = (B.length filter) * 8
-      index = bloomHash hashNum tweak hashData filterLengthBits
+      index = bloomHash hashNum tweak hashData (filterLengthBits f)
 
 bloomHash :: Int -> Tweak -> ByteString -> Int -> Int
-bloomHash hashNum tweak hashData filterLengthBits =
-  hash `mod` filterLengthBits
+bloomHash hashNum tweak hashData fLengthBits =
+  hash `mod` fLengthBits
   where
     hash = (fromIntegral $ murmur3 seedValue hashData)
     seedValue = seed hashNum tweak      
 
 blankFilter :: Int -> Probability -> Filter
-blankFilter n p = Filter . B.pack . replicate (filterSize n p) $ fromIntegral 0
+blankFilter n p = Filter { filterLengthBytes = (filterSize n p), filterValue =  0 }
+
+
+-- Taken from src of Data.Binary
+-- http://hackage.haskell.org/package/binary-0.4.1/docs/src/Data-Binary.html#Binary
+unroll :: Integer -> ByteString
+unroll = B.pack . unfoldr step
+  where
+    step 0 = Nothing
+    step i = Just (fromIntegral i, i `shiftR` 8)
+
+roll :: ByteString -> Integer
+roll   = foldr unstep 0 . B.unpack
+  where
+    unstep b a = a `shiftL` 8 .|. fromIntegral b
+
+serializeFilter :: Filter -> ByteString
+serializeFilter f = (unroll . filterValue $ f) `B.append` paddingNullBytes
+  where filterBase = unroll . filterValue $ f
+        paddingNullBytes = B.replicate (filterLengthBytes f - B.length filterBase) 0
+
+deserializeFilter :: ByteString -> Filter
+deserializeFilter bs = Filter {filterLengthBytes = fLength, filterValue = fValue}
+  where fLength = B.length bs
+        fValue = roll bs
 
 {--
-hashTest :: IO ()
-hashTest = do
-  mapM_ runHash [0..10]
-  where
-    runHash hashNum = do
-      putStrLn $ "hashNum " ++ show hashNum ++ " nIndex: " ++ show (bloomHash hashNum tweak hashData n pDefault)
-    tweak = Tweak 0
-    n = 1
-    hashData = fst . decode $  "019f5b01d4195ecbc9398fbf3c3b1fa9bb3183301d7a1fb3bd174fcfa40a2b65"
---} 
+setFilterTest :: IO ()
+setFilterTest = do
+  let
+    blank = blankFilter 1 pDefault
+    s = filterSize 1 pDefault
+    nHashFuncs = numberHashFunctions s 1
+    txId = fst . decode $ "019f5b01d4195ecbc9398fbf3c3b1fa9bb3183301d7a1fb3bd174fcfa40a2b65"
+    filter' = updateFilter nHashFuncs hardcodedTweak txId blank
+  putStrLn $ "Blank: " ++ show blank
+  putStrLn $ "Filter size " ++ show s
+  putStrLn $ "number of hash functions " ++ show nHashFuncs
+  putStrLn $ "Final filter " ++ show filter'
+--}

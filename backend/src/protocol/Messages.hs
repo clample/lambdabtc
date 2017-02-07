@@ -21,7 +21,7 @@ import Control.Lens (over, _2, mapped)
 import Protocol.Types (getCommand', getNetwork', Network(..), Addr(..), Header(..), Command(..), Message(..), MessageContext(..), getCommand, MessageBody (..))
 import Data.Binary.Put (Put, putWord16be, putWord32le, putWord32be, putWord64le, putWord64be, putWord8, putByteString, runPut)
 import Data.Binary (Binary(..))
-import BloomFilter (Filter(..), Tweak(..))
+import BloomFilter (Filter(..), Tweak(..), serializeFilter)
 import qualified Data.ByteString.Lazy as BL
 
 putMessage :: Message -> Put
@@ -65,9 +65,9 @@ putMessageBody (HeadersMessage blockHeaders) = do
   put (VarInt . length $ blockHeaders)
   mapM_ put blockHeaders
 
-putMessageBody (FilterloadMessage (Filter filter) nHashFuncs (Tweak nTweak) nFlags) = do
-  put . VarInt . BS.length $ filter
-  putByteString filter
+putMessageBody (FilterloadMessage (filter) nHashFuncs (Tweak nTweak) nFlags) = do
+  put . VarInt . filterLengthBytes $ filter
+  putByteString . serializeFilter $ filter
   putWord32le (fromIntegral nHashFuncs)
   putWord32le (fromIntegral nTweak)
     -- TODO: It's not clear if nTweak should be litle or big endian
