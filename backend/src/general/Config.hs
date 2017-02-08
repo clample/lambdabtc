@@ -8,6 +8,8 @@
 
 module General.Config where
 
+import General.Types (HasNetwork(..), Network(..))
+
 import Control.Monad.Reader (ReaderT, MonadReader)
 import Control.Monad.IO.Class (MonadIO)
 import Web.Scotty.Trans (ActionT, Options(..))
@@ -19,7 +21,7 @@ import Data.Default (def)
 import Database.Persist.Sql (ConnectionPool)
 import Database.Persist.Sqlite (createSqlitePool)
 import Control.Monad.Logger (runStdoutLoggingT)
-import Control.Lens (makeFields, (^.))
+import Control.Lens (makeFields, makeLenses, (^.))
 
 
 data Environment =
@@ -29,18 +31,22 @@ data Environment =
   deriving (Eq, Read, Show)
 
 data Config =
-  Config { _configEnvironment :: Environment
-         , _configPort :: Int -- port might belong elsewhere
-         , _configPool :: ConnectionPool}
+  Config { _environment :: Environment
+         , _port :: Int -- port might belong elsewhere
+         , _pool :: ConnectionPool
+         , _configNetwork :: Network }
 
-makeFields ''Config
+makeLenses ''Config
+
+instance HasNetwork Config where
+  network = configNetwork
 
 developmentConfig :: IO Config
 developmentConfig = do
   let env = Development
   pool' <- runStdoutLoggingT $
     createSqlitePool "file:resources/sqlite3.db" (getConnectionSize env)
-  return $ Config Development 49535 pool'
+  return $ Config Development 49535 pool' TestNet3
 
 getConnectionSize :: Environment -> Int
 getConnectionSize Development = 1

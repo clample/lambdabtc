@@ -9,14 +9,14 @@ module Protocol.Server where
 
 import Protocol.Parser (parseMessage)
 import Protocol.Messages (putMessage)
-import Protocol.Types 
+import Protocol.Types
 import Protocol.Network (Peer(..), connectToPeer, sock, addr)
 import BitcoinCore.BlockHeaders ( BlockHash(..)
                                 , encodeBlockHeader
                                 , BlockHeader(..)
                                 , decodeBlockHeader
                                 , hashBlock
-                                , genesisBlockTestnet
+                                , genesisBlock
                                 , verifyHeaders)
 import BitcoinCore.BloomFilter ( pDefault
                                , blankFilter
@@ -27,6 +27,7 @@ import BitcoinCore.BloomFilter ( pDefault
                                , NFlags(..))
 import General.Config (ConfigM(..), Config(..), pool)
 import General.Persistence (runDB, PersistentBlockHeader(..))
+import General.Types (HasNetwork(..))
 
 import Network.Socket (Socket)
 import Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
@@ -62,7 +63,6 @@ data ConnectionContext = ConnectionContext
   , _connectionContextRelay :: Bool
     -- https://github.com/bitcoin/bips/blob/master/bip-0037.mediawiki#extensions-to-existing-messages
     -- Relay should be set to False when functioning as an SPV node
-  , _connectionContextNetwork :: Network
   , _connectionContextWriterChan :: TBMChan Message
   , _connectionContextListenChan :: TBMChan Message
   , _connectionContextTime :: POSIXTime
@@ -101,7 +101,6 @@ getConnectionContext config = do
         , _connectionContextMyAddr = Addr (0, 0, 0, 0) 18333 
         , _connectionContextPeer = peer'
         , _connectionContextRelay = False 
-        , _connectionContextNetwork = TestNet3
         , _connectionContextWriterChan = writerChan'
         , _connectionContextListenChan = listenChan'
         , _connectionContextTime = time'
@@ -118,7 +117,7 @@ persistGenesisBlock :: Config -> IO ()
 persistGenesisBlock config = do
   lastBlock' <- getLastBlock config
   when (lastBlock' == -1) $
-    runSqlPool (insert_ $ encodeBlockHeader genesisBlockTestnet) (config^.pool)
+    runSqlPool (insert_ . encodeBlockHeader . genesisBlock $ (config^.network)) (config^.pool)
 
 instance Binary Message where
   put = putMessage
@@ -169,8 +168,9 @@ handleResponse :: Message -> Connection ()
 
 handleResponse (Message (VersionMessageBody body) _) = do
   context <- State.get
+  config  <- ask
   let verackMessage =
-        Message (VerackMessageBody VerackMessage) (MessageContext (context^.network))
+        Message (VerackMessageBody VerackMessage) (MessageContext (config^.network))
       lastBlockPeer = body^.lastBlock
       lastBlockSelf = context^.lastBlock
   liftIO . atomically $ writeTBMChan (context^.writerChan) verackMessage
@@ -179,8 +179,9 @@ handleResponse (Message (VersionMessageBody body) _) = do
 
 handleResponse (Message (PingMessageBody _) _) = do
   context <- State.get
+  config  <- ask
   let pongMessage =
-        Message (PongMessageBody PongMessage) (MessageContext (context^.network))
+        Message (PongMessageBody PongMessage) (MessageContext (config^.network))
   liftIO . atomically $ writeTBMChan (context^.writerChan) pongMessage
 
 handleResponse (Message (HeadersMessageBody (HeadersMessage headers)) _) = do
@@ -212,6 +213,7 @@ getMostRecentHeader = do
 sendVersion :: Connection ()
 sendVersion = do
   context <- State.get
+  config <- ask
   let nonce' = fst $ randomR (0, 0xffffffffffffffff ) (context^.randGen)
       versionMessage = Message
           (VersionMessageBody (VersionMessage
@@ -222,13 +224,14 @@ sendVersion = do
             (context^.myAddr)
             (context^.relay)
             (context^.time)))
-          (MessageContext (context^.network))
+          (MessageContext (config^.network))
   liftIO . atomically $ writeTBMChan (context^.writerChan) versionMessage
 
 
 setFilter :: Connection ()
 setFilter = do
   context <- State.get
+  config <- ask
   let
     blank = blankFilter 1 pDefault
     s = filterSize 1 pDefault
@@ -237,7 +240,7 @@ setFilter = do
     filter' = updateFilter nHashFuncs hardcodedTweak txId blank
     filterloadMessage = Message
       (FilterloadMessageBody (FilterloadMessage filter' nHashFuncs hardcodedTweak BLOOM_UPDATE_NONE))
-      (MessageContext (context^.network))
+      (MessageContext (config^.network))
   liftIO . atomically $ writeTBMChan (context^.writerChan) filterloadMessage
 
 
@@ -269,7 +272,7 @@ getHeaders = do
           (GetHeadersMessageBody (GetHeadersMessage (context^.version) blockLocatorHashes
             (BlockHash . fst . decode $
              "0000000000000000000000000000000000000000000000000000000000000000")))
-          (MessageContext (context^.network))
+          (MessageContext (config^.network))
   message <- liftIO $ getHeadersMessage (fromIntegral (context^.lastBlock))
   liftIO . atomically $ writeTBMChan (context^.writerChan) message
 

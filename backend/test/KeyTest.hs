@@ -2,7 +2,7 @@ module KeyTest where
 
 import TestUtil
 import BitcoinCore.Keys
-import Util
+import General.Util
 import Crypto.PubKey.ECC.ECDSA (PrivateKey(..), PublicKey(..))
 import Crypto.PubKey.ECC.Types (ecc_n, common_curve, getCurveByName, CurveName(SEC_p256k1))
 import Crypto.PubKey.ECC.Generate (generateQ)

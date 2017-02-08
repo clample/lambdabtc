@@ -17,6 +17,7 @@ library
                      , General.Persistence
                      , General.Config
                      , General.Util
+                     , General.Types
                      , LamdaBTC.Server
                      , LamdaBTC.Handlers
                      , BitcoinCore.Transaction.Script

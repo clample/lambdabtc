@@ -2,6 +2,7 @@
 module BlockHeaderTest where
 
 import TestUtil
+import General.Types
 import BitcoinCore.BlockHeaders
 import qualified Data.ByteString as BS
 import Data.Binary.Get (runGet)
@@ -22,13 +23,13 @@ prop_blockHeaderInvertible blockHeader =
 genesisBlockHash :: Assertion
 genesisBlockHash = assertEqual
   "Genesis block should have the correct hash"
-  (hashBlock genesisBlockMain)
+  (hashBlock . genesisBlock $ MainNet)
   (BlockHash . fst . decode $ "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f")
 
 genesisBlockTestnetHash :: Assertion
 genesisBlockTestnetHash = assertEqual
   "Genesis block for testnet should have the correct hash"
-  (hashBlock genesisBlockTestnet)
+  (hashBlock . genesisBlock $ TestNet3)
   (BlockHash . fst . decode $ "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943")
 
 validHeadersVerify = testProperty

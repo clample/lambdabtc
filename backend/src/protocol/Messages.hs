@@ -3,6 +3,7 @@
 module Protocol.Messages where
 
 import General.Util (checkSum, VarInt(..))
+import General.Types (HasNetwork(..))
 import BitcoinCore.BloomFilter (Filter(..), Tweak(..), serializeFilter)
 import Protocol.Types ( getCommand'
                       , getNetwork'
@@ -11,7 +12,6 @@ import Protocol.Types ( getCommand'
                       , Message(..)
                       , getCommand
                       , MessageBody (..)
-                      , network
                       , VersionMessage(..)
                       , GetHeadersMessage(..)
                       , HeadersMessage(..)
@@ -28,7 +28,7 @@ import qualified Data.ByteString.Lazy as BL
 import Control.Lens ((^.))
 
 putMessage :: Message -> Put
-putMessage message@(Message messageBody context) = do
+putMessage (Message messageBody context) = do
   putHeader (Header
               (context^.network)
               (getCommand messageBody)

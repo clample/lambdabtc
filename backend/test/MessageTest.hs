@@ -1,6 +1,7 @@
 module MessageTest where
 
 import TestUtil
+import General.Types
 import Protocol.Messages (putMessage)
 import Protocol.Types
 import Protocol.Parser (parseMessage)

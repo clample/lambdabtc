@@ -3,6 +3,7 @@ module BitcoinCore.BlockHeaders where
 
 import General.Persistence
 import General.Util (VarInt(..), doubleSHA)
+import General.Types (Network(..))
 
 import Data.ByteString (ByteString)
 import Data.Time.Clock.POSIX (POSIXTime)
@@ -261,8 +262,8 @@ instance Arbitrary TxCount where
 
 -- The genesis blocks were determined by hand, referencing
 -- https://github.com/bitcoin/bitcoin/blob/812714fd80e96e28cd288c553c83838cecbfc2d9/src/chainparams.cpp
-genesisBlockMain :: BlockHeader
-genesisBlockMain = BlockHeader
+genesisBlock :: Network -> BlockHeader
+genesisBlock MainNet = BlockHeader
   (BlockVersion 1)
   (BlockHash . fst . decode $ "0000000000000000000000000000000000000000000000000000000000000000" )
   (MerkleRoot . fst . decode $ "3BA3EDFD7A7B12B27AC72C3E67768F617FC81BC3888A51323A9FB8AA4B1E5E4A")
@@ -271,8 +272,7 @@ genesisBlockMain = BlockHeader
   (Nonce . fst . decode . Char8.pack $ "1DAC2B7C")
   (TxCount . VarInt $ 1)
 
-genesisBlockTestnet :: BlockHeader
-genesisBlockTestnet = BlockHeader
+genesisBlock TestNet3 = BlockHeader
   (BlockVersion 1)
   (BlockHash . fst . decode $ "0000000000000000000000000000000000000000000000000000000000000000" )
   (MerkleRoot . fst . decode $ "3BA3EDFD7A7B12B27AC72C3E67768F617FC81BC3888A51323A9FB8AA4B1E5E4A")

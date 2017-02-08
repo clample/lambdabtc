@@ -11,6 +11,7 @@ module Protocol.Types where
 import BitcoinCore.BlockHeaders (BlockHash(..), BlockHeader(..))
 import BitcoinCore.BloomFilter (Filter(..), Tweak(..), NFlags(..))
 import BitcoinCore.Inventory (InventoryVector(..))
+import General.Types (Network(..), HasNetwork(..))
 
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
@@ -22,7 +23,7 @@ import Data.Char (toUpper)
 import Data.Tuple (swap)
 import Data.ByteString.Base16 (decode, encode)
 import Data.Binary.Get (Get, getByteString)
-import Control.Lens (makeFields)
+import Control.Lens (makeFields, makeLenses)
 
 data Addr = Addr IP Port
   deriving (Show, Eq)
@@ -31,14 +32,14 @@ type IP = (Int, Int, Int, Int)
 
 type Port = Int
 
-data Network = TestNet3 | MainNet
-  deriving (Show, Eq)
-
 data MessageContext = MessageContext
   { _messageContextNetwork :: Network
   } deriving (Show, Eq)
 
-makeFields ''MessageContext
+makeLenses ''MessageContext
+
+instance HasNetwork MessageContext where
+  network = messageContextNetwork
 
 
 data VersionMessage = VersionMessage
