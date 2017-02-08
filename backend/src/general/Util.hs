@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Util
+module General.Util
   ( Payload(..)
   , prefix
   , Prefix

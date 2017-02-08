@@ -4,9 +4,9 @@
 {-# LANGUAGE OverloadedStrings, GADTs, FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
-module Persistence where
+module General.Persistence where
 
-import LamdaBTC.Config (ConfigM, Config(..), pool)
+import General.Config (ConfigM, Config(..), pool)
 
 import Data.Text (Text)
 import Database.Persist.Sqlite (runMigration)

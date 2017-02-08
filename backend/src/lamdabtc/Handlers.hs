@@ -7,9 +7,10 @@ module LamdaBTC.Handlers
   , getFundRequestsH
   ) where
 
-import LamdaBTC.Config
 import BitcoinCore.Keys
-import Persistence
+import General.Persistence
+import General.Config
+import General.Util (maybeRead)
 
 import Network.HTTP.Types.Status (internalServerError500, ok200, badRequest400)
 import Data.Aeson ( object
@@ -18,7 +19,6 @@ import Data.Aeson ( object
                   , FromJSON)
 import Web.Scotty.Trans (status, showError, json, jsonData)
 import GHC.Generics
-import Util (maybeRead)
 import Control.Monad.IO.Class (liftIO)
 import qualified Data.Text as T 
 import Database.Persist.Sql (insert_, selectList)

@@ -1,8 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 module BitcoinCore.BlockHeaders where
 
-import Persistence
-import Util (VarInt(..), doubleSHA)
+import General.Persistence
+import General.Util (VarInt(..), doubleSHA)
 
 import Data.ByteString (ByteString)
 import Data.Time.Clock.POSIX (POSIXTime)

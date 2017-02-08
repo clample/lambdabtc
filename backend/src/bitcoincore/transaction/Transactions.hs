@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module BitcoinCore.Transaction.Transactions where
 
-import Util
+import General.Util
 import BitcoinCore.Transaction.Script
 import BitcoinCore.Keys
 

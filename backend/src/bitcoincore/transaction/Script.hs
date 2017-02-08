@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module BitcoinCore.Transaction.Script where
 
-import Util
+import General.Util
 import BitcoinCore.Transaction.Optcodes (OPCODE(..))
 import BitcoinCore.Keys
 

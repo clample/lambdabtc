@@ -4,7 +4,7 @@ module Protocol.Parser where
 
 import Protocol.Types 
 import BitcoinCore.BloomFilter (Tweak(..), deserializeFilter)
-import Util (VarInt(..))
+import General.Util (VarInt(..))
 
 import Data.Binary.Get (Get, getByteString, getWord32le, getWord64be, getWord64le, getWord8, getWord16be, isolate, bytesRead)
 import Data.ByteString.Base16 (encode)

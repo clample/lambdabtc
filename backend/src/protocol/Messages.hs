@@ -2,7 +2,7 @@
 
 module Protocol.Messages where
 
-import Util (checkSum, VarInt(..))
+import General.Util (checkSum, VarInt(..))
 import BitcoinCore.BloomFilter (Filter(..), Tweak(..), serializeFilter)
 import Protocol.Types ( getCommand'
                       , getNetwork'

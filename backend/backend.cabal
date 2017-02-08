@@ -14,23 +14,23 @@ library
   hs-source-dirs:      src
   ghc-options:         -Wall -fno-warn-unused-do-bind
   exposed-modules:     BitcoinCore.Keys
-                     , Persistence
+                     , General.Persistence
+                     , General.Config
+                     , General.Util
                      , LamdaBTC.Server
-                     , LamdaBTC.Config
                      , LamdaBTC.Handlers
                      , BitcoinCore.Transaction.Script
                      , BitcoinCore.Transaction.Optcodes
-                     , Util
                      , BitcoinCore.Transaction.Transactions
                      , BitcoinCore.Transaction.Parser
+                     , BitcoinCore.BlockHeaders
+                     , BitcoinCore.BloomFilter
+                     , BitcoinCore.Inventory
                      , Protocol.Messages
                      , Protocol.Parser
                      , Protocol.Server
                      , Protocol.Types
                      , Protocol.Network
-                     , BitcoinCore.BlockHeaders
-                     , BitcoinCore.BloomFilter
-                     , BitcoinCore.Inventory
   build-depends:       base >= 4.7 && < 5
                      , QuickCheck
                      , bytestring >= 0.10 && < 0.11

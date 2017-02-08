@@ -25,8 +25,8 @@ import BitcoinCore.BloomFilter ( pDefault
                                , filterSize
                                , hardcodedTweak
                                , NFlags(..))
-import LamdaBTC.Config (ConfigM(..), Config(..), pool)
-import Persistence (runDB, PersistentBlockHeader(..))
+import General.Config (ConfigM(..), Config(..), pool)
+import General.Persistence (runDB, PersistentBlockHeader(..))
 
 import Network.Socket (Socket)
 import Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)

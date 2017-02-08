@@ -2,7 +2,7 @@
 module Main where
 
 import LamdaBTC.Server (developmentConfig, runApplication)
-import Persistence (migrateSchema)
+import General.Persistence (migrateSchema)
 import Protocol.Server (connectTestnet)
 import Control.Concurrent (forkIO)
 

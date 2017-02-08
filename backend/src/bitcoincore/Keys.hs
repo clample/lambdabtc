@@ -19,8 +19,8 @@ module BitcoinCore.Keys
   , getPubKey
   , btcCurve) where
 
-import Persistence (KeySet(..))
-import Util
+import General.Persistence (KeySet(..))
+import General.Util
 
 import Prelude hiding (take, concat)
 import Data.ByteString (ByteString)

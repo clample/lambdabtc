@@ -2,7 +2,7 @@
 module LamdaBTC.Server (runApplication, developmentConfig) where
 
 import LamdaBTC.Handlers 
-import LamdaBTC.Config
+import General.Config
 
 import Web.Scotty.Trans ( ScottyT
                         , scottyOptsT

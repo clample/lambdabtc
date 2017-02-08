@@ -1,6 +1,6 @@
 module BitcoinCore.Transaction.Parser where
 
-import Util (switchEndian, readInt, parseCount, parsePayload)
+import General.Util (switchEndian, readInt, parseCount, parsePayload)
 import BitcoinCore.Transaction.Transactions (TxVersion, UTXO(..))
 import BitcoinCore.Transaction.Script (Value(..), CompiledScript(..), ScriptComponent(..), Script(..))
 
