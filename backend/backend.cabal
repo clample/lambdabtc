@@ -12,7 +12,7 @@ cabal-version:       >=1.10
 
 library
   hs-source-dirs:      src
-  ghc-options:         -Wall
+  ghc-options:         -Wall -fno-warn-unused-do-bind
   exposed-modules:     BitcoinCore.Keys
                      , Persistence
                      , LamdaBTC.Server

@@ -2,13 +2,7 @@
 
 module Protocol.Parser where
 
-import Protocol.Types ( MessageBody(..)
-                      , Command(..)
-                      , Addr(..)
-                      , Message(..)
-                      , getNetwork
-                      , readCommand
-                      , MessageContext(..))
+import Protocol.Types 
 import BitcoinCore.BloomFilter (Tweak(..), deserializeFilter)
 import Util (VarInt(..))
 
@@ -64,53 +58,67 @@ parseMessageBody _ VersionCommand = do
   userAgent   <- getPayload
   startHeight <- fromIntegral <$> getWord32le
   relay       <- toBool <$> getWord8 
-  return $ VersionMessage version nonce startHeight sender peer relay timestamp
+  return $ VersionMessageBody
+    (VersionMessage version nonce startHeight sender peer relay timestamp)
 
 -- These should all at least consume their length!
 parseMessageBody expectedLength VerackCommand =
-  parseRemaining expectedLength >> return VerackMessage
+  parseRemaining expectedLength >> return
+    (VerackMessageBody VerackMessage)
 parseMessageBody expectedLength AddrCommand =
-  parseRemaining expectedLength >> return AddrMessage
+  parseRemaining expectedLength >> return
+    (AddrMessageBody AddrMessage)
 parseMessageBody expectedLength TxCommand =
-  parseRemaining expectedLength >> return TxMessage
+  parseRemaining expectedLength >> return
+    (TxMessageBody TxMessage)
 parseMessageBody expectedLength RejectCommand =
-  parseRemaining expectedLength >> return RejectMessage
+  parseRemaining expectedLength >> return
+    (RejectMessageBody RejectMessage)
 parseMessageBody expectedLength PingCommand =
-  parseRemaining expectedLength >> return PingMessage
+  parseRemaining expectedLength >> return
+    (PingMessageBody PingMessage)
 parseMessageBody expectedLength PongCommand =
-  parseRemaining expectedLength >> return PongMessage
+  parseRemaining expectedLength >> return
+    (PongMessageBody PongMessage)
   
 parseMessageBody _ InvCommand = do
    VarInt count <- get
    inventoryVectors <- replicateM count get
-   return $ InvMessage inventoryVectors
+   return $ InvMessageBody (InvMessage inventoryVectors)
   
 parseMessageBody expectedLength GetDataCommand =
-  parseRemaining expectedLength >> return GetDataMessage
+  parseRemaining expectedLength >> return
+    (GetDataMessageBody GetDataMessage)
 
 parseMessageBody _ GetHeadersCommand = do
   version            <- fromIntegral <$> getWord32le
   VarInt nHashes     <- get
   blockLocatorHashes <- replicateM nHashes get
   hashStop           <- get
-  return $ GetHeadersMessage version blockLocatorHashes hashStop
+  return $ GetHeadersMessageBody
+    (GetHeadersMessage version blockLocatorHashes hashStop)
   
 parseMessageBody expectedLength BlockCommand =
-  parseRemaining expectedLength >> return BlockMessage
+  parseRemaining expectedLength >> return
+    (BlockMessageBody BlockMessage)
   
 parseMessageBody expectedLength HeadersCommand = do
   VarInt nHeaders <- get
   blockHeaders    <- replicateM nHeaders get
-  return $ HeadersMessage blockHeaders
+  return $ HeadersMessageBody (HeadersMessage blockHeaders)
   
 parseMessageBody expectedLength GetAddrCommand =
-  parseRemaining expectedLength >> return GetAddrMessage
+  parseRemaining expectedLength >> return
+    (GetAddrMessageBody GetAddrMessage)
 parseMessageBody expectedLength MempoolCommand =
-  parseRemaining expectedLength >> return MempoolMessage
+  parseRemaining expectedLength >> return
+    (MempoolMessageBody MempoolMessage)
 parseMessageBody expectedLength CheckorderCommand =
-  parseRemaining expectedLength >> return CheckorderMessage
+  parseRemaining expectedLength >> return
+    (CheckorderMessageBody CheckorderMessage)
 parseMessageBody expectedLength SubmitorderCommand =
-  parseRemaining expectedLength >> return SubmitorderMessage
+  parseRemaining expectedLength >> return
+    (SubmitorderMessageBody SubmitorderMessage)
   
 parseMessageBody _ FilterloadCommand = do
   VarInt lengthFilter <- get
@@ -118,25 +126,36 @@ parseMessageBody _ FilterloadCommand = do
   nHashFuncs <- fromIntegral <$> getWord32le
   nTweak     <- Tweak . fromIntegral <$> getWord32le
   nFlags <- toEnum . fromIntegral <$> getWord8
-  return $ FilterloadMessage filter nHashFuncs nTweak nFlags
+  return $ FilterloadMessageBody
+    (FilterloadMessage filter nHashFuncs nTweak nFlags)
   
 parseMessageBody expectedLength FilteraddCommand =
-  parseRemaining expectedLength >> return FilteraddMessage
+  parseRemaining expectedLength >> return
+    (FilteraddMessageBody FilteraddMessage)
 parseMessageBody expectedLength FilterclearCommand =
-  parseRemaining expectedLength >> return FilterclearMessage
+  parseRemaining expectedLength >> return
+    (FilterclearMessageBody FilterclearMessage)
 parseMessageBody expectedLength MerkleblockCommand =
-  parseRemaining expectedLength >> return MerkleblockMessage
+  parseRemaining expectedLength >> return
+    (MerkleblockMessageBody MerkleblockMessage)
 parseMessageBody expectedLength SendheadersCommand =
-  parseRemaining expectedLength >> return SendheadersMessage
+  parseRemaining expectedLength >> return
+    (SendheadersMessageBody SendheadersMessage)
 parseMessageBody expectedLength FeefilterCommand =
-  parseRemaining expectedLength >> return FeefilterMessage
+  parseRemaining expectedLength >> return
+    (FeefilterMessageBody FeefilterMessage)
 parseMessageBody expectedLength SendcmpctCommand =
-  parseRemaining expectedLength >> return SendcmpctMessage
+  parseRemaining expectedLength >> return
+    (SendcmpctMessageBody SendcmpctMessage)
 parseMessageBody expectedLength CmpctblockCommand =
-  parseRemaining expectedLength >> return CmpctblockMessage
+  parseRemaining expectedLength >> return
+    (CpmctblockMessageBody CmpctblockMessage)
 parseMessageBody expectedLength GetblocktxnCommand =
-  parseRemaining expectedLength >> return GetblocktxnMessage
+  parseRemaining expectedLength >> return
+    (GetblocktxnMessageBody GetblocktxnMessage)
 parseMessageBody expectedLength BlocktxnCommand =
-  parseRemaining expectedLength >> return BlocktxnMessage
+  parseRemaining expectedLength >> return
+    (BlocktxnMessageBody BlocktxnMessage)
 parseMessageBody expectedLength UnknownCommand =
-  parseRemaining expectedLength >> return UnknownMessage
+  parseRemaining expectedLength >> return
+    (UnknownMessageBody UnknownMessage)

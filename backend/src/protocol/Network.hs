@@ -1,3 +1,7 @@
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TemplateHaskell #-}
 module Protocol.Network where
 
 import Protocol.Types (Addr(..))
@@ -12,9 +16,15 @@ import Network.Socket ( socket
                       , setSocketOption
                       , SocketOption(..)
                       , Socket)
+import Control.Lens (makeFields)
 
-data Peer = Peer Socket Addr
-  deriving (Show, Eq)
+
+data Peer = Peer
+  { _peerSock :: Socket
+  , _peerAddr :: Addr
+  } deriving (Show, Eq)
+
+makeFields ''Peer
 
 connectToPeer :: Int -> IO Peer
 connectToPeer n = do

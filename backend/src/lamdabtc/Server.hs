@@ -11,6 +11,7 @@ import Web.Scotty.Trans ( ScottyT
                         , post
                         , get)
 import Control.Monad.Reader (runReaderT)
+import Control.Lens ((^.))
 
 runApplication :: Config -> IO ()
 runApplication c = do
@@ -20,9 +21,8 @@ runApplication c = do
   scottyOptsT o r app
 
 application :: Config -> ScottyT Error ConfigM ()
-application c = do
-  let e = environment c
-  middleware (loggingM e)
-  defaultHandler (defaultH e)
+application config = do
+  middleware (loggingM (config^.environment))
+  defaultHandler (defaultH (config^.environment))
   post "/fundrequests" postFundRequestsH
   get  "/fundrequests" getFundRequestsH

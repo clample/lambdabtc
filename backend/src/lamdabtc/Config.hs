@@ -1,3 +1,8 @@
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -14,12 +19,21 @@ import Data.Default (def)
 import Database.Persist.Sql (ConnectionPool)
 import Database.Persist.Sqlite (createSqlitePool)
 import Control.Monad.Logger (runStdoutLoggingT)
+import Control.Lens (makeFields, (^.))
 
+
+data Environment =
+  Development |
+  Production |
+  Test
+  deriving (Eq, Read, Show)
 
 data Config =
-  Config { environment :: Environment
-         , port :: Int -- port might belong elsewhere
-         , pool :: ConnectionPool}
+  Config { _configEnvironment :: Environment
+         , _configPort :: Int -- port might belong elsewhere
+         , _configPool :: ConnectionPool}
+
+makeFields ''Config
 
 developmentConfig :: IO Config
 developmentConfig = do
@@ -33,12 +47,6 @@ getConnectionSize Development = 1
 getConnectionSize Production = 8
 getConnectionSize Test = 1
 
-data Environment =
-  Development |
-  Production |
-  Test
-  deriving (Eq, Read, Show)
-
 type Error = LT.Text
 
 newtype ConfigM a =
@@ -50,7 +58,7 @@ type Action = ActionT Error ConfigM ()
 getOptions :: Config -> Options
 getOptions config =
   def { settings = getSettings
-      , verbose = case environment config of
+      , verbose = case (config^.environment) of
                     Development -> 1
                     Production -> 0
                     Test -> 0

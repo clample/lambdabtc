@@ -2,7 +2,7 @@ module MessageTest where
 
 import TestUtil
 import Protocol.Messages (putMessage)
-import Protocol.Types (Command(..), commandTable, Network(..), networkTable, Header(..), Addr(..), MessageBody(..), MessageContext(..), Message(..))
+import Protocol.Types
 import Protocol.Parser (parseMessage)
 import qualified Data.ByteString.Char8 as Char8
 import Data.Time.Clock (NominalDiffTime(..))
@@ -25,7 +25,7 @@ instance Arbitrary MessageBody where
     , arbitraryGetHeadersMessage
     , arbitraryFilterloadMessage
     , arbitraryInvMessage
-    , return VerackMessage ]
+    , return (VerackMessageBody VerackMessage)]
 
 instance Arbitrary MessageContext where
   arbitrary = MessageContext <$> arbitrary
@@ -39,7 +39,8 @@ arbitraryVersionMessage = do
   peerAddr   <- arbitrary
   relay      <- arbitrary
   time       <- choose (0, maxTime) :: Gen Integer
-  return $ VersionMessage version nonceInt lastBlockN senderAddr peerAddr relay (realToFrac time)
+  return $ VersionMessageBody
+    (VersionMessage version nonceInt lastBlockN senderAddr peerAddr relay (realToFrac time))
   where
     maxVersion = 0xffffffff         -- 4 bytes
     maxNonce   = 0xffffffffffffffff -- 8 bytes
@@ -51,13 +52,15 @@ arbitraryGetHeadersMessage = do
   n      <- choose (0, 2000)
   blockLocatorHashes <- vectorOf n arbitrary
   hashStop <- arbitrary
-  return $ GetHeadersMessage version blockLocatorHashes hashStop
+  return $ GetHeadersMessageBody
+    (GetHeadersMessage version blockLocatorHashes hashStop)
   where maxVersion = 0xffffffff -- 4 bytes
 
 arbitraryHeadersMessage = do
   n            <- choose (0, 2000) -- A headers message contains at most 2000 block headers
   blockHeaders <- vectorOf n arbitrary
-  return $ HeadersMessage blockHeaders
+  return $ HeadersMessageBody
+    (HeadersMessage blockHeaders)
 
 arbitraryFilterloadMessage = do
   fValue <- choose (0, 0xffffffffffffffff) -- upper limit is so the value is reasonably sized
@@ -67,13 +70,14 @@ arbitraryFilterloadMessage = do
   nHashFuncs <- choose (0, maxNHashFuncs)
   nTweak <- Tweak <$> choose (0, maxNTweak)
   nFlags <- arbitraryBoundedEnum
-  return $ FilterloadMessage  filter nHashFuncs nTweak nFlags
+  return $ FilterloadMessageBody
+    (FilterloadMessage  filter nHashFuncs nTweak nFlags)
   where
     maxNHashFuncs = 0xffffffff -- 4 bytes
     maxNTweak     = 0xffffffff -- 4 bytes
 
 arbitraryInvMessage = 
-  InvMessage <$> arbitrary
+  InvMessageBody . InvMessage <$> arbitrary
   
 instance Arbitrary InventoryVector where
   arbitrary = do

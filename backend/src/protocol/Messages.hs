@@ -9,9 +9,14 @@ import Protocol.Types ( getCommand'
                       , Addr(..)
                       , Header(..)
                       , Message(..)
-                      , MessageContext(..)
                       , getCommand
-                      , MessageBody (..))
+                      , MessageBody (..)
+                      , network
+                      , VersionMessage(..)
+                      , GetHeadersMessage(..)
+                      , HeadersMessage(..)
+                      , FilterloadMessage(..)
+                      , InvMessage(..))
 
 
 import qualified Data.ByteString as BS
@@ -20,11 +25,12 @@ import Network.Socket (SockAddr(..), hostAddressToTuple)
 import Data.Binary.Put (Put, putWord16be, putWord32le, putWord64le, putWord64be, putWord8, putByteString, runPut)
 import Data.Binary (Binary(..))
 import qualified Data.ByteString.Lazy as BL
+import Control.Lens ((^.))
 
 putMessage :: Message -> Put
 putMessage message@(Message messageBody context) = do
   putHeader (Header
-              (network context)
+              (context^.network)
               (getCommand messageBody)
               (BL.toStrict messageBS))
   messageBodyEncode
@@ -41,7 +47,7 @@ putHeader (Header network command message) = do
 
 putMessageBody :: MessageBody -> Put
 
-putMessageBody (VersionMessage version randInt blockN senderAddr peerAddr relay time) = do
+putMessageBody (VersionMessageBody (VersionMessage version randInt blockN senderAddr peerAddr relay time)) = do
   putWord32le (fromIntegral version)
   putServices
   putWord64le . floor $ time
@@ -52,17 +58,17 @@ putMessageBody (VersionMessage version randInt blockN senderAddr peerAddr relay 
   putWord32le . fromIntegral $ blockN
   put relay
 
-putMessageBody (GetHeadersMessage version blockLocatorHashes hashStop) = do
+putMessageBody (GetHeadersMessageBody (GetHeadersMessage version blockLocatorHashes hashStop)) = do
   putWord32le (fromIntegral version)
   put (VarInt . length $ blockLocatorHashes)
   mapM_ put blockLocatorHashes
   put hashStop
 
-putMessageBody (HeadersMessage blockHeaders) = do
+putMessageBody (HeadersMessageBody (HeadersMessage blockHeaders)) = do
   put (VarInt . length $ blockHeaders)
   mapM_ put blockHeaders
 
-putMessageBody (FilterloadMessage filter nHashFuncs (Tweak nTweak) nFlags) = do
+putMessageBody (FilterloadMessageBody (FilterloadMessage filter nHashFuncs (Tweak nTweak) nFlags)) = do
   put . VarInt . filterLengthBytes $ filter
   putByteString . serializeFilter $ filter
   putWord32le (fromIntegral nHashFuncs)
@@ -71,7 +77,7 @@ putMessageBody (FilterloadMessage filter nHashFuncs (Tweak nTweak) nFlags) = do
     --       This won't be a problem when nTweak is 0, but it may cause bugs later
   (putWord8 . fromIntegral . fromEnum) nFlags
 
-putMessageBody (InvMessage invVectors) = do
+putMessageBody (InvMessageBody (InvMessage invVectors)) = do
   put . VarInt . length $ invVectors
   mapM_ put invVectors
 

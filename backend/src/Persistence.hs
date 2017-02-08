@@ -6,7 +6,7 @@
 
 module Persistence where
 
-import LamdaBTC.Config (ConfigM, Config(..))
+import LamdaBTC.Config (ConfigM, Config(..), pool)
 
 import Data.Text (Text)
 import Database.Persist.Sqlite (runMigration)
@@ -17,8 +17,9 @@ import Database.Persist.Sql ( SqlPersistT
                             , runSqlPersistMPool)
 import Control.Monad.IO.Class (liftIO, MonadIO)
 import Control.Monad.Trans.Class (MonadTrans, lift)
-import Control.Monad.Reader (asks)
+import Control.Monad.Reader (ask)
 import Data.ByteString (ByteString)
+import Control.Lens ((^.))
 
 share [mkPersist sqlSettings, mkMigrate "migrateTables"] [persistLowerCase|
 FundRequest json
@@ -44,12 +45,12 @@ PersistentBlockHeader
   
 
 migrateSchema :: Config -> IO ()
-migrateSchema c =
-  liftIO $ flip runSqlPersistMPool (pool c) $ runMigration migrateTables
+migrateSchema config =
+  liftIO $ flip runSqlPersistMPool (config^.pool) $ runMigration migrateTables
 
 
 runDB :: (MonadTrans t, MonadIO (t ConfigM)) =>
          SqlPersistT IO a -> t ConfigM a
 runDB q = do
-  p <- lift (asks pool)
-  liftIO (runSqlPool q p)
+  config <- lift ask
+  liftIO (runSqlPool q (config^.pool))

@@ -1,16 +1,16 @@
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Protocol.Server where
 
 import Protocol.Parser (parseMessage)
 import Protocol.Messages (putMessage)
-import Protocol.Types ( Network(..)
-                      , Addr(..)
-                      , MessageContext(..)
-                      , Message(..)
-                      , MessageBody(..))
-import Protocol.Network (Peer(..), connectToPeer)
+import Protocol.Types 
+import Protocol.Network (Peer(..), connectToPeer, sock, addr)
 import BitcoinCore.BlockHeaders ( BlockHash(..)
                                 , encodeBlockHeader
                                 , BlockHeader(..)
@@ -25,7 +25,7 @@ import BitcoinCore.BloomFilter ( pDefault
                                , filterSize
                                , hardcodedTweak
                                , NFlags(..))
-import LamdaBTC.Config (ConfigM(..), Config(..))
+import LamdaBTC.Config (ConfigM(..), Config(..), pool)
 import Persistence (runDB, PersistentBlockHeader(..))
 
 import Network.Socket (Socket)
@@ -35,7 +35,7 @@ import Control.Monad.Reader (runReaderT, ask)
 import Control.Monad (when)
 import qualified Control.Monad.State.Lazy as State
 import System.Random (randomR, StdGen, getStdGen)
-import Conduit (Producer, runConduit, (.|), mapC, mapMC)
+import Conduit (runConduit, (.|), mapC, mapMC, Conduit)
 import Data.Conduit.Network (sourceSocket, sinkSocket)
 import Data.Conduit.Serialization.Binary (conduitGet, conduitPut)
 import Data.Conduit.TMChan ( sourceTBMChan
@@ -52,72 +52,73 @@ import Database.Persist.Sql (insertMany_, count, runSqlPool, Filter, toSqlKey, i
 import qualified Database.Persist.Sql as DB
 import Data.List.Split (chunksOf)
 import Data.Maybe (fromJust)
+import Control.Lens (makeFields, (^.), (+=))
 
 data ConnectionContext = ConnectionContext
-  { version' :: Int
-  , lastBlock' :: Integer
-  , myAddr' :: Addr
-  , peer' :: Peer
-  , relay' :: Bool
+  { _connectionContextVersion :: Int
+  , _connectionContextLastBlock :: Integer
+  , _connectionContextMyAddr :: Addr
+  , _connectionContextPeer :: Peer
+  , _connectionContextRelay :: Bool
     -- https://github.com/bitcoin/bips/blob/master/bip-0037.mediawiki#extensions-to-existing-messages
     -- Relay should be set to False when functioning as an SPV node
-  , network' :: Network
-  , writerChan :: TBMChan Message
-  , listenChan :: TBMChan Message
-  , time :: POSIXTime
-  , randGen :: StdGen
+  , _connectionContextNetwork :: Network
+  , _connectionContextWriterChan :: TBMChan Message
+  , _connectionContextListenChan :: TBMChan Message
+  , _connectionContextTime :: POSIXTime
+  , _connectionContextRandGen :: StdGen
   } 
+
+makeFields ''ConnectionContext
 
 type Connection a = StateT ConnectionContext ConfigM a
 
 runConnection :: Connection a -> ConnectionContext -> Config -> IO (a, ConnectionContext)
-runConnection connection state =
-  runReaderT (runConfigM (runStateT connection state))
+runConnection connectionM state =
+  runReaderT (runConfigM (runStateT connectionM state))
 
 connectTestnet :: Config -> IO () 
 connectTestnet config = do
   persistGenesisBlock config
   context <- getConnectionContext config
-  let listenChan' = listenChan context
-      writerChan' = writerChan context
-      Peer peerSocket _ = peer' context
-  forkIO $ listener listenChan' peerSocket
-  forkIO $ writer writerChan' peerSocket
+  let peerSocket = context^.peer.sock
+  forkIO $ listener (context^.listenChan) peerSocket
+  forkIO $ writer (context^.writerChan) peerSocket
   runConnection connection context config
   return ()
 
 getConnectionContext :: Config -> IO ConnectionContext
 getConnectionContext config = do
-  peer <- connectToPeer 1
-  writeChan <- atomically $ newTBMChan 16
-  listenChan <- atomically $ newTBMChan 16
+  peer' <- connectToPeer 1
+  writerChan' <- atomically $ newTBMChan 16
+  listenChan' <- atomically $ newTBMChan 16
   time' <- getPOSIXTime
   randGen' <- getStdGen
-  lastBlock <- fromIntegral <$> getLastBlock config
+  lastBlock' <- fromIntegral <$> getLastBlock config
   return ConnectionContext
-        { version' = 60002
-        , lastBlock' = lastBlock
-        , myAddr' = Addr (0, 0, 0, 0) 18333 
-        , peer' = peer
-        , relay' = False 
-        , network' = TestNet3
-        , writerChan = writeChan
-        , listenChan = listenChan
-        , time = time'
-        , randGen = randGen'
+        { _connectionContextVersion = 60002
+        , _connectionContextLastBlock = lastBlock'
+        , _connectionContextMyAddr = Addr (0, 0, 0, 0) 18333 
+        , _connectionContextPeer = peer'
+        , _connectionContextRelay = False 
+        , _connectionContextNetwork = TestNet3
+        , _connectionContextWriterChan = writerChan'
+        , _connectionContextListenChan = listenChan'
+        , _connectionContextTime = time'
+        , _connectionContextRandGen = randGen'
         }
 
 getLastBlock :: Config -> IO Int
-getLastBlock Config {pool = pool} =
-  ((-1) +) <$> runSqlPool lastBlockQuery pool
+getLastBlock config =
+  ((-1) +) <$> runSqlPool lastBlockQuery (config^.pool)
   where lastBlockQuery = count allBlocksFilter
         allBlocksFilter = [] :: [Filter PersistentBlockHeader]
 
 persistGenesisBlock :: Config -> IO ()
-persistGenesisBlock config@Config {pool = pool} = do
-  lastBlock <- getLastBlock config
-  when (lastBlock == -1) $
-    runSqlPool (insert_ $ encodeBlockHeader genesisBlockTestnet) pool
+persistGenesisBlock config = do
+  lastBlock' <- getLastBlock config
+  when (lastBlock' == -1) $
+    runSqlPool (insert_ $ encodeBlockHeader genesisBlockTestnet) (config^.pool)
 
 instance Binary Message where
   put = putMessage
@@ -141,6 +142,7 @@ writer chan socket = runConduit
   .| sinkSocket socket
 
 
+logMessages :: Show b => String -> Conduit b IO b
 logMessages context =
   mapMC logAndReturn
   where logAndReturn message = do
@@ -155,48 +157,44 @@ connection = do
 
 connectionLoop :: Connection ()
 connectionLoop = do
-  chan <- State.gets listenChan
-  mResponse <-  liftIO . atomically . readTBMChan $ chan
+  context <- State.get
+  mResponse <-  liftIO . atomically . readTBMChan $ (context^.listenChan)
   case mResponse of
     Nothing -> fail "listenChan is closed and empty"
     Just response -> handleResponse response
   connectionLoop
 
-  
+
 handleResponse :: Message -> Connection ()
 
-handleResponse (Message VersionMessage {lastBlockN = lastBlockPeer} _) = do
-  connectionContext <- State.get
-  let
-    network = network' connectionContext
-    writerChan' = writerChan connectionContext
-    lastBlock = lastBlock' connectionContext
-    verackMessage = Message VerackMessage (MessageContext network)
-  liftIO . atomically $ writeTBMChan writerChan' verackMessage
-  when (lastBlockPeer > lastBlock) $
+handleResponse (Message (VersionMessageBody body) _) = do
+  context <- State.get
+  let verackMessage =
+        Message (VerackMessageBody VerackMessage) (MessageContext (context^.network))
+      lastBlockPeer = body^.lastBlock
+      lastBlockSelf = context^.lastBlock
+  liftIO . atomically $ writeTBMChan (context^.writerChan) verackMessage
+  when (lastBlockPeer > lastBlockSelf) $
     synchronizeHeaders lastBlockPeer
 
-handleResponse (Message PingMessage _) = do
-  connectionContext <- State.get
-  let
-    network = network' connectionContext
-    writerChan' = writerChan connectionContext
-    pongMessage = Message PongMessage (MessageContext network)
-  liftIO . atomically $ writeTBMChan writerChan' pongMessage
+handleResponse (Message (PingMessageBody _) _) = do
+  context <- State.get
+  let pongMessage =
+        Message (PongMessageBody PongMessage) (MessageContext (context^.network))
+  liftIO . atomically $ writeTBMChan (context^.writerChan) pongMessage
 
-handleResponse (Message (HeadersMessage headers) _) = do
+handleResponse (Message (HeadersMessageBody (HeadersMessage headers)) _) = do
   let persistentHeaders = map encodeBlockHeader headers
       chunkedPersistentHeaders = chunksOf 100 persistentHeaders
       -- Headers are inserted in chunks
       -- sqlite rejects if we insert all at once
-  config <- ask
   mostRecentHeader <- getMostRecentHeader
   let isValid = verifyHeaders (mostRecentHeader:headers)
+      newHeaders = fromIntegral . length $ headers
   if isValid
     then do
-    runDB $ mapM_ insertMany_ chunkedPersistentHeaders
-    State.modify (\context@ConnectionContext {lastBlock' = lastBlock}
-                 -> context {lastBlock' = lastBlock + (fromIntegral .length) headers})
+      runDB $ mapM_ insertMany_ chunkedPersistentHeaders
+      lastBlock += newHeaders
     else fail "We recieved invalid headers"
     
 handleResponse _ = return ()
@@ -213,93 +211,87 @@ getMostRecentHeader = do
 
 sendVersion :: Connection ()
 sendVersion = do
-  connectionContext <- State.get
-  let ConnectionContext
-       { version' = version'
-       , lastBlock' = lastBlock'
-       , relay' = relay'
-       , myAddr' = myAddr'
-       , peer' = Peer peerSocket peerAddr'
-       , network' = network'
-       , writerChan = writerChan
-       , time = time
-       , randGen = randGen
-       } = connectionContext
-      nonce' = fst $ randomR (0, 0xffffffffffffffff ) randGen
+  context <- State.get
+  let nonce' = fst $ randomR (0, 0xffffffffffffffff ) (context^.randGen)
       versionMessage = Message
-          (VersionMessage version' nonce' lastBlock' peerAddr' myAddr' relay' time)
-          (MessageContext network')
-  liftIO . atomically $ writeTBMChan writerChan versionMessage
+          (VersionMessageBody (VersionMessage
+            (context^.version)
+            nonce'
+            (context^.lastBlock)
+            (context^.peer.addr)
+            (context^.myAddr)
+            (context^.relay)
+            (context^.time)))
+          (MessageContext (context^.network))
+  liftIO . atomically $ writeTBMChan (context^.writerChan) versionMessage
 
 
 setFilter :: Connection ()
 setFilter = do
- writerChan <- State.gets writerChan
- network' <- State.gets network'
- let
-   blank = blankFilter 1 pDefault
-   s = filterSize 1 pDefault
-   nHashFuncs = numberHashFunctions s 1
-   txId = fst . decode $ "b73619d208b4f7b91cc93185b1e2f5057bacbe9b5c0b63c36159e0354be0a77f"
-   filter' = updateFilter nHashFuncs hardcodedTweak txId blank
-   filterloadMessage = Message
-     (FilterloadMessage filter' nHashFuncs hardcodedTweak BLOOM_UPDATE_NONE)
-     (MessageContext network')
- liftIO . atomically $ writeTBMChan writerChan filterloadMessage
+  context <- State.get
+  let
+    blank = blankFilter 1 pDefault
+    s = filterSize 1 pDefault
+    nHashFuncs = numberHashFunctions s 1
+    txId = fst . decode $ "b73619d208b4f7b91cc93185b1e2f5057bacbe9b5c0b63c36159e0354be0a77f"
+    filter' = updateFilter nHashFuncs hardcodedTweak txId blank
+    filterloadMessage = Message
+      (FilterloadMessageBody (FilterloadMessage filter' nHashFuncs hardcodedTweak BLOOM_UPDATE_NONE))
+      (MessageContext (context^.network))
+  liftIO . atomically $ writeTBMChan (context^.writerChan) filterloadMessage
 
 
 synchronizeHeaders :: Integer -> Connection ()
 synchronizeHeaders lastBlockPeer = do
-  lastBlock <- State.gets lastBlock'
-  when (lastBlock < lastBlockPeer) $ do
+  context <- State.get
+  when ((context^.lastBlock) < lastBlockPeer) $ do
     getHeaders
     handleMessages
     synchronizeHeaders lastBlockPeer
   where
     -- Keep reading messages until we get a headers message
     handleMessages = do
-      chan <- State.gets listenChan
-      mResponse <-  liftIO . atomically . readTBMChan $ chan
+      context  <- State.get
+      mResponse <-  liftIO . atomically . readTBMChan $ (context^.listenChan)
       case mResponse of
         Nothing -> fail "listenChan is closed and empty"
-        Just response@(Message (HeadersMessage _) _) -> handleResponse response
+        Just response@(Message (HeadersMessageBody _) _) -> handleResponse response
         Just response -> handleResponse response >> handleMessages
       
 
 getHeaders :: Connection ()
 getHeaders = do
-  connectionContext <- State.get
+  context <- State.get
   config <- ask
-  let
-    ConnectionContext
-     { version' = version'
-     , network' = network'
-     , writerChan = writerChan
-     , lastBlock' = lastBlock
-     } = connectionContext
-    getHeadersMessage lastBlock = do
-      blockLocatorHashes <- queryBlockLocatorHashes lastBlock config
-      return $ Message
-        (GetHeadersMessage version' blockLocatorHashes
-         (BlockHash . fst . decode $ "0000000000000000000000000000000000000000000000000000000000000000"))
-        (MessageContext network')
-  message <- liftIO $ getHeadersMessage (fromIntegral lastBlock)
-  liftIO . atomically $ writeTBMChan writerChan message
+  let getHeadersMessage lastBlock' = do
+        blockLocatorHashes <- queryBlockLocatorHashes lastBlock' config
+        return $ Message
+          (GetHeadersMessageBody (GetHeadersMessage (context^.version) blockLocatorHashes
+            (BlockHash . fst . decode $
+             "0000000000000000000000000000000000000000000000000000000000000000")))
+          (MessageContext (context^.network))
+  message <- liftIO $ getHeadersMessage (fromIntegral (context^.lastBlock))
+  liftIO . atomically $ writeTBMChan (context^.writerChan) message
 
 
 queryBlockLocatorHashes :: Int -> Config -> IO [BlockHash]
-queryBlockLocatorHashes lastBlock Config {pool=pool} =
-  mapM queryBlockHash (blockLocatorIndices lastBlock)
+queryBlockLocatorHashes lastBlock' config =
+  mapM queryBlockHash (blockLocatorIndices lastBlock')
   where
-    queryBlockHash i = (hashBlock . decodeBlockHeader . fromJust) <$> runSqlPool (DB.get (toSqlKey . fromIntegral $  i + 1)) pool
+    queryBlockHash i =
+      (hashBlock . decodeBlockHeader . fromJust) <$>
+        runSqlPool (DB.get (toSqlKey . fromIntegral $  i + 1)) (config^.pool)
     -- NOTE: we query by i + 1 since the genesis block (block 0) is in the db at index 1
 
 blockLocatorIndices :: Int -> [Int]
-blockLocatorIndices lastBlock = reverse . addGenesisIndiceIfNeeded $ blockLocatorIndicesStep 10 1 [lastBlock]
+blockLocatorIndices lastBlock' = reverse . addGenesisIndiceIfNeeded $ blockLocatorIndicesStep 10 1 [lastBlock']
   where addGenesisIndiceIfNeeded (0:xs) = 0:xs
         addGenesisIndiceIfNeeded xs   = 0:xs
 
+blockLocatorIndicesStep :: Int -> Int -> [Int] -> [Int]
 blockLocatorIndicesStep c step (i:is)
   | c > 0 && i > 0 = blockLocatorIndicesStep (c - 1) step ((i - 1):i:is)
   | i - step > 0 = blockLocatorIndicesStep c (step * 2) ((i - step):i:is)
   | otherwise = i:is
+blockLocatorIndicesStep _ _ [] =
+  error "blockLocatorIndicesStep must be called with a nonempty accummulator array "
