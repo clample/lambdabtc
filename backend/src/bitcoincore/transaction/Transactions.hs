@@ -52,7 +52,7 @@ count c = T.encodeUtf8 $ hexify (toInteger c) 2
 
 outPoint :: UTXO -> ByteString
 outPoint utxo =
-  (switchEndian (outTxHash utxo))
+  switchEndian (outTxHash utxo)
   -- 32 Bytes, little endian
   -- http://www.righto.com/2014/02/bitcoins-hard-way-using-raw-bitcoin.html#ref7
   `BS.append`
@@ -111,7 +111,7 @@ scriptSig rawTx privKey =
     -- TODO: CHANGE THIS!
     -- signWith should use a random number, not a hardcoded 100
     -- fromJust will cause runtime errors
-  signedHashDER = (derSignature signedHash) `BS.append` sighashAll
+  signedHashDER = derSignature signedHash `BS.append` sighashAll
   derSigHashLength = payloadLength signedHashDER
   Compressed publicKeyText = compressed . getPubKey $ privKey
   publicKeyBS = T.encodeUtf8 publicKeyText

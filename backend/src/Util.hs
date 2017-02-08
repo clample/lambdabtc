@@ -61,7 +61,7 @@ maybeRead :: Read a => String -> Maybe a
 maybeRead = fmap fst . listToMaybe . reads
 
 checkSum :: ByteString -> ByteString
-checkSum = (take 4) . doubleSHA
+checkSum = take 4 . doubleSHA
 
 -- 
 doubleSHA :: ByteString -> ByteString

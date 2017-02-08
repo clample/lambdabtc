@@ -79,25 +79,25 @@ data MessageBody
   deriving (Show, Eq)
 
 getCommand :: MessageBody -> Command
-getCommand (VersionMessage {}) = VersionCommand
+getCommand VersionMessage {} = VersionCommand
 getCommand VerackMessage = VerackCommand
 getCommand AddrMessage = AddrCommand
 getCommand TxMessage = TxCommand
 getCommand RejectMessage = RejectCommand
 getCommand PingMessage = PingCommand
 getCommand PongMessage = PongCommand
-getCommand (InvMessage {}) = InvCommand
+getCommand InvMessage {} = InvCommand
 getCommand GetDataMessage = GetDataCommand
 getCommand NotFoundMessage = NotFoundCommand
 getCommand GetBlocksMessage = GetBlocksCommand
-getCommand (GetHeadersMessage {}) = GetHeadersCommand
+getCommand GetHeadersMessage {} = GetHeadersCommand
 getCommand BlockMessage = BlockCommand
-getCommand (HeadersMessage {}) = HeadersCommand
+getCommand HeadersMessage {} = HeadersCommand
 getCommand GetAddrMessage = GetAddrCommand
 getCommand MempoolMessage = MempoolCommand
 getCommand CheckorderMessage = CheckorderCommand
 getCommand SubmitorderMessage = SubmitorderCommand
-getCommand (FilterloadMessage {}) = FilterloadCommand
+getCommand FilterloadMessage {} = FilterloadCommand
 getCommand FilteraddMessage = FilteraddCommand
 getCommand FilterclearMessage = FilterclearCommand
 getCommand MerkleblockMessage = MerkleblockCommand
@@ -174,16 +174,16 @@ data Command
   deriving (Show, Eq)
 
 commandTable :: [(Command, ByteString)]
-commandTable = over (mapped . _2) (getCommandBS) commandTable'
+commandTable = over (mapped . _2) getCommandBS commandTable'
 
 commandTableBinary :: [(Command, ByteString)]
-commandTableBinary = over (mapped . _2) (Char8.pack) commandTable'
+commandTableBinary = over (mapped . _2) Char8.pack commandTable'
 
 getCommand' :: Command -> ByteString
 getCommand' = padWithZeroes . getCommand
   where 
   getCommand = fromJust . flip lookup commandTableBinary
-  padWithZeroes bs = bs `BS.append` (padding bs)
+  padWithZeroes bs = bs `BS.append` padding bs
   padding bs = BS.replicate (12 - BS.length bs) 0
   -- need to pad with zeroes
 
@@ -219,8 +219,8 @@ commandTable' =
   , (BlocktxnCommand, "blocktxn")]
 
 getCommandBS :: String -> ByteString
-getCommandBS = Char8.pack . (padWithZeroes) . map toUpper . Char8.unpack .  encode . Char8.pack
-  where padWithZeroes str = str ++ (padding str)
+getCommandBS = Char8.pack . padWithZeroes . map toUpper . Char8.unpack .  encode . Char8.pack
+  where padWithZeroes str = str ++ padding str
         padding str = replicate (24 - length str) '0'        
 
 printCommand :: Command -> ByteString
@@ -232,7 +232,7 @@ readCommand bs = fromMaybe UnknownCommand (readFromTable commandTable bs)
 readFromTable :: [(a, ByteString)] -> ByteString -> Maybe a
 readFromTable table = lookupInTable . uppercase
   where
-    uppercase     = Char8.pack . (map toUpper) . Char8.unpack
+    uppercase     = Char8.pack . map toUpper . Char8.unpack
     lookupInTable = flip lookup (map swap table)
 
 genesisHash :: Network -> BlockHash

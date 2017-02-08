@@ -56,7 +56,7 @@ data NFlags
 
 probability :: Float -> Probability
 probability p =
-  if (p >= 0 && p <= 1)
+  if p >= 0 && p <= 1
   then Probability p
   else error $ "Can't construct a probability " ++ show p
 
@@ -85,14 +85,14 @@ filterSize :: Int -> Probability -> Int
 filterSize n (Probability p) =
   min (floor (numerator / denominator)) maxFilterBytes
   where
-    numerator = (-1) * (fromIntegral n) * (log p) 
-    denominator = ((log 2) ^ 2) * 8
+    numerator = (-1) * fromIntegral n * log p 
+    denominator = (log 2 ^ 2) * 8
     
   
 -- s: filter size (Bytes)
 numberHashFunctions :: Int -> Int -> Int
 numberHashFunctions s n = min calculatedHashFunctions maxHashFuncs
-  where calculatedHashFunctions = floor $ ((fromIntegral s) * 8 * log 2) / (fromIntegral n)
+  where calculatedHashFunctions = floor $ (fromIntegral s * 8 * log 2) / fromIntegral n
 
 updateFilter :: Int -> Tweak -> ByteString -> Filter -> Filter
 updateFilter numberHashes tweak hashData fltr =
@@ -112,11 +112,11 @@ bloomHash :: Int -> Tweak -> ByteString -> Int -> Int
 bloomHash hashNum tweak hashData fLengthBits =
   hash `mod` fLengthBits
   where
-    hash = (fromIntegral $ murmur3 seedValue hashData)
+    hash = fromIntegral $ murmur3 seedValue hashData
     seedValue = seed hashNum tweak      
 
 blankFilter :: Int -> Probability -> Filter
-blankFilter n p = Filter { filterLengthBytes = (filterSize n p), filterValue =  0 }
+blankFilter n p = Filter { filterLengthBytes = filterSize n p, filterValue =  0 }
 
 
 -- Taken from src of Data.Binary

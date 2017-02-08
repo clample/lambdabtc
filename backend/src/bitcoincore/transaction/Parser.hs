@@ -66,9 +66,9 @@ parseTxValue = do
   return $ Satoshis $ readInt val
 
 parseBlockLockTime :: Parsec Dec String ByteString
-parseBlockLockTime = do
-  bs <- switchEndian . Char8.pack <$> count 8 hexDigitChar
-  return bs
+parseBlockLockTime = 
+  switchEndian . Char8.pack <$> count 8 hexDigitChar
+  
 
 parseDerSignature :: Parsec Dec String Signature
 parseDerSignature = do
@@ -88,18 +88,18 @@ parseScript =
   Script <$> many parseScriptComponent
 
 parseScriptStep :: Script -> Parsec Dec String Script
-parseScriptStep (Script scriptArr) = do
+parseScriptStep (Script scriptArr) =
   undefined
   
 parseScriptComponent :: Parsec Dec String ScriptComponent
 parseScriptComponent = do
   code <- parseCount
-  if ( 0 < code && code < 76)
+  if 0 < code && code < 76
     then parseTxtComponent code
     else return $ OP $ toEnum code
 
 parseTxtComponent :: Int -> Parsec Dec String ScriptComponent
 parseTxtComponent numBytes = do
   let charsToParse = numBytes * 2
-  payload <- count (charsToParse) hexDigitChar
+  payload <- count charsToParse hexDigitChar
   return $ Txt $ Char8.pack payload

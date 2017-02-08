@@ -87,7 +87,7 @@ prop_transactionInvertible tx =
       (and $ zipWith compareOutputs (__outputs tx) (outputs parsedTx))
     compareInputs (utxoIn, privKey) (utxoParsed, compiledScript) = utxoIn == utxoParsed
     compareOutputs txOut (val, compiledScript) =
-      (value txOut == val)
+      value txOut == val
 
 scriptInvertible = testProperty
   "It should be possible to encode and decode a script"

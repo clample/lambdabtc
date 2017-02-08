@@ -26,7 +26,7 @@ putMessage message@(Message messageBody context) = do
   putHeader (Header
               (network context)
               (getCommand messageBody)
-              (BL.toStrict $ messageBS))
+              (BL.toStrict messageBS))
   messageBodyEncode
   where
     messageBS = runPut messageBodyEncode
@@ -62,7 +62,7 @@ putMessageBody (HeadersMessage blockHeaders) = do
   put (VarInt . length $ blockHeaders)
   mapM_ put blockHeaders
 
-putMessageBody (FilterloadMessage (filter) nHashFuncs (Tweak nTweak) nFlags) = do
+putMessageBody (FilterloadMessage filter nHashFuncs (Tweak nTweak) nFlags) = do
   put . VarInt . filterLengthBytes $ filter
   putByteString . serializeFilter $ filter
   putWord32le (fromIntegral nHashFuncs)

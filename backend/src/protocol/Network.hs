@@ -16,7 +16,7 @@ import Network.Socket ( socket
 data Peer = Peer Socket Addr
   deriving (Show, Eq)
 
-connectToPeer :: Int -> IO (Peer)
+connectToPeer :: Int -> IO Peer
 connectToPeer n = do
   addrInfo <- (!! n) <$> getAddrInfo Nothing (Just "testnet-seed.bitcoin.petertodd.org") (Just "18333")
   peerSocket <- socket (addrFamily addrInfo) Stream defaultProtocol

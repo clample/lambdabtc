@@ -95,14 +95,14 @@ encodeBlockHeader
     (Difficulty difficulty)
     (Nonce nonce)
     (TxCount (VarInt txCount))) =
-  (PersistentBlockHeader
+  PersistentBlockHeader
     blockVersion
     prevBlockHash
     merkleRoot
     (fromIntegral . floor $ timestamp)
     difficulty
     nonce
-    txCount)
+    txCount
 
 putBlockHeaderWithoutTxCount :: BlockHeader -> Put
 putBlockHeaderWithoutTxCount (BlockHeader version prevHash merkleRoot time difficulty nonce _) = do
@@ -216,11 +216,10 @@ getTxCount =
 -- We will assume that incoming headers are sorted [oldest ... newest]
 -- TODO: try take any order headers and sort them if needed
 verifyHeaders :: [BlockHeader] -> Bool
-verifyHeaders (newest:[]) = True
+verifyHeaders [newest] = True
 verifyHeaders (old:new:rest) =
-  if (hashBlock old == prevBlockHash new)
-  then verifyHeaders (new:rest)
-  else False
+  (hashBlock old == prevBlockHash new) &&
+  verifyHeaders (new:rest)
 
 instance Binary TxCount where
   put = putTxCount

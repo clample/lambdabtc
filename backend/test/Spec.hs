@@ -93,7 +93,7 @@ testWIFPrivateKey (input, expected) = assertEqual
  
 testDataWIFPrivateKey =
   ( Hex "0C28FCA386C7A227600B2FE50B7CAE11EC86D3BF1FBE471BE89827E19D72AA1D" -- INPUT DATA
-  , WIF $ "5HueCGU8rMjxEXxiPuD5BDku4MkFqeZyd4dZ1jvhTVqvbTLvyTJ" -- EXPECTED OUTPUT
+  , WIF "5HueCGU8rMjxEXxiPuD5BDku4MkFqeZyd4dZ1jvhTVqvbTLvyTJ" -- EXPECTED OUTPUT
   ) 
 
 optCodeScriptTest :: Assertion
@@ -106,7 +106,7 @@ optCodeScriptTest = assertEqual
 payToPubkeyHashTest :: Assertion
 payToPubkeyHashTest = assertEqual
   "payToPubkeyHash should have correct output"
-  (CompiledScript $ "76a914010966776006953d5567439e5e39f86a0d273bee88ac")
+  (CompiledScript "76a914010966776006953d5567439e5e39f86a0d273bee88ac")
   (payToPubkeyHash $ Uncompressed 
   "0450863AD64A87AE8A2FE83C1AF1A8403CB53F53E486D8511DAD8A04887E5B23522CD470243453A299FA9E77237716103ABC11A1DF38855ED6F2EE187E9C582BA6")
 
@@ -114,5 +114,5 @@ txValueTest :: Assertion
 txValueTest = assertEqual
   "txValue should be correctly rendered"
   -- Example taken from http://www.righto.com/2014/02/bitcoins-hard-way-using-raw-bitcoin.html#ref7
-  ("6264010000000000")
+  "6264010000000000"
   (txValue $ Satoshis 91234)

@@ -36,6 +36,6 @@ compile (Script script) = CompiledScript $ BS.concat $ map compileScriptComponen
 compileScriptComponent :: ScriptComponent -> ByteString
 compileScriptComponent (OP opcode) = T.encodeUtf8 $ hexify (fromIntegral . fromEnum $ opcode) 2
 compileScriptComponent (Txt bs) =
-   (payloadLength compiledTextComponent) `BS.append` compiledTextComponent
+   payloadLength compiledTextComponent `BS.append` compiledTextComponent
    where
      compiledTextComponent = bs
