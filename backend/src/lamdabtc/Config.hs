@@ -3,7 +3,7 @@
 
 module LamdaBTC.Config where
 
-import Control.Monad.Reader (ReaderT, runReaderT, MonadReader)
+import Control.Monad.Reader (ReaderT, MonadReader)
 import Control.Monad.IO.Class (MonadIO)
 import Web.Scotty.Trans (ActionT, Options(..))
 import qualified Data.Text.Lazy as LT
@@ -13,7 +13,7 @@ import Network.Wai.Handler.Warp (Settings, setPort, defaultSettings)
 import Data.Default (def)
 import Database.Persist.Sql (ConnectionPool)
 import Database.Persist.Sqlite (createSqlitePool)
-import Control.Monad.Logger (runNoLoggingT, runStdoutLoggingT)
+import Control.Monad.Logger (runStdoutLoggingT)
 
 
 data Config =
@@ -24,9 +24,9 @@ data Config =
 developmentConfig :: IO Config
 developmentConfig = do
   let env = Development
-  pool <- runStdoutLoggingT $
+  pool' <- runStdoutLoggingT $
     createSqlitePool "file:resources/sqlite3.db" (getConnectionSize env)
-  return $ Config Development 49535 pool
+  return $ Config Development 49535 pool'
 
 getConnectionSize :: Environment -> Int
 getConnectionSize Development = 1

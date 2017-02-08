@@ -12,6 +12,7 @@ cabal-version:       >=1.10
 
 library
   hs-source-dirs:      src
+  ghc-options:         -Wall
   exposed-modules:     BitcoinCore.Keys
                      , Persistence
                      , LamdaBTC.Server

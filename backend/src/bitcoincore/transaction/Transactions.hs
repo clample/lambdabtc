@@ -4,25 +4,19 @@ module BitcoinCore.Transaction.Transactions where
 
 import Util
 import BitcoinCore.Transaction.Script
-import Persistence
 import BitcoinCore.Keys
 
 import Prelude hiding (concat, reverse, sequence)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.ByteString.Char8 (pack)
-import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
-import Data.ByteString.Base16 (decode, encode)
-import Numeric (readHex, showHex)
-import Data.List (reverse)
+import Numeric (showHex)
 import Data.Maybe (fromJust)
-import Crypto.Hash (Digest, digestFromByteString, hashWith)
+import Crypto.Hash (hashWith)
 import Crypto.Hash.Algorithms (SHA256(..))
 import Crypto.PubKey.ECC.ECDSA (signWith, Signature(..), PrivateKey(..))
-import Data.ASN1.BinaryEncoding (DER(..))
-import Data.ASN1.Encoding (decodeASN1, encodeASN1)
-import Control.Lens (makeLenses, set, over, mapped, _3)
+import Control.Lens (makeLenses)
 
 
 data TxOutput = TxOutput
@@ -53,8 +47,8 @@ blockLockTime = pack $ replicate 8 '0'
 defaultVersion :: TxVersion 
 defaultVersion = "01000000" 
 
-count :: Int -> Count -- represents the input our output count
-count count = T.encodeUtf8 $ hexify (toInteger count) 2
+count :: Int -> Count -- represents the input or output count
+count c = T.encodeUtf8 $ hexify (toInteger c) 2
 
 outPoint :: UTXO -> ByteString
 outPoint utxo =
@@ -74,7 +68,7 @@ sequence :: ByteString
 sequence = pack $ replicate 8 'f'
 
 showTransaction :: Transaction -> ((UTXO, PrivateKey) -> CompiledScript) -> ByteString
-showTransaction tx@(Transaction inputs outputs txVersion) getScript = BS.concat
+showTransaction (Transaction inputs outputs txVersion) getScript = BS.concat
   [ txVersion
   , count (length inputs)
   , outPoint utxo
@@ -94,13 +88,13 @@ showTransaction tx@(Transaction inputs outputs txVersion) getScript = BS.concat
     CompiledScript payToPubKeyHashBS = payToPubkeyHash (pubKeyRep $ head outputs)
 
 signedTransaction :: Transaction -> ByteString
-signedTransaction tx@(Transaction inputs outputs txVersion) =
+signedTransaction tx@(Transaction _ _ txVersion) =
   showTransaction tx (\(_, privKey) -> scriptSig fillerTransaction privKey)
   where
     fillerTransaction =  showTransaction tx (\(utxo, _) -> getUtxoScript utxo) `BS.append` txVersion
 
 getUtxoScript :: UTXO -> CompiledScript -- Returns the output script from the given UTXO
-getUtxoScript utxo = CompiledScript "76a914010966776006953d5567439e5e39f86a0d273bee88ac"
+getUtxoScript _ = CompiledScript "76a914010966776006953d5567439e5e39f86a0d273bee88ac"
 
 -- TODO: Move this to Script.hs?
 scriptSig :: ByteString -> PrivateKey -> CompiledScript

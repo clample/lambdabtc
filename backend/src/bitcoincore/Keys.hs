@@ -23,8 +23,8 @@ import Persistence (KeySet(..))
 import Util
 
 import Prelude hiding (take, concat)
-import Data.ByteString (ByteString, append, take, concat)
-import Data.ByteString.Char8 (pack, unpack)
+import Data.ByteString (ByteString)
+import Data.ByteString.Char8 (unpack)
 import Crypto.PubKey.ECC.Types ( Curve
                                , getCurveByName
                                , Point(..)
@@ -33,15 +33,11 @@ import Crypto.PubKey.ECC.Generate (generate, generateQ)
 import Crypto.Hash.Algorithms (SHA256(..), RIPEMD160(..))
 import Crypto.PubKey.ECC.ECDSA ( PublicKey(..)
                                , PrivateKey(..))
-import Crypto.Hash (Digest, digestFromByteString, hashWith)
-import Numeric (showHex, readHex)
-import Data.Base58String.Bitcoin (Base58String, fromBytes, toBytes, toText)
-import Data.Word8 (Word8(..))
-import Data.ByteString.Base16 (decode, encode)
-import Data.Char (toUpper)
+import Crypto.Hash (hashWith)
+import Numeric (readHex)
+import Data.ByteString.Base16 (encode)
 import Control.Monad.IO.Class (liftIO)
 import qualified Data.Text as T
-import qualified Data.Text.Encoding as T
 
 data PublicKeyRep =
   Compressed T.Text
@@ -96,9 +92,13 @@ getPrivateKeyFromHex (Hex privateKeyHex) = PrivateKey curve privateNumber
     curve = getCurveByName SEC_p256k1
     privateNumber = fst . head . readHex . T.unpack $ privateKeyHex
 
+getPrivateKeyFromHex _ = error "getPrivateKeyFromHex: Unable to get private key"
+
 getWIFPrivateKey :: PrivateKeyRep -> PrivateKeyRep
 getWIFPrivateKey (Hex privateKey) =
   WIF $ encodeBase58Check privateKeyPrefix (Payload $ textToHexByteString privateKey)
+
+getWIFPrivateKey _ = error "getWIFPrivateKey: Unable to get WIF private key"
 
 getPrivateKeyFromWIF :: PrivateKeyRep -> PrivateKey
 getPrivateKeyFromWIF (WIF privateKeyWIF) = PrivateKey curve privateNumber
@@ -106,6 +106,8 @@ getPrivateKeyFromWIF (WIF privateKeyWIF) = PrivateKey curve privateNumber
     curve = getCurveByName SEC_p256k1
     privateNumber = (fst . head . readHex . unpack . encode) payload
     (_, Payload payload, _) = decodeBase58Check privateKeyWIF
+
+getPrivateKeyFromWIF _ = error "getPrivateKeyFromWIF: Unable to get private key"
 
 
 pubKeyHash :: PublicKeyRep -> ByteString
@@ -132,12 +134,12 @@ uncompressed pubKey =
 -- https://github.com/bitcoinbook/bitcoinbook/blob/first_edition/ch04.asciidoc#compressed-public-keys
 compressed :: PublicKey -> PublicKeyRep
 compressed pubKey =
-  Compressed $  prefix `T.append` hexify x 64
+  Compressed $  prfx `T.append` hexify x 64
   where
     Point x y = public_q pubKey
-    prefix = if isEven y
-               then "02"
-               else "03"
+    prfx = if isEven y
+           then "02"
+           else "03"
     isEven n = n `mod` 2 == 0
 
 addressPrefix :: Prefix

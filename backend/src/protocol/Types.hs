@@ -5,18 +5,17 @@ module Protocol.Types where
 import BitcoinCore.BlockHeaders (BlockHash(..), BlockHeader(..))
 import BitcoinCore.BloomFilter (Filter(..), Tweak(..), NFlags(..))
 import BitcoinCore.Inventory (InventoryVector(..))
-import Util (VarInt(..))
 
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as Char8
-import Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
+import Data.Time.Clock.POSIX (POSIXTime)
 import Control.Lens (over, _2, mapped)
 import Data.Maybe (fromJust, fromMaybe)
 import Data.Char (toUpper)
 import Data.Tuple (swap)
 import Data.ByteString.Base16 (decode, encode)
-import Data.Binary.Get (Get(..), getByteString)
+import Data.Binary.Get (Get, getByteString)
 
 data Addr = Addr IP Port
   deriving (Show, Eq)
@@ -126,6 +125,7 @@ networkTable =
 printNetwork :: Network -> ByteString
 printNetwork = fromJust . flip lookup networkTable
 
+getNetwork' :: Network -> ByteString
 getNetwork' = fst . decode . printNetwork
 
 readNetwork :: ByteString -> Maybe Network

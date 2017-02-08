@@ -4,29 +4,46 @@
 module Protocol.Server where
 
 import Protocol.Parser (parseMessage)
-import Protocol.Messages (getAddr, putMessage)
-import Protocol.Types (Network(..), Addr(..), MessageContext(..), Message(..), MessageBody(..), genesisHash)
+import Protocol.Messages (putMessage)
+import Protocol.Types ( Network(..)
+                      , Addr(..)
+                      , MessageContext(..)
+                      , Message(..)
+                      , MessageBody(..))
 import Protocol.Network (Peer(..), connectToPeer)
 import BitcoinCore.BlockHeaders (BlockHash(..), encodeBlockHeader)
-import BitcoinCore.BlockHeaders (BlockHeader(..), decodeBlockHeader, hashBlock, genesisBlockTestnet, verifyHeaders)
-import BitcoinCore.BloomFilter (pDefault, blankFilter, updateFilter, numberHashFunctions, filterSize, hardcodedTweak, NFlags(..))
-import LamdaBTC.Config (ConfigM(..), Config(..), developmentConfig)
+import BitcoinCore.BlockHeaders ( BlockHeader(..)
+                                , decodeBlockHeader
+                                , hashBlock
+                                , genesisBlockTestnet
+                                , verifyHeaders)
+import BitcoinCore.BloomFilter ( pDefault
+                               , blankFilter
+                               , updateFilter
+                               , numberHashFunctions
+                               , filterSize
+                               , hardcodedTweak
+                               , NFlags(..))
+import LamdaBTC.Config (ConfigM(..), Config(..))
 import Persistence (runDB, PersistentBlockHeader(..))
 
 import Network.Socket (Socket)
 import Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
-import Control.Monad.State.Lazy (StateT(..), runStateT, liftIO, get, gets)
+import Control.Monad.State.Lazy (StateT(..), runStateT, liftIO)
 import Control.Monad.Reader (runReaderT, ask)
 import qualified Control.Monad.State.Lazy as State
 import System.Random (randomR, StdGen, getStdGen)
-import Conduit (Producer(..), runConduit, (.|), mapC, mapMC)
-import Data.Conduit.Combinators (encodeBase16, stdout)
+import Conduit (Producer, runConduit, (.|), mapC, mapMC)
 import Data.Conduit.Network (sourceSocket, sinkSocket)
 import Data.Conduit.Serialization.Binary (conduitGet, conduitPut)
-import Data.Conduit.TMChan (sourceTBMChan, sinkTBMChan, newTBMChan, TBMChan, writeTBMChan, readTBMChan)
-import Control.Concurrent.STM (atomically, STM(..))
+import Data.Conduit.TMChan ( sourceTBMChan
+                           , sinkTBMChan
+                           , newTBMChan
+                           , TBMChan
+                           , writeTBMChan
+                           , readTBMChan)
+import Control.Concurrent.STM (atomically)
 import Control.Concurrent (forkIO)
-import Data.Binary.Put (runPut)
 import Data.Binary (Binary(..))
 import Data.ByteString.Base16 (decode)
 import Database.Persist.Sql (insertMany_, count, runSqlPool, Filter, toSqlKey, insert_)

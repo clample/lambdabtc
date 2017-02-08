@@ -5,7 +5,7 @@ import qualified Data.ByteString as BS
 import Data.ByteString.Base16 (encode)
 import Data.Binary (Binary(..))
 import Data.Binary.Put (Put, putWord32le, putByteString)
-import Data.Binary.Get (Get(..), getWord32le, getByteString)
+import Data.Binary.Get (Get, getWord32le, getByteString)
 
 data InventoryVector =
   InventoryVector ObjectType ObjectHash

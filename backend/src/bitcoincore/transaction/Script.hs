@@ -7,13 +7,9 @@ import BitcoinCore.Keys
 
 import Prelude hiding (concat, reverse, sequence)
 import qualified  Data.ByteString as BS
-import Data.ByteString (ByteString) 
-import Data.ByteString.Char8 (pack)
-import qualified Data.Text as T
+import Data.ByteString (ByteString)
 import qualified Data.Text.Encoding as T
-import Data.ByteString.Base16 (decode, encode)
-import Numeric (readHex)
-import Data.List (reverse)
+import Data.ByteString.Base16 (encode)
 
 data Script = Script [ ScriptComponent ]
   deriving (Eq, Show)

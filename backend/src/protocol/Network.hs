@@ -4,17 +4,11 @@ import Protocol.Types (Addr(..))
 import Protocol.Messages (getAddr)
 
 import Network.Socket ( socket
-                      , Family(..)
                       , SocketType(..)
                       , defaultProtocol
                       , connect
-                      , SockAddr(..)
-                      , tupleToHostAddress
                       , getAddrInfo
                       , AddrInfo(..)
-                      , iNADDR_ANY
-                      , defaultHints
-                      , AddrInfoFlag(..)
                       , setSocketOption
                       , SocketOption(..)
                       , Socket)

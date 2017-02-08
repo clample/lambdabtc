@@ -1,14 +1,13 @@
 module BitcoinCore.Transaction.Parser where
 
 import Util (switchEndian, readInt, parseCount, parsePayload)
-import BitcoinCore.Transaction.Transactions (Transaction(..), TxVersion,  UTXO(..), TxOutput(..))
+import BitcoinCore.Transaction.Transactions (TxVersion, UTXO(..))
 import BitcoinCore.Transaction.Script (Value(..), CompiledScript(..), ScriptComponent(..), Script(..))
 
 import Text.Megaparsec (Parsec, Dec, count, hexDigitChar, eof, many)
 import qualified Data.ByteString.Char8 as Char8
 import Data.ByteString (ByteString)
-import Numeric (readHex)
-import Crypto.PubKey.ECC.ECDSA (signWith, Signature(..))
+import Crypto.PubKey.ECC.ECDSA (Signature(..))
 
 data ParsedTransaction = ParsedTransaction
   { txVersion :: TxVersion 
@@ -52,8 +51,8 @@ parseOutput = do
 parseOutPoint :: Parsec Dec String UTXO
 parseOutPoint = do
   txHash <- switchEndian . Char8.pack <$> count 64 hexDigitChar
-  outIndex <- switchEndian . Char8.pack <$> count 8 hexDigitChar
-  let parsedIndex = read . Char8.unpack $ outIndex
+  outIndex' <- switchEndian . Char8.pack <$> count 8 hexDigitChar
+  let parsedIndex = read . Char8.unpack $ outIndex'
   return $ UTXO txHash parsedIndex
 
 parseSequence :: Parsec Dec String ByteString

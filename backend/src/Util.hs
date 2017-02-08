@@ -25,24 +25,21 @@ module Util
 import Prelude hiding (take)
 
 import Data.Maybe (listToMaybe)
-import Data.ByteString (ByteString)
+import Data.ByteString (ByteString, take)
+import Data.ByteString.Base16 (decode, encode)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as Char8
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
-import Data.Base58String.Bitcoin (Base58String, fromBytes, toBytes, toText, fromText)
-import Crypto.Hash.Algorithms (SHA256(..), RIPEMD160(..))
-import Crypto.Hash (Digest(..), digestFromByteString, hashWith)
-import qualified Data.ByteString as BS
-import Data.ByteString (ByteString, take)
-import qualified Data.ByteString.Char8 as Char8
-import Data.ByteString.Base16 (decode, encode)
+import Data.Base58String.Bitcoin (fromBytes, toBytes, toText, fromText)
+import Crypto.Hash.Algorithms (SHA256(..))
+import Crypto.Hash (hashWith)
 import Numeric (showHex, readHex)
 import Text.Megaparsec (Parsec, Dec, count, hexDigitChar)
-import Data.Word (Word32)
 import Data.ByteArray (convert)
 import Data.Binary (Binary(..))
-import Data.Binary.Get(Get(..), getWord8, getWord16le, getWord32le, getWord64le)
-import Data.Binary.Put (Put(..), putWord8, putWord16le, putWord32le, putWord64le)
-import Data.Memory.Endian (getSystemEndianness, Endianness(..)) 
+import Data.Binary.Get(Get, getWord8, getWord16le, getWord32le, getWord64le)
+import Data.Binary.Put (Put, putWord8, putWord16le, putWord32le, putWord64le)
 
 data Payload = Payload ByteString
   deriving (Show, Eq)
@@ -79,10 +76,10 @@ encodeBase58Check (Prefix prefix) (Payload payload) =
 
 -- all components are binary encoded rather than hex
 decodeBase58Check :: T.Text -> (Prefix, Payload, CheckSum)
-decodeBase58Check b58 = (Prefix prefix, Payload payload, CheckSum checksum)
+decodeBase58Check b58 = (Prefix pre, Payload payload, CheckSum checksum)
   where
     content = (toBytes . fromText) b58
-    prefix = (BS.singleton . BS.head) content
+    pre = (BS.singleton . BS.head) content
     withoutPrefix = BS.drop 1 content
     (payload, checksum) = BS.splitAt (BS.length content - 5) withoutPrefix
 
@@ -124,9 +121,8 @@ readInt = fst . head . readHex . Char8.unpack
 
 parsePayload :: Parsec Dec String ByteString
 parsePayload = do
-  length <- parseCount
-  payload <- count (length * 2) hexDigitChar
-    -- * 2 because we are parsing hex characters but the length is in bytes
+  lengthBytes <- parseCount
+  payload <- count (lengthBytes * 2) hexDigitChar
   return $ Char8.pack payload
 
 parseCount :: Parsec Dec String Int
@@ -163,6 +159,7 @@ getVarInt = do
       | firstByte == 0xFD = fromIntegral <$> getWord16le
       | firstByte == 0xFE = fromIntegral <$> getWord32le 
       | firstByte == 0xFF = fromIntegral <$> getWord64le
+      | otherwise = error "Unable to parse VarInd. This should not happen"
 
 putVarInt :: VarInt -> Put
 putVarInt (VarInt i)

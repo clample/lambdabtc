@@ -16,6 +16,7 @@ instance Enum OPCODE where
   fromEnum = fromJust . flip lookup opcodeTable
   toEnum = fromJust . flip lookup (map swap opcodeTable)
 
+opcodeTable :: [(OPCODE, Int)]
 opcodeTable =
   [ (OP_DUP, 118)
   , (OP_HASH160, 169)

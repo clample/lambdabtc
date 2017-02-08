@@ -9,17 +9,12 @@ module Persistence where
 import LamdaBTC.Config (ConfigM, Config(..))
 
 import Data.Text (Text)
-import Database.Persist
-import Database.Persist.Sqlite (runSqlite, runMigration)
+import Database.Persist.Sqlite (runMigration)
 import Database.Persist.TH (mkPersist, mkMigrate, persistLowerCase,
                             share, sqlSettings)
-import Database.Persist.Sql ( rawQuery
-                            , insert
-                            , SqlPersistT
+import Database.Persist.Sql ( SqlPersistT
                             , runSqlPool
                             , runSqlPersistMPool)
-import Data.Conduit (($$))
-import Data.Conduit.List as CL
 import Control.Monad.IO.Class (liftIO, MonadIO)
 import Control.Monad.Trans.Class (MonadTrans, lift)
 import Control.Monad.Reader (asks)

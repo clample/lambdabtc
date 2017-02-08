@@ -15,11 +15,7 @@ import Network.HTTP.Types.Status (internalServerError500, ok200, badRequest400)
 import Data.Aeson ( object
                   , (.=)
                   , Value (Null)
-                  , FromJSON
-                  , ToJSON
-                  , toEncoding
-                  , genericToEncoding
-                  , defaultOptions)
+                  , FromJSON)
 import Web.Scotty.Trans (status, showError, json, jsonData)
 import GHC.Generics
 import Util (maybeRead)
@@ -52,12 +48,12 @@ postFundRequestsH = do
       Hex privKeyText = getHexPrivateKey privKey
       address@(Address addressText) = getAddress compressedPub
   fundRequestRaw <- jsonData
-  let either = validateFundRequest address fundRequestRaw
+  let eitherFundRequest = validateFundRequest address fundRequestRaw
       keyset = KeySet addressText privKeyText pubKeyText
-  case either of
-    Left error -> do
+  case eitherFundRequest of
+    Left errorMessage -> do
       status badRequest400
-      json $ object ["error" .= showError error]
+      json $ object ["error" .= showError errorMessage]
     Right fundRequest -> do
       runDB (insert_ keyset)
       runDB (insert_ fundRequest)
@@ -78,7 +74,7 @@ data FundRequestRaw = FundRequestRaw
 instance FromJSON FundRequestRaw
 
 validateFundRequest :: Address -> FundRequestRaw -> Either Error FundRequest
-validateFundRequest (Address address) fundRequestRaw@(FundRequestRaw labelR messageR amountR) =
+validateFundRequest (Address address) (FundRequestRaw labelR messageR amountR) =
   let
     ma :: Maybe Double
     ma = maybeRead amountR

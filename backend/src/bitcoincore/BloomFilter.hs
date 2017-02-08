@@ -21,7 +21,7 @@ import Data.Hash.Murmur (murmur3)
 import Data.Word (Word32)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
-import Data.ByteString.Base16 (encode, decode)
+import Data.ByteString.Base16 (encode)
 import Data.Bits (setBit, shiftR, shiftL, (.|.))
 import Data.List (unfoldr)
 
@@ -95,8 +95,8 @@ numberHashFunctions s n = min calculatedHashFunctions maxHashFuncs
   where calculatedHashFunctions = floor $ ((fromIntegral s) * 8 * log 2) / (fromIntegral n)
 
 updateFilter :: Int -> Tweak -> ByteString -> Filter -> Filter
-updateFilter numberHashes tweak hashData filter =
-  foldl (\f updateFunc -> updateFunc f) filter updateFuncs
+updateFilter numberHashes tweak hashData fltr =
+  foldl (\fltr' updateFunc -> updateFunc fltr') fltr updateFuncs
   where
     updateFuncs = map
       (\hashNum -> updateFilterStep hashNum tweak hashData)
