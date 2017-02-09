@@ -12,6 +12,7 @@ import BitcoinCore.Transaction.Transactions
 import Crypto.PubKey.ECC.ECDSA (PublicKey(..), PrivateKey(..))
 import Crypto.PubKey.ECC.Types (Curve, getCurveByName, Point(..), CurveName(SEC_p256k1))
 import Data.ByteString (length)
+import qualified Data.ByteString.Lazy as BL
 import Data.Base58String.Bitcoin (Base58String, toText, fromBytes, toBytes, b58String, fromText)
 import qualified Data.Text as T
 import Data.ByteString.Base16 (decode, encode)
@@ -19,6 +20,7 @@ import KeyTest
 import TransactionTest
 import MessageTest
 import BlockHeaderTest
+import Data.Binary.Put (runPut)
 
 main :: IO ()
 main = defaultMain tests
@@ -37,9 +39,7 @@ tests =
       testCase "optcode only script test"
         optCodeScriptTest,
       testCase "payToPubkeyHash test"
-        payToPubkeyHashTest,
-      testCase "txValue test"
-        txValueTest
+        payToPubkeyHashTest
       ],
     testGroup "QuickCheck Key Tests" [
       privateKeyInvertibleHex,
@@ -50,9 +50,7 @@ tests =
       base58CheckInvertible
       ],
     testGroup "QuickCheck Transaction Tests" [
-      derSignatureInvertible,
-      transactionInvertible,
-      scriptInvertible
+      transactionInvertible
       ],
     testGroup "QuickCheck Message Tests" [
       messageInvertible
@@ -96,23 +94,18 @@ testDataWIFPrivateKey =
   , WIF "5HueCGU8rMjxEXxiPuD5BDku4MkFqeZyd4dZ1jvhTVqvbTLvyTJ" -- EXPECTED OUTPUT
   ) 
 
+
 optCodeScriptTest :: Assertion
 optCodeScriptTest = assertEqual
   "Simple script should compile correctly"
-  (CompiledScript "76a988ac")
+  (fst . decode $ "76a988ac")
   -- expected output from https://en.bitcoin.it/wiki/Script
-  (compile $ Script [OP OP_DUP, OP OP_HASH160, OP OP_EQUALVERIFY, OP OP_CHECKSIG])
+  (BL.toStrict . runPut . putScript $ Script [OP OP_DUP, OP OP_HASH160, OP OP_EQUALVERIFY, OP OP_CHECKSIG])
 
 payToPubkeyHashTest :: Assertion
 payToPubkeyHashTest = assertEqual
   "payToPubkeyHash should have correct output"
-  (CompiledScript "76a914010966776006953d5567439e5e39f86a0d273bee88ac")
-  (payToPubkeyHash $ Uncompressed 
+  (fst . decode $ "76a914010966776006953d5567439e5e39f86a0d273bee88ac")
+  (BL.toStrict . runPut . putScript . payToPubkeyHash $ Uncompressed 
   "0450863AD64A87AE8A2FE83C1AF1A8403CB53F53E486D8511DAD8A04887E5B23522CD470243453A299FA9E77237716103ABC11A1DF38855ED6F2EE187E9C582BA6")
 
-txValueTest :: Assertion
-txValueTest = assertEqual
-  "txValue should be correctly rendered"
-  -- Example taken from http://www.righto.com/2014/02/bitcoins-hard-way-using-raw-bitcoin.html#ref7
-  "6264010000000000"
-  (txValue $ Satoshis 91234)

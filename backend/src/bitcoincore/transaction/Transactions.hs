@@ -4,98 +4,151 @@ module BitcoinCore.Transaction.Transactions where
 
 import General.Util
 import BitcoinCore.Transaction.Script
-import BitcoinCore.Keys
 
 import Prelude hiding (concat, reverse, sequence)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
-import Data.ByteString.Char8 (pack)
-import qualified Data.Text.Encoding as T
-import Numeric (showHex)
-import Data.Maybe (fromJust)
 import Crypto.Hash (hashWith)
 import Crypto.Hash.Algorithms (SHA256(..))
 import Crypto.PubKey.ECC.ECDSA (signWith, Signature(..), PrivateKey(..))
-import Control.Lens (makeLenses)
+import Control.Lens (makeLenses, (^.))
+import Data.Binary.Put (Put, putWord8, putWord32le, putWord64le, putByteString)
+import Data.Binary (Binary(..))
+
+newtype TxVersion = TxVersion Int
+  deriving (Eq, Show)
+
+newtype TxHash = TxHash ByteString
+  deriving (Eq, Show)
+
+newtype TxIndex = TxIndex Int
+  deriving (Eq, Show)
 
 
 data TxOutput = TxOutput
-  { value :: Value
-  , pubKeyRep :: PublicKeyRep
+  { _value :: Value
+  , _outputScript :: Script
   } deriving (Eq, Show)
 
-type TxVersion = ByteString
-
-type Count = ByteString
+makeLenses ''TxOutput
 
 data UTXO = UTXO
-  { outTxHash :: ByteString
-  , outIndex :: Int
+  { _outTxHash :: TxHash
+  , _outIndex :: TxIndex
   } deriving (Eq, Show)
 
+makeLenses ''UTXO
+
+data TxInput = TxInput
+  { _utxo :: UTXO
+  , _signatureScript :: Script
+  } deriving (Eq, Show)
+
+makeLenses ''TxInput
+
 data Transaction = Transaction
-  { __inputs :: [(UTXO, PrivateKey)]
-  , __outputs :: [TxOutput]
-  , __version :: TxVersion
+  { _inputs :: [TxInput]
+  , _outputs :: [TxOutput]
+  , _txVersion :: TxVersion
   } deriving (Eq, Show)
 
 makeLenses ''Transaction
 
-blockLockTime :: ByteString 
-blockLockTime = pack $ replicate 8 '0'
+putBlockLockTime :: Put
+putBlockLockTime =
+  putWord32le 0x00000000
 
 defaultVersion :: TxVersion 
-defaultVersion = "01000000" 
+defaultVersion = TxVersion 1
 
-count :: Int -> Count -- represents the input or output count
-count c = T.encodeUtf8 $ hexify (toInteger c) 2
+putOutPoint :: UTXO -> Put
+putOutPoint utxo = do
+  putTxHash (utxo^.outTxHash)
+  let TxIndex i = utxo^.outIndex
+  putWord32le . fromIntegral $ i
 
-outPoint :: UTXO -> ByteString
-outPoint utxo =
-  switchEndian (outTxHash utxo)
-  -- 32 Bytes, little endian
-  -- http://www.righto.com/2014/02/bitcoins-hard-way-using-raw-bitcoin.html#ref7
-  `BS.append`
-  (switchEndian . T.encodeUtf8 $ hexify  (toInteger $ outIndex utxo) 8)
-  -- 4 Bytes, pretty sure this is little endian as well
-  -- (see: http://bitcoin.stackexchange.com/questions/3374/how-to-redeem-a-basic-tx)
+putTxHash :: TxHash -> Put
+putTxHash (TxHash hash) =
+  putByteString . BS.reverse $ hash
 
-txValue :: Value -> ByteString
-txValue (Satoshis i) =  switchEndian . T.encodeUtf8 $ hexify (toInteger i) 16
-  -- littleEndian, 8 bytes
+putTxValue :: Value -> Put
+putTxValue (Satoshis i) =
+  putWord64le . fromIntegral $ i
 
-sequence :: ByteString
-sequence = pack $ replicate 8 'f'
+putTxVersion :: TxVersion -> Put
+putTxVersion (TxVersion v) =
+  putWord32le . fromIntegral $ v
 
-showTransaction :: Transaction -> ((UTXO, PrivateKey) -> CompiledScript) -> ByteString
-showTransaction (Transaction inputs outputs txVersion) getScript = BS.concat
-  [ txVersion
-  , count (length inputs)
-  , outPoint utxo
-  , payloadLength inputScript
-  , inputScript
-  , sequence
-  , count (length outputs)
-  , txValue val
-  , payloadLength payToPubKeyHashBS
-  , payToPubKeyHashBS
-  , blockLockTime
-  ]
-  where
-    CompiledScript inputScript = getScript $ head inputs
-    (utxo, _) = head inputs
-    val = value $ head outputs
-    CompiledScript payToPubKeyHashBS = payToPubkeyHash (pubKeyRep $ head outputs)
+putSequence :: Put
+putSequence =
+  putWord32le 0xffffffff
 
-signedTransaction :: Transaction -> ByteString
+putTxInput :: TxInput -> Put
+putTxInput txInput = do
+  putOutPoint (txInput^.utxo)
+  putWithLength
+    (putScript (txInput^.signatureScript))
+  putSequence
+
+putTxOutput :: TxOutput -> Put
+putTxOutput txOutput = do
+  putTxValue (txOutput^.value)
+  putWithLength
+    (putScript (txOutput^.outputScript))
+
+putTransaction :: Transaction -> Put
+putTransaction (Transaction inputs outputs txVersion) = do
+  putTxVersion txVersion
+  put . VarInt . fromIntegral . length $ inputs
+  mapM_ putTxInput inputs
+  put . VarInt . fromIntegral . length $ outputs
+  mapM_ putTxOutput outputs
+  putBlockLockTime
+
+putDerSignature :: Signature -> Put
+putDerSignature signature = do
+  putWord8 30
+  putWithLength $ do
+    putWord8 2
+    putWithLength (
+      putByteString
+      . BS.reverse
+        -- TODO: Is this being put with correct endian?
+      . unroll
+      . sign_r
+      $ signature)
+    putWord8 2
+    putWithLength (
+      putByteString
+      . BS.reverse
+        -- TODO: Is this being put with correct endian?
+      . unroll
+      . sign_s
+      $ signature)
+
+putSighashAll :: Put
+putSighashAll =
+  putWord8 1
+
+
+{--
+signedTransaction :: Transaction -> Put
 signedTransaction tx@(Transaction _ _ txVersion) =
-  showTransaction tx (\(_, privKey) -> scriptSig fillerTransaction privKey)
+  putTransaction tx (\(_, privKey) -> scriptSig fillerTransaction privKey)
   where
-    fillerTransaction =  showTransaction tx (\(utxo, _) -> getUtxoScript utxo) `BS.append` txVersion
+    fillerTransaction = do
+      putTransaction tx (\(utxo, _) -> getUtxoScript utxo)
+      putTxVersion defaultVersion
+--}
 
+
+{--
 getUtxoScript :: UTXO -> CompiledScript -- Returns the output script from the given UTXO
 getUtxoScript _ = CompiledScript "76a914010966776006953d5567439e5e39f86a0d273bee88ac"
+--}
 
+
+{--
 -- TODO: Move this to Script.hs?
 scriptSig :: ByteString -> PrivateKey -> CompiledScript
 scriptSig rawTx privKey =
@@ -116,36 +169,4 @@ scriptSig rawTx privKey =
   Compressed publicKeyText = compressed . getPubKey $ privKey
   publicKeyBS = T.encodeUtf8 publicKeyText
   publicKeyBSLength = payloadLength publicKeyBS
-  
-  
--- TODO: Try to use https://hackage.haskell.org/package/asn1-encoding
--- instead of implementing this on my own.
--- Maybe I can make Signature an instance of ASN1Decoding/Encoding  
-derSignature :: Signature -> ByteString
-derSignature signature = BS.concat
-  [ sequenceCode
-  , payloadLength sequenceBS
-  , sequenceBS
-  ]
-  where
-    sequenceBS = BS.concat
-      [ intCode
-      , payloadLength xBS
-      , xBS
-      , intCode
-      , payloadLength yBS
-      , yBS ]
-    intCode = "02"
-    sequenceCode = "30"
-    xBS = pack $ showPaddedHex (sign_r signature)
-    yBS = pack $ showPaddedHex (sign_s signature)
-    showPaddedHex i =
-      case length str `mod` 2 of
-        0 -> str
-        1 -> "0" ++ str
-      where str = showHex i ""
-      -- There is probably a better way than
-      -- reading to hex then to binary
-    
-sighashAll :: ByteString
-sighashAll = "01"
+--}

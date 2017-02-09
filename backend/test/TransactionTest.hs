@@ -1,16 +1,23 @@
 module TransactionTest where
 
 import BitcoinCore.Transaction.Transactions
-import KeyTest 
-import BitcoinCore.Keys (compressed)
-import BitcoinCore.Transaction.Script (Value(..), Script(..), ScriptComponent(..), CompiledScript(..), compile)
-import BitcoinCore.Transaction.Optcodes (OPCODE(..), opcodeTable)
-import Crypto.PubKey.ECC.ECDSA (Signature(..))
-import Text.Megaparsec (runParser, parseMaybe)
-import BitcoinCore.Transaction.Parser (parseDerSignature, parseTransaction, ParsedTransaction(..), parseScript)
-import qualified Data.ByteString.Char8 as Char8
-import Data.ByteString (ByteString)
+import BitcoinCore.Transaction.Parser
+import KeyTest()
 import TestUtil
+import BitcoinCore.Keys (compressed)
+import BitcoinCore.Transaction.Script (Value(..), Script(..), ScriptComponent(..))
+import BitcoinCore.Transaction.Optcodes (OPCODE(..), opcodeTable)
+import BitcoinCore.Transaction.Parser ()
+
+import qualified Data.ByteString as BS
+import Crypto.PubKey.ECC.ECDSA (Signature(..))
+import Text.Megaparsec (parseMaybe)
+import qualified Data.ByteString.Char8 as Char8
+import Control.Lens ((^.))
+import TestUtil
+import Data.Binary.Get (runGet)
+import Data.Binary.Put (runPut)
+
 
 instance Arbitrary Signature where
   arbitrary = do
@@ -20,9 +27,11 @@ instance Arbitrary Signature where
 
 instance Arbitrary UTXO where
   arbitrary = do
-    hash <- hexBS 64
-    index <- choose (0, 9)
-    return $ UTXO hash index
+    hash <- TxHash . BS.pack <$> vectorOf 32 arbitrary
+    index <- TxIndex <$> choose (0, 0xffffffff)
+    return UTXO
+      { _outTxHash = hash
+      , _outIndex = index }
 
 instance Arbitrary Value where
   arbitrary = Satoshis <$> arbitrary `suchThat` (> 0)
@@ -30,15 +39,31 @@ instance Arbitrary Value where
 instance Arbitrary TxOutput where
   arbitrary = do
     value <- arbitrary
-    pubKeyRep <- compressed <$> arbitrary
-    return $ TxOutput value pubKeyRep
+    script <- arbitrary
+    return TxOutput
+      { _value = value
+      , _outputScript = script }
+
+instance Arbitrary TxInput where
+  arbitrary = do
+    utxo' <- arbitrary
+    script <- arbitrary
+    return TxInput
+      { _utxo = utxo'
+      , _signatureScript = script }
+
+instance Arbitrary TxVersion where
+  arbitrary = TxVersion <$> choose (0, 0xffffffff)
 
 instance Arbitrary Transaction where
   arbitrary = do
-    utxo <- arbitrary
-    privKey <- arbitrary
-    txOutput <- arbitrary
-    return $ Transaction [(utxo, privKey)] [txOutput] defaultVersion
+    inputs' <- arbitrary
+    outputs' <- arbitrary
+    txVersion' <- arbitrary
+    return Transaction
+      { _inputs = inputs'
+      , _outputs = outputs'
+      , _txVersion = txVersion' }
 
 instance Arbitrary OPCODE where
   arbitrary = do
@@ -49,56 +74,19 @@ instance Arbitrary ScriptComponent where
   arbitrary = oneof [genTxt, genOp]
     where
       genTxt = do
-        txtLength <- arbitrary `suchThat` (\n -> 1 <= n && n <= 75)
-        Txt <$> hexBS (2 * txtLength)
+        txtLength <- choose (1, 75)
+        Txt . BS.pack <$> vectorOf txtLength arbitrary
       genOp = OP <$> arbitrary
 
 instance Arbitrary Script where
   arbitrary = Script <$> listOf arbitrary
-    
-derSignatureInvertible = testProperty
-  "It should be possible to encode and decode a signature through DER"
-  prop_derSignatureInvertible
-
-prop_derSignatureInvertible :: Signature -> Bool
-prop_derSignatureInvertible sig = 
-  case eitherSig of
-    Nothing -> False
-    Just parsedSig -> sig == parsedSig
-  where
-    derString = Char8.unpack . derSignature $ sig
-    eitherSig = parseMaybe parseDerSignature derString
 
 transactionInvertible = testProperty
-  "It should be possible to encode and decode a transaction"
+  "It should be possible to encode and decode transactions"
   prop_transactionInvertible
 
 prop_transactionInvertible :: Transaction -> Bool
 prop_transactionInvertible tx =
-  case eitherTx of
-    Nothing -> False
-    Just parsedTx -> compareTransactions parsedTx
+  tx == parsedTx
   where
-    txString = Char8.unpack . signedTransaction $ tx
-    eitherTx = parseMaybe parseTransaction txString
-    compareTransactions parsedTx =
-      (txVersion parsedTx == __version tx) &&
-      (and $ zipWith compareInputs (__inputs tx) (inputs parsedTx)) &&
-      (and $ zipWith compareOutputs (__outputs tx) (outputs parsedTx))
-    compareInputs (utxoIn, privKey) (utxoParsed, compiledScript) = utxoIn == utxoParsed
-    compareOutputs txOut (val, compiledScript) =
-      value txOut == val
-
-scriptInvertible = testProperty
-  "It should be possible to encode and decode a script"
-  prop_scriptInvertible
-
-prop_scriptInvertible :: Script -> Bool
-prop_scriptInvertible script =
-  case eitherScript of
-    Nothing -> False
-    Just parsedScript -> parsedScript == script
-  where
-    eitherScript = parseMaybe parseScript scriptString
-    scriptString = Char8.unpack scriptBS
-    CompiledScript scriptBS = compile script 
+    parsedTx = runGet getTransaction (runPut . putTransaction $ tx)

@@ -1,105 +1,83 @@
 module BitcoinCore.Transaction.Parser where
 
-import General.Util (switchEndian, readInt, parseCount, parsePayload)
-import BitcoinCore.Transaction.Transactions (TxVersion, UTXO(..))
-import BitcoinCore.Transaction.Script (Value(..), CompiledScript(..), ScriptComponent(..), Script(..))
+import BitcoinCore.Transaction.Transactions (TxVersion(..), UTXO(..), TxHash(..), TxIndex(..), Transaction(..), TxOutput(..), TxInput(..))
+import BitcoinCore.Transaction.Script (Value(..),  ScriptComponent(..), Script(..), getScript)
+import General.Util (VarInt(..), roll)
 
-import Text.Megaparsec (Parsec, Dec, count, hexDigitChar, eof, many)
-import qualified Data.ByteString.Char8 as Char8
 import Data.ByteString (ByteString)
 import Crypto.PubKey.ECC.ECDSA (Signature(..))
+import Data.Binary (Binary(..))
+import Data.Binary.Get (Get, getWord32le, getByteString, getWord64le, getWord8)
+import qualified Data.ByteString as BS
+import Control.Monad (replicateM)
 
-data ParsedTransaction = ParsedTransaction
-  { txVersion :: TxVersion 
-  , inputs :: [(UTXO, CompiledScript)]
-  , outputs :: [(Value, CompiledScript)]
-  } deriving (Eq, Show)
+getTransaction :: Get Transaction
+getTransaction = do
+  v <- getVersion 
+  VarInt inputCount <- get
+  inputArray <- replicateM inputCount getInput
+  VarInt outputCount <- get
+  outputArray <- replicateM outputCount getOutput
+  getBlockLockTime
+  return Transaction
+    { _inputs = inputArray
+    , _outputs = outputArray
+    , _txVersion = v }
 
-parseTransaction :: Parsec Dec String ParsedTransaction
-parseTransaction = do
-  v <- parseVersion
-  inputCount <- parseCount
-  inputArray <- count inputCount parseInput
-  parseSequence
-  outputCount <- parseCount
-  outputArray <- count outputCount parseOutput
-  parseBlockLockTime
-  eof
-  return ParsedTransaction
-    { txVersion = v
-    , inputs = inputArray
-    , outputs =  outputArray}
-    
-
-parseVersion :: Parsec Dec String TxVersion
-parseVersion = do
-  version <- count 8 hexDigitChar
-  return $ Char8.pack version
-
-parseInput :: Parsec Dec String (UTXO, CompiledScript)
-parseInput = do
-  outPoint <- parseOutPoint
-  inputScript <- parsePayload
-  return (outPoint, CompiledScript inputScript)
-
-parseOutput :: Parsec Dec String (Value, CompiledScript)
-parseOutput = do
-  val <- parseTxValue
-  outputScript <- parsePayload
-  return (val, CompiledScript outputScript)
-
-parseOutPoint :: Parsec Dec String UTXO
-parseOutPoint = do
-  txHash <- switchEndian . Char8.pack <$> count 64 hexDigitChar
-  outIndex' <- switchEndian . Char8.pack <$> count 8 hexDigitChar
-  let parsedIndex = read . Char8.unpack $ outIndex'
-  return $ UTXO txHash parsedIndex
-
-parseSequence :: Parsec Dec String ByteString
-parseSequence = do
-  s <- count 8 hexDigitChar
-  return $ Char8.pack s
-
-parseTxValue :: Parsec Dec String Value
-parseTxValue = do
-  val <- switchEndian . Char8.pack <$> count 16 hexDigitChar
-  return $ Satoshis $ readInt val
-
-parseBlockLockTime :: Parsec Dec String ByteString
-parseBlockLockTime = 
-  switchEndian . Char8.pack <$> count 8 hexDigitChar
+getVersion :: Get TxVersion
+getVersion = do
+  TxVersion . fromIntegral <$> getWord32le
   
+getInput :: Get TxInput
+getInput = do
+  outPoint <- getOutPoint
+  VarInt scriptLength <- get
+  script <- getScript scriptLength
+  getSequence
+  return TxInput
+    { _utxo = outPoint
+    , _signatureScript = script}
 
-parseDerSignature :: Parsec Dec String Signature
-parseDerSignature = do
-  sequenceCode <- count 2 hexDigitChar
-  derLength <- parseCount
-  parseIntCode
-  x <- parsePayload
-  parseIntCode
-  y <- parsePayload
+getOutput :: Get TxOutput
+getOutput = do
+  val <- getTxValue
+  VarInt scriptLength <- get
+  script <- getScript scriptLength
+  return TxOutput
+    { _value = val
+    , _outputScript = script }
+
+getOutPoint :: Get UTXO
+getOutPoint = UTXO
+  <$> (TxHash . BS.reverse <$> getByteString 32)
+  <*> (TxIndex . fromIntegral <$> getWord32le)
+
+getSequence :: Get ()
+getSequence = do
+  getWord32le
+  return ()
+
+getTxValue :: Get Value
+getTxValue =
+  Satoshis . fromIntegral <$> getWord64le
+  
+getBlockLockTime :: Get ()
+getBlockLockTime = do
+  getWord32le
+  return ()
+
+getDerSignature :: Get  Signature
+getDerSignature = do
+  sequenceCode <- getWord8
+  derLength <- fromIntegral <$> getWord8
+  getWord8
+  xLength <- fromIntegral <$> getWord8
+  x <- BS.reverse <$> getByteString xLength
+    -- TODO: is the BS.reverse necessary?
+  getWord8
+  yLength <- fromIntegral <$> getWord8
+  y <- BS.reverse <$> getByteString yLength
+    -- TODO: is the BS.reverse necessary?
   return $
-    Signature (fromIntegral . readInt $ x) (fromIntegral . readInt $ y)
-  where
-    parseIntCode = count 2 hexDigitChar
+    Signature (roll x) (roll y)
 
-parseScript :: Parsec Dec String Script
-parseScript =
-  Script <$> many parseScriptComponent
-
-parseScriptStep :: Script -> Parsec Dec String Script
-parseScriptStep (Script scriptArr) =
-  undefined
-  
-parseScriptComponent :: Parsec Dec String ScriptComponent
-parseScriptComponent = do
-  code <- parseCount
-  if 0 < code && code < 76
-    then parseTxtComponent code
-    else return $ OP $ toEnum code
-
-parseTxtComponent :: Int -> Parsec Dec String ScriptComponent
-parseTxtComponent numBytes = do
-  let charsToParse = numBytes * 2
-  payload <- count charsToParse hexDigitChar
-  return $ Txt $ Char8.pack payload

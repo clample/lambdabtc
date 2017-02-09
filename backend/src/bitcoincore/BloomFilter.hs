@@ -17,6 +17,8 @@ module BitcoinCore.BloomFilter
   , deserializeFilter
   )where
 
+import General.Util (roll, unroll)
+
 import Data.Hash.Murmur (murmur3)
 import Data.Word (Word32)
 import Data.ByteString (ByteString)
@@ -117,20 +119,6 @@ bloomHash hashNum tweak hashData fLengthBits =
 
 blankFilter :: Int -> Probability -> Filter
 blankFilter n p = Filter { filterLengthBytes = filterSize n p, filterValue =  0 }
-
-
--- Taken from src of Data.Binary
--- http://hackage.haskell.org/package/binary-0.4.1/docs/src/Data-Binary.html#Binary
-unroll :: Integer -> ByteString
-unroll = B.pack . unfoldr step
-  where
-    step 0 = Nothing
-    step i = Just (fromIntegral i, i `shiftR` 8)
-
-roll :: ByteString -> Integer
-roll   = foldr unstep 0 . B.unpack
-  where
-    unstep b a = a `shiftL` 8 .|. fromIntegral b
 
 serializeFilter :: Filter -> ByteString
 serializeFilter f = (unroll . filterValue $ f) `B.append` paddingNullBytes

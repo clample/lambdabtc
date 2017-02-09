@@ -10,22 +10,19 @@ module General.Util
   , stringToHexByteString
   , textToHexByteString
   , hexify
-  , payloadLength
-  , switchEndian
-  , payloadLength'
   , checkSum
-  , readInt
-  , parseCount
-  , parsePayload
   , showBool
-  , parseBool
   , VarInt(..)
-  , doubleSHA) where
+  , doubleSHA
+  , putWithLength
+  , roll
+  , unroll) where
 
 import Prelude hiding (take)
 
 import Data.Maybe (listToMaybe)
 import Data.ByteString (ByteString, take)
+import qualified Data.ByteString.Lazy as BL
 import Data.ByteString.Base16 (decode, encode)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as Char8
@@ -35,11 +32,13 @@ import Data.Base58String.Bitcoin (fromBytes, toBytes, toText, fromText)
 import Crypto.Hash.Algorithms (SHA256(..))
 import Crypto.Hash (hashWith)
 import Numeric (showHex, readHex)
-import Text.Megaparsec (Parsec, Dec, count, hexDigitChar)
 import Data.ByteArray (convert)
 import Data.Binary (Binary(..))
 import Data.Binary.Get(Get, getWord8, getWord16le, getWord32le, getWord64le)
-import Data.Binary.Put (Put, putWord8, putWord16le, putWord32le, putWord64le)
+import Data.Binary.Put (Put, putWord8, putWord16le, putWord32le, putWord64le, runPut, putByteString)
+import Data.Bits (setBit, shiftR, shiftL, (.|.))
+import Data.List (unfoldr)
+
 
 data Payload = Payload ByteString
   deriving (Show, Eq)
@@ -83,15 +82,20 @@ decodeBase58Check b58 = (Prefix pre, Payload payload, CheckSum checksum)
     withoutPrefix = BS.drop 1 content
     (payload, checksum) = BS.splitAt (BS.length content - 5) withoutPrefix
 
+
+-- TODO: Get rid of this abomination!
 -- this function name is misleading?
 -- This is going from hex string to binary bytestring
 stringToHexByteString :: String -> ByteString
 stringToHexByteString = fst . decode . Char8.pack 
 
+-- TODO: Get rid of this abomination!
 textToHexByteString :: T.Text -> ByteString
 textToHexByteString = stringToHexByteString . T.unpack
 
+
 -- Make sure that we include leading zeroes when converting an int to its string representatin in hexidecimal
+-- TODO: Get rid of this abomination!
 hexify :: Integer -> Int -> T.Text
 hexify n desiredLength =
   if n >= 0
@@ -101,42 +105,13 @@ hexify n desiredLength =
     base = showHex n ""
     leadingZeroes = replicate (desiredLength - length base) '0'
 
--- Take a hex encoded payload and give a hex bs with payload length
-payloadLength :: ByteString -> ByteString
-payloadLength = payloadLength' 2
-
-payloadLength' :: Int -> ByteString -> ByteString
-payloadLength' padding payload =
-  T.encodeUtf8 $ hexify (toInteger . BS.length . fst . decode $ payload) padding
 
 
-switchEndian :: ByteString -> ByteString
-switchEndian = encode . BS.reverse . fst . decode 
-  -- converts a hex encoded bytestring from little endian to big endian
-  -- (and vice versa)
-
-
-readInt :: ByteString -> Int
-readInt = fst . head . readHex . Char8.unpack
-
-parsePayload :: Parsec Dec String ByteString
-parsePayload = do
-  lengthBytes <- parseCount
-  payload <- count (lengthBytes * 2) hexDigitChar
-  return $ Char8.pack payload
-
-parseCount :: Parsec Dec String Int
-parseCount = do
-  countStr <- count 2 hexDigitChar
-  return . readInt . Char8.pack $ countStr
-
-parseBool :: Parsec Dec String Bool
-parseBool = do
-  str <- count 2 hexDigitChar
-  case str of
-    "01" -> return True
-    "00" -> return False
-    _    -> fail "Unable to parse bool"
+putWithLength :: Put -> Put
+putWithLength putM = do
+  let payload = BL.toStrict . runPut $ putM
+  put . VarInt . BS.length $ payload
+  putByteString payload
 
 showBool :: Bool -> ByteString
 showBool True  = "01"
@@ -174,3 +149,16 @@ putVarInt (VarInt i)
   | otherwise = do
       putWord8 0xFF
       putWord64le . fromIntegral $ i
+
+-- Taken from src of Data.Binary
+-- http://hackage.haskell.org/package/binary-0.4.1/docs/src/Data-Binary.html#Binary
+unroll :: Integer -> ByteString
+unroll = BS.pack . unfoldr step
+  where
+    step 0 = Nothing
+    step i = Just (fromIntegral i, i `shiftR` 8)
+
+roll :: ByteString -> Integer
+roll   = foldr unstep 0 . BS.unpack
+  where
+    unstep b a = a `shiftL` 8 .|. fromIntegral b
