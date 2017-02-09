@@ -23,7 +23,6 @@ library
                      , BitcoinCore.Transaction.Script
                      , BitcoinCore.Transaction.Optcodes
                      , BitcoinCore.Transaction.Transactions
-                     , BitcoinCore.Transaction.Parser
                      , BitcoinCore.BlockHeaders
                      , BitcoinCore.BloomFilter
                      , BitcoinCore.Inventory

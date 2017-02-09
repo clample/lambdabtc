@@ -1,15 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 module BitcoinCore.Transaction.Script where
 
-import General.Util
 import BitcoinCore.Transaction.Optcodes (OPCODE(..))
-import BitcoinCore.Keys
+import BitcoinCore.Keys (PublicKeyRep, pubKeyHash)
 
 import Prelude hiding (concat, reverse, sequence)
 import qualified  Data.ByteString as BS
 import Data.ByteString (ByteString)
-import qualified Data.Text.Encoding as T
-import Data.ByteString.Base16 (encode)
+import Data.Binary (Binary(..))
 import Data.Binary.Put (Put, putWord8, putByteString)
 import Data.Binary.Get (Get, getWord8, getByteString, isolate, bytesRead)
 import Data.List (reverse)
@@ -22,8 +20,9 @@ data ScriptComponent
   | Txt ByteString
   deriving (Eq, Show)
 
-data Value = Satoshis Int
-  deriving (Eq, Show)
+instance Binary ScriptComponent where
+  put = putScriptComponent
+  get = getScriptComponent
 
 payToPubkeyHash :: PublicKeyRep -> Script
 payToPubkeyHash pubKeyRep = Script
@@ -31,7 +30,7 @@ payToPubkeyHash pubKeyRep = Script
 
 putScript :: Script -> Put
 putScript (Script script) =
-  mapM_ putScriptComponent script
+  mapM_ put script
 
 putScriptComponent :: ScriptComponent -> Put
 putScriptComponent (OP opcode) = putWord8 . fromIntegral . fromEnum $ opcode
@@ -49,7 +48,7 @@ getScript lengthBytes = isolate lengthBytes $
           bytesRead' <- bytesRead
           if  bytesRead' < (fromIntegral lengthBytes)
           then do
-            comp <- getScriptComponent
+            comp <- get
             getScriptStep (comp:acc)
           else return acc
 

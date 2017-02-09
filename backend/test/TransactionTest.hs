@@ -1,20 +1,14 @@
 module TransactionTest where
 
 import BitcoinCore.Transaction.Transactions
-import BitcoinCore.Transaction.Parser
 import KeyTest()
 import TestUtil
-import BitcoinCore.Keys (compressed)
-import BitcoinCore.Transaction.Script (Value(..), Script(..), ScriptComponent(..))
+import BitcoinCore.Transaction.Script ( Script(..), ScriptComponent(..))
 import BitcoinCore.Transaction.Optcodes (OPCODE(..), opcodeTable)
-import BitcoinCore.Transaction.Parser ()
 
 import qualified Data.ByteString as BS
 import Crypto.PubKey.ECC.ECDSA (Signature(..))
-import Text.Megaparsec (parseMaybe)
-import qualified Data.ByteString.Char8 as Char8
-import Control.Lens ((^.))
-import TestUtil
+import Data.Binary (Binary(..))
 import Data.Binary.Get (runGet)
 import Data.Binary.Put (runPut)
 
@@ -89,4 +83,4 @@ prop_transactionInvertible :: Transaction -> Bool
 prop_transactionInvertible tx =
   tx == parsedTx
   where
-    parsedTx = runGet getTransaction (runPut . putTransaction $ tx)
+    parsedTx = runGet get (runPut . put $ tx)
