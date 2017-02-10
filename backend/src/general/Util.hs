@@ -16,7 +16,8 @@ module General.Util
   , doubleSHA
   , putWithLength
   , roll
-  , unroll) where
+  , unroll
+  , readFromTable) where
 
 import Prelude hiding (take)
 
@@ -38,6 +39,8 @@ import Data.Binary.Get(Get, getWord8, getWord16le, getWord32le, getWord64le)
 import Data.Binary.Put (Put, putWord8, putWord16le, putWord32le, putWord64le, runPut, putByteString)
 import Data.Bits (setBit, shiftR, shiftL, (.|.))
 import Data.List (unfoldr)
+import Data.Char (toUpper)
+import Data.Tuple (swap)
 
 
 data Payload = Payload ByteString
@@ -162,3 +165,9 @@ roll :: ByteString -> Integer
 roll   = foldr unstep 0 . BS.unpack
   where
     unstep b a = a `shiftL` 8 .|. fromIntegral b
+
+readFromTable :: [(a, ByteString)] -> ByteString -> Maybe a
+readFromTable table = lookupInTable . uppercase
+  where
+    uppercase     = Char8.pack . map toUpper . Char8.unpack
+    lookupInTable = flip lookup (map swap table)

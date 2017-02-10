@@ -27,9 +27,8 @@ library
                      , BitcoinCore.BloomFilter
                      , BitcoinCore.Inventory
                      , Protocol.Messages
-                     , Protocol.Parser
+                     , Protocol.MessageBodies
                      , Protocol.Server
-                     , Protocol.Types
                      , Protocol.Network
   build-depends:       base >= 4.7 && < 5
                      , QuickCheck

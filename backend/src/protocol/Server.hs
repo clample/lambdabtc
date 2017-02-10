@@ -7,10 +7,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Protocol.Server where
 
-import Protocol.Parser (parseMessage)
-import Protocol.Messages (putMessage)
-import Protocol.Types
-import Protocol.Network (Peer(..), connectToPeer, sock, addr)
+import Protocol.Messages (parseMessage, Message(..), MessageBody(..), MessageContext(..))
+import Protocol.MessageBodies 
+import Protocol.Network (Peer(..), connectToPeer, sock, addr, Addr(..))
 import BitcoinCore.BlockHeaders ( BlockHash(..)
                                 , encodeBlockHeader
                                 , BlockHeader(..)
@@ -27,7 +26,7 @@ import BitcoinCore.BloomFilter ( pDefault
                                , NFlags(..))
 import General.Config (ConfigM(..), Config(..), pool)
 import General.Persistence (runDB, PersistentBlockHeader(..))
-import General.Types (HasNetwork(..))
+import General.Types (HasNetwork(..), HasVersion(..), HasRelay(..), HasTime(..), HasLastBlock(..))
 
 import Network.Socket (Socket)
 import Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
@@ -53,23 +52,35 @@ import Database.Persist.Sql (insertMany_, count, runSqlPool, Filter, toSqlKey, i
 import qualified Database.Persist.Sql as DB
 import Data.List.Split (chunksOf)
 import Data.Maybe (fromJust)
-import Control.Lens (makeFields, (^.), (+=))
+import Control.Lens (makeLenses, (^.), (+=))
 
 data ConnectionContext = ConnectionContext
   { _connectionContextVersion :: Int
   , _connectionContextLastBlock :: Integer
-  , _connectionContextMyAddr :: Addr
-  , _connectionContextPeer :: Peer
+  , _myAddr :: Addr
+  , _peer :: Peer
   , _connectionContextRelay :: Bool
     -- https://github.com/bitcoin/bips/blob/master/bip-0037.mediawiki#extensions-to-existing-messages
     -- Relay should be set to False when functioning as an SPV node
-  , _connectionContextWriterChan :: TBMChan Message
-  , _connectionContextListenChan :: TBMChan Message
+  , _writerChan :: TBMChan Message
+  , _listenChan :: TBMChan Message
   , _connectionContextTime :: POSIXTime
-  , _connectionContextRandGen :: StdGen
+  , _randGen :: StdGen
   } 
 
-makeFields ''ConnectionContext
+makeLenses ''ConnectionContext
+
+instance HasVersion ConnectionContext where
+  version = connectionContextVersion
+
+instance HasRelay ConnectionContext where
+  relay = connectionContextRelay
+
+instance HasTime ConnectionContext where
+  time = connectionContextTime
+
+instance HasLastBlock ConnectionContext where
+  lastBlock = connectionContextLastBlock
 
 type Connection a = StateT ConnectionContext ConfigM a
 
@@ -98,13 +109,13 @@ getConnectionContext config = do
   return ConnectionContext
         { _connectionContextVersion = 60002
         , _connectionContextLastBlock = lastBlock'
-        , _connectionContextMyAddr = Addr (0, 0, 0, 0) 18333 
-        , _connectionContextPeer = peer'
+        , _myAddr = Addr (0, 0, 0, 0) 18333 
+        , _peer = peer'
         , _connectionContextRelay = False 
-        , _connectionContextWriterChan = writerChan'
-        , _connectionContextListenChan = listenChan'
+        , _writerChan = writerChan'
+        , _listenChan = listenChan'
         , _connectionContextTime = time'
-        , _connectionContextRandGen = randGen'
+        , _randGen = randGen'
         }
 
 getLastBlock :: Config -> IO Int
@@ -118,11 +129,6 @@ persistGenesisBlock config = do
   lastBlock' <- getLastBlock config
   when (lastBlock' == -1) $
     runSqlPool (insert_ . encodeBlockHeader . genesisBlock $ (config^.network)) (config^.pool)
-
-instance Binary Message where
-  put = putMessage
-  get = parseMessage
-
 
 listener :: TBMChan Message -> Socket -> IO ()
 listener chan socket = runConduit
