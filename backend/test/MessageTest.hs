@@ -2,11 +2,12 @@ module MessageTest where
 
 import TestUtil
 import General.Types
-import Protocol.Messages (putMessage)
-import Protocol.Types
-import Protocol.Parser (parseMessage)
+import Protocol.Messages (Message(..), MessageBody(..), MessageContext(..))
+import Protocol.Network (Addr(..))
+import Protocol.MessageBodies
 import qualified Data.ByteString.Char8 as Char8
 import Data.Time.Clock (NominalDiffTime(..))
+import Data.Binary (Binary(..))
 import Data.Binary.Get (runGet)
 import Data.Binary.Put (runPut)
 import qualified Data.ByteString.Lazy as BL
@@ -112,5 +113,5 @@ prop_messageInvertible :: Message -> Bool
 prop_messageInvertible message =
       parsedMessage == message
   where
-    parsedMessage = runGet parseMessage (runPut . putMessage $ message)
+    parsedMessage = runGet get (runPut . put $ message)
     
