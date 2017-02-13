@@ -1,3 +1,4 @@
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveGeneric #-}
 
@@ -5,9 +6,21 @@ module LamdaBTC.Handlers
   ( defaultH
   , postFundRequestsH
   , getFundRequestsH
+  , postTransactionsH
   ) where
 
 import BitcoinCore.Keys
+import BitcoinCore.Transaction.Transactions ( Transaction(..)
+                                            , TxInput(..)
+                                            , TxOutput(..)
+                                            , UTXO(..)
+                                            , Value(..)
+                                            , TxVersion(..)
+                                            , TxIndex(..)
+                                            , defaultVersion)
+import qualified BitcoinCore.Transaction.Transactions as TX
+import BitcoinCore.Transaction.Script (payToPubkeyHash)
+
 import General.Persistence
 import General.Config
 import General.Types (HasNetwork(..))
@@ -18,7 +31,7 @@ import Data.Aeson ( object
                   , (.=)
                   , Value (Null)
                   , FromJSON)
-import Web.Scotty.Trans (status, showError, json, jsonData)
+import Web.Scotty.Trans (status, showError, json, jsonData, ActionT)
 import GHC.Generics
 import Control.Monad.IO.Class (liftIO)
 import qualified Data.Text as T 
@@ -26,7 +39,8 @@ import Database.Persist.Sql (insert_, selectList)
 import Database.Persist (Entity)
 import Control.Monad.Reader (ask)
 import Control.Monad.Trans.Class (lift)
-import Control.Lens ((^.))
+import Control.Lens ((^.), makeLenses)
+import Data.Maybe (fromJust)
 
 defaultH :: Environment -> Error -> Action
 defaultH e x = do
@@ -83,9 +97,54 @@ validateFundRequest (Address address) (FundRequestRaw labelR messageR amountR) =
   let
     ma :: Maybe Double
     ma = maybeRead amountR
-    uri = "bitcoin:"-- ++ address
+    uri = "bitcoin:"
   in
     case ma of
       Nothing -> Left "Unable to parse amount"
       Just a -> Right $
         FundRequest labelR messageR a address uri
+
+data TransactionRaw = TransactionRaw
+  { recieverAddress :: String
+  , transactionAmountRaw :: String }
+  deriving (Generic, Show)
+
+instance FromJSON TransactionRaw
+
+postTransactionsH :: Action
+postTransactionsH = do
+  transactionRaw <- jsonData
+  transaction <- buildTransaction transactionRaw
+  status ok200
+
+buildTransaction :: TransactionRaw -> ActionT Error ConfigM Transaction
+buildTransaction txRaw = do
+  let mVal = buildValue (transactionAmountRaw txRaw)
+      val = fromJust mVal
+      -- TODO: Handle Nothing value appropriately
+      {--
+      outputScript' = payToPubkeyHash
+                    . compressed
+                    . addressToPubKey
+                    . fromJust -- TODO: do actual error handling here
+                    . buildAddress
+                    . recieverAddress
+                    $ txRaw
+      --}
+  return Transaction
+    { _txVersion = TX.defaultVersion
+    , _outputs =
+        [TxOutput
+         { _value = val
+         , _outputScript = undefined }]
+    , _inputs = [TxInput {}]}
+  -- recieverAddress => outputScript
+  -- transactionAmountRaw => Value
+  -- db (query old utxo's, keys) => TxInput
+  -- defaultVersion => txVersion 
+
+buildValue :: String -> Maybe TX.Value
+buildValue str = TX.Satoshis <$> maybeRead str
+
+buildAddress :: String -> Maybe Address
+buildAddress = undefined

@@ -17,7 +17,8 @@ module BitcoinCore.Keys
   , getPrivateKeyFromWIF
   , addressPrefix
   , getPubKey
-  , btcCurve) where
+  , btcCurve
+  ) where
 
 import General.Persistence (KeySet(..))
 import General.Util
@@ -110,7 +111,9 @@ getPrivateKeyFromWIF (WIF privateKeyWIF) = PrivateKey curve privateNumber
 
 getPrivateKeyFromWIF _ = error "getPrivateKeyFromWIF: Unable to get private key"
 
+byteStringPubKeyHash = undefined
 
+-- TODO: This should return binary
 pubKeyHash :: PublicKeyRep -> ByteString
 pubKeyHash pubKeyRep =
   stringToHexByteString . show . hashWith RIPEMD160 . hashWith SHA256 $ pubKey

@@ -26,3 +26,4 @@ application config = do
   defaultHandler (defaultH (config^.environment))
   post "/fundrequests" postFundRequestsH
   get  "/fundrequests" getFundRequestsH
+  post "/transactions" postTransactionsH
