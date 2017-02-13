@@ -248,8 +248,7 @@ parseMessageBody expectedLength AddrCommand =
   parseRemaining expectedLength >> return
     (AddrMessageBody AddrMessage)
 parseMessageBody expectedLength TxCommand =
-  parseRemaining expectedLength >> return
-    (TxMessageBody TxMessage)
+  TxMessageBody <$> get
 parseMessageBody expectedLength RejectCommand =
   parseRemaining expectedLength >> return
     (RejectMessageBody RejectMessage)

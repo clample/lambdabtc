@@ -268,6 +268,7 @@ synchronizeHeaders lastBlockPeer = do
         Just response -> handleResponse response >> handleMessages
       
 
+
 getHeaders :: Connection ()
 getHeaders = do
   context <- State.get

@@ -9,6 +9,7 @@ import General.Util (VarInt(..))
 import BitcoinCore.Inventory (InventoryVector(..))
 import BitcoinCore.BlockHeaders (BlockHash(..), BlockHeader(..))
 import BitcoinCore.BloomFilter (Tweak(..), Filter(..), NFlags(..), serializeFilter, deserializeFilter)
+import BitcoinCore.Transaction.Transactions (Transaction(..))
 
 import Data.Time.Clock.POSIX (POSIXTime)
 import Control.Lens (makeLenses, makeFields, (^.))
@@ -85,10 +86,26 @@ data VerackMessage = VerackMessage
 data AddrMessage = AddrMessage
   deriving (Show, Eq)
 
+-----------------------------
 data TxMessage = TxMessage
+  {_transaction :: Transaction }
   deriving (Show, Eq)
+
+makeLenses ''TxMessage
+
+instance Binary TxMessage where
+  put = putTxMessage
+  get = getTxMessage
+
+putTxMessage :: TxMessage -> Put
+putTxMessage message =
+  put (message^.transaction)
   
 
+getTxMessage :: Get TxMessage
+getTxMessage = TxMessage <$> get
+  
+----------------------------
 data RejectMessage = RejectMessage
   deriving (Show, Eq)
 
