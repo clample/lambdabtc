@@ -21,6 +21,7 @@ module BitcoinCore.Keys
 
 import General.Persistence (KeySet(..))
 import General.Util
+import General.Types (Network(..))
 
 import Prelude hiding (take, concat)
 import Data.ByteString (ByteString)
@@ -60,12 +61,12 @@ btcCurve = getCurveByName SEC_p256k1
 genKeys :: IO (PublicKey, PrivateKey)
 genKeys = generate btcCurve
 
-genKeySet :: IO KeySet
-genKeySet = do
+genKeySet :: Network -> IO KeySet
+genKeySet network = do
   (pubKey, privKey) <- liftIO genKeys
   let compressedPub@(Compressed pubKeyText) = compressed pubKey
       (Hex privKeyText) = getHexPrivateKey privKey
-      (Address addressText) = getAddress compressedPub
+      (Address addressText) = getAddress compressedPub network
   return (KeySet addressText privKeyText pubKeyText)
 
 getPubKey :: PrivateKey -> PublicKey
@@ -77,9 +78,9 @@ getPubKey privKey =
 -- SHA256, then RIPEMD160 hashing of the public key
 -- Then Base58 encoding the resulting hash
 -- https://github.com/bitcoinbook/bitcoinbook/blob/first_edition/ch04.asciidoc#bitcoin-addresses
-getAddress :: PublicKeyRep  -> Address 
-getAddress pubKeyRep =
-  Address $ encodeBase58Check addressPrefix payload
+getAddress :: PublicKeyRep  -> Network -> Address 
+getAddress pubKeyRep network =
+  Address $ encodeBase58Check (addressPrefix network) payload
   where payload = Payload $ pubKeyHash pubKeyRep
 
 getHexPrivateKey :: PrivateKey -> PrivateKeyRep
@@ -142,8 +143,9 @@ compressed pubKey =
            else "03"
     isEven n = n `mod` 2 == 0
 
-addressPrefix :: Prefix
-addressPrefix = prefix $ stringToHexByteString "00"
+addressPrefix :: Network -> Prefix
+addressPrefix MainNet = prefix $ stringToHexByteString "00"
+addressPrefix TestNet3 = prefix $ stringToHexByteString "6F"
 
 privateKeyPrefix :: Prefix
 privateKeyPrefix = prefix $ stringToHexByteString "80"

@@ -10,6 +10,7 @@ module LamdaBTC.Handlers
 import BitcoinCore.Keys
 import General.Persistence
 import General.Config
+import General.Types (HasNetwork(..))
 import General.Util (maybeRead)
 
 import Network.HTTP.Types.Status (internalServerError500, ok200, badRequest400)
@@ -23,6 +24,9 @@ import Control.Monad.IO.Class (liftIO)
 import qualified Data.Text as T 
 import Database.Persist.Sql (insert_, selectList)
 import Database.Persist (Entity)
+import Control.Monad.Reader (ask)
+import Control.Monad.Trans.Class (lift)
+import Control.Lens ((^.))
 
 defaultH :: Environment -> Error -> Action
 defaultH e x = do
@@ -42,11 +46,12 @@ getFundRequestsH = do
 
 postFundRequestsH :: Action
 postFundRequestsH = do
+  config <- lift ask
   -- TODO: Refractor to use genKeySet
   (pubKey, privKey) <- liftIO genKeys
   let compressedPub@(Compressed pubKeyText) = compressed pubKey
       Hex privKeyText = getHexPrivateKey privKey
-      address@(Address addressText) = getAddress compressedPub
+      address@(Address addressText) = getAddress compressedPub (config^.network)
   fundRequestRaw <- jsonData
   let eitherFundRequest = validateFundRequest address fundRequestRaw
       keyset = KeySet addressText privKeyText pubKeyText

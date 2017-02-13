@@ -9,12 +9,17 @@ import Data.Binary.Get (Get, getByteString)
 import Data.ByteString.Base16 (encode, decode)
 import Data.Maybe (fromJust)
 import Data.Time.Clock.POSIX (POSIXTime)
+import Test.QuickCheck.Arbitrary (Arbitrary(..))
+import Test.QuickCheck.Gen (elements)
 
 class HasNetwork t where
   network :: Lens' t Network
 
 data Network = TestNet3 | MainNet
   deriving (Show, Eq)
+
+instance Arbitrary Network where
+  arbitrary = elements [TestNet3, MainNet]
 
 
 networkTable :: [(Network, ByteString)]

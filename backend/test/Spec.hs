@@ -2,13 +2,15 @@
 
 import Prelude hiding (length)
 
-import Test.Framework (defaultMain, testGroup)
-import Test.Framework.Providers.HUnit (testCase)
-import Test.HUnit
+import General.Types (Network(..))
 import BitcoinCore.Transaction.Script
 import BitcoinCore.Transaction.Optcodes
 import BitcoinCore.Keys
 import BitcoinCore.Transaction.Transactions
+
+import Test.Framework (defaultMain, testGroup)
+import Test.Framework.Providers.HUnit (testCase)
+import Test.HUnit
 import Crypto.PubKey.ECC.ECDSA (PublicKey(..), PrivateKey(..))
 import Crypto.PubKey.ECC.Types (Curve, getCurveByName, Point(..), CurveName(SEC_p256k1))
 import Data.ByteString (length)
@@ -81,7 +83,7 @@ addressTest :: PublicKeyRep -> Assertion
 addressTest pubKeyRep = assertEqual
   "We should derive the correct address from a given public key"
   (Address $ toText $ b58String "16UwLL9Risc3QfPqBUvKofHmBQ7wMtjvM")
-  (getAddress pubKeyRep)
+  (getAddress pubKeyRep MainNet)
 
 testWIFPrivateKey :: (PrivateKeyRep, PrivateKeyRep) -> Assertion
 testWIFPrivateKey (input, expected) = assertEqual

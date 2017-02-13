@@ -87,12 +87,6 @@ instance Arbitrary InventoryVector where
     objHash <- ObjectHash . Char8.pack <$> vector 32
     return $ InventoryVector objType objHash
 
-  
-instance Arbitrary Network where
-  arbitrary = do
-    let networks = map fst networkTable
-    elements networks
-
 instance Arbitrary Addr where
   arbitrary = do
     a <- chooseIpComponent

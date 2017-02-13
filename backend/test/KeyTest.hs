@@ -3,6 +3,7 @@ module KeyTest where
 import TestUtil
 import BitcoinCore.Keys
 import General.Util
+import General.Types (Network(..))
 import Crypto.PubKey.ECC.ECDSA (PrivateKey(..), PublicKey(..))
 import Crypto.PubKey.ECC.Types (ecc_n, common_curve, getCurveByName, CurveName(SEC_p256k1))
 import Crypto.PubKey.ECC.Generate (generateQ)
@@ -73,11 +74,11 @@ addressLength = testProperty
   "Address should always be 25 bytes"
   prop_addressLength
 
-prop_addressLength :: PublicKey -> Bool
-prop_addressLength pubKey =
+prop_addressLength :: PublicKey-> Network -> Bool
+prop_addressLength pubKey network =
   addressLength == 25
   where
-    (Address b58) = (getAddress . compressed) pubKey
+    (Address b58) = (flip getAddress network . compressed) pubKey
     addressLength = (BS.length . toBytes . fromText) b58
 
 base58CheckInvertible = testProperty
