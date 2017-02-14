@@ -58,3 +58,4 @@ class HasLastBlock t where
 
 class HasVersion t where
   version :: Lens' t Int
+

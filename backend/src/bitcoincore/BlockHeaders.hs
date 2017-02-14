@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module BitcoinCore.BlockHeaders where
 
-import General.Persistence
+--import General.Persistence
 import General.Util (VarInt(..), doubleSHA)
 import General.Types (Network(..))
 
@@ -67,6 +67,7 @@ hashBlock blockHeader = BlockHash $
   BS.reverse . doubleSHA . BL.toStrict . runPut $ putBlockHeaderWithoutTxCount blockHeader
   -- HELP: Why do we need reverse here?
 
+{--
 decodeBlockHeader :: PersistentBlockHeader -> BlockHeader
 decodeBlockHeader
   (PersistentBlockHeader
@@ -104,6 +105,7 @@ encodeBlockHeader
     difficulty
     nonce
     txCount
+--}
 
 putBlockHeaderWithoutTxCount :: BlockHeader -> Put
 putBlockHeaderWithoutTxCount (BlockHeader version prevHash merkleRoot time difficulty nonce _) = do

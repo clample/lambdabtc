@@ -10,10 +10,9 @@ module Protocol.Server where
 import Protocol.Messages (parseMessage, Message(..), MessageBody(..), MessageContext(..))
 import Protocol.MessageBodies 
 import Protocol.Network (Peer(..), connectToPeer, sock, addr, Addr(..))
+import Protocol.Util (encodeBlockHeader, decodeBlockHeader)
 import BitcoinCore.BlockHeaders ( BlockHash(..)
-                                , encodeBlockHeader
                                 , BlockHeader(..)
-                                , decodeBlockHeader
                                 , hashBlock
                                 , genesisBlock
                                 , verifyHeaders)

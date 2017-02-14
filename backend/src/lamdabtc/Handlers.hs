@@ -23,7 +23,7 @@ import BitcoinCore.Transaction.Script (payToPubkeyHash, Script(..), ScriptCompon
 
 import General.Persistence
 import General.Config
-import General.Types (HasNetwork(..))
+import General.Types (HasNetwork(..), Network(..))
 import General.Util (maybeRead, decodeBase58Check, Payload(..))
 
 import Network.HTTP.Types.Status (internalServerError500, ok200, badRequest400)
@@ -79,6 +79,13 @@ postFundRequestsH = do
       runDB (insert_ fundRequest)
       json fundRequest
       status ok200
+
+genKeySet :: Network -> IO KeySet
+genKeySet network = do
+  (pubKey, privKey) <- liftIO genKeys
+  let WIF privKeyText = getWIFPrivateKey privKey
+      (Address addressText) = getAddress (PublicKeyRep Compressed pubKey) network
+  return (KeySet addressText privKeyText)
 
 -- FundRequest:  
 -- Documented in BIP 0021

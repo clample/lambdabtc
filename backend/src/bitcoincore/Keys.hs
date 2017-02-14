@@ -10,7 +10,6 @@ module BitcoinCore.Keys
   , getWIFPrivateKey
   , getPrivateKeyFromWIF
   , textToHexByteString
-  , genKeySet
   , getPubKey
   , btcCurve
   , serializePrivateKey
@@ -22,7 +21,7 @@ module BitcoinCore.Keys
   , addressToPubKeyHash
   ) where
 
-import General.Persistence (KeySet(..))
+
 import General.Util
 import General.Types (Network(..))
 
@@ -79,13 +78,6 @@ btcEcGroup = case ecGroupFromCurveOID "secp256k1" of
 
 genKeys :: IO (PublicKey, PrivateKey)
 genKeys = generate btcCurve
-
-genKeySet :: Network -> IO KeySet
-genKeySet network = do
-  (pubKey, privKey) <- liftIO genKeys
-  let WIF privKeyText = getWIFPrivateKey privKey
-      (Address addressText) = getAddress (PublicKeyRep Compressed pubKey) network
-  return (KeySet addressText privKeyText)
 
 getPubKey :: PrivateKey -> PublicKey
 getPubKey privKey =

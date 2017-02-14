@@ -21,6 +21,7 @@ import Control.Monad.Reader (ask)
 import Data.ByteString (ByteString)
 import Control.Lens ((^.))
 
+
 share [mkPersist sqlSettings, mkMigrate "migrateTables"] [persistLowerCase|
 FundRequest json
     label Text
@@ -41,7 +42,7 @@ PersistentBlockHeader
     nonce ByteString
     txCount Int
 |]
-  
+
 
 migrateSchema :: Config -> IO ()
 migrateSchema config =

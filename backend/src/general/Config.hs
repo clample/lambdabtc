@@ -9,6 +9,7 @@
 module General.Config where
 
 import General.Types (HasNetwork(..), Network(..))
+import General.InternalMessaging (InternalMessage(..))
 
 import Control.Monad.Reader (ReaderT, MonadReader)
 import Control.Monad.IO.Class (MonadIO)
@@ -22,6 +23,8 @@ import Database.Persist.Sql (ConnectionPool)
 import Database.Persist.Sqlite (createSqlitePool)
 import Control.Monad.Logger (runStdoutLoggingT)
 import Control.Lens (makeFields, makeLenses, (^.))
+import Control.Concurrent.STM.TBMChan (TBMChan, newTBMChan)
+import GHC.Conc (atomically)
 
 
 data Environment =
@@ -34,7 +37,8 @@ data Config =
   Config { _environment :: Environment
          , _port :: Int -- port might belong elsewhere
          , _pool :: ConnectionPool
-         , _configNetwork :: Network }
+         , _configNetwork :: Network
+         , _appChan :: TBMChan InternalMessage}
 
 makeLenses ''Config
 
@@ -46,7 +50,8 @@ developmentConfig = do
   let env = Development
   pool' <- runStdoutLoggingT $
     createSqlitePool "file:resources/sqlite3.db" (getConnectionSize env)
-  return $ Config Development 49535 pool' TestNet3
+  chan <- atomically $ newTBMChan 16
+  return $ Config Development 49535 pool' TestNet3 chan
 
 getConnectionSize :: Environment -> Int
 getConnectionSize Development = 1
