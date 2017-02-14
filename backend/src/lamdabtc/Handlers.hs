@@ -20,6 +20,7 @@ import BitcoinCore.Transaction.Transactions ( Transaction(..)
                                             , defaultVersion)
 import qualified BitcoinCore.Transaction.Transactions as TX
 import BitcoinCore.Transaction.Script (payToPubkeyHash, Script(..), ScriptComponent(..))
+import General.InternalMessaging (InternalMessage(..))
 
 import General.Persistence
 import General.Config
@@ -42,6 +43,8 @@ import Control.Monad.Trans.Class (lift)
 import Control.Lens ((^.), makeLenses)
 import Data.Maybe (fromJust)
 import Data.ByteString.Base16 (decode)
+import Control.Concurrent.STM.TBMChan (writeTBMChan)
+import GHC.Conc (atomically)
 
 defaultH :: Environment -> Error -> Action
 defaultH e x = do
@@ -123,6 +126,8 @@ postTransactionsH :: Action
 postTransactionsH = do
   transactionRaw <- jsonData
   transaction <- buildTransaction transactionRaw
+  config <- lift ask
+  liftIO . atomically $ writeTBMChan (config^.appChan) (SendTX transaction)
   status ok200
 
 buildTransaction :: TransactionRaw -> ActionT Error ConfigM Transaction

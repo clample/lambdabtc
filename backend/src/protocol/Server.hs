@@ -23,9 +23,10 @@ import BitcoinCore.BloomFilter ( pDefault
                                , filterSize
                                , hardcodedTweak
                                , NFlags(..))
-import General.Config (ConfigM(..), Config(..), pool)
+import General.Config (ConfigM(..), Config(..), pool, appChan)
 import General.Persistence (runDB, PersistentBlockHeader(..))
 import General.Types (HasNetwork(..), HasVersion(..), HasRelay(..), HasTime(..), HasLastBlock(..))
+import General.InternalMessaging (InternalMessage(..))
 
 import Network.Socket (Socket)
 import Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
@@ -42,7 +43,8 @@ import Data.Conduit.TMChan ( sourceTBMChan
                            , newTBMChan
                            , TBMChan
                            , writeTBMChan
-                           , readTBMChan)
+                           , readTBMChan
+                           , tryReadTBMChan)
 import Control.Concurrent.STM (atomically)
 import Control.Concurrent (forkIO)
 import Data.Binary (Binary(..))
@@ -162,10 +164,17 @@ connection = do
 connectionLoop :: Connection ()
 connectionLoop = do
   context <- State.get
-  mResponse <-  liftIO . atomically . readTBMChan $ (context^.listenChan)
-  case mResponse of
+  config <- ask
+  mmResponse <-  liftIO . atomically . tryReadTBMChan $ (context^.listenChan)
+  case mmResponse of
     Nothing -> fail "listenChan is closed and empty"
-    Just response -> handleResponse response
+    Just Nothing -> return () -- chan is empty
+    Just (Just response) -> handleResponse response
+  mmInternalMessage <- liftIO . atomically . tryReadTBMChan $ (config^.appChan)
+  case mmInternalMessage of
+    Nothing -> fail "appChan is closed and empty"
+    Just Nothing -> return () -- chan is empty
+    Just (Just internalMessage) -> handleInternalMessage internalMessage
   connectionLoop
 
 
@@ -204,6 +213,16 @@ handleResponse (Message (HeadersMessageBody (HeadersMessage headers)) _) = do
     else fail "We recieved invalid headers"
     
 handleResponse _ = return ()
+
+handleInternalMessage :: InternalMessage -> Connection ()
+handleInternalMessage (SendTX transaction) = do
+  context <- State.get
+  config <- ask
+  let body = TxMessageBody . TxMessage $ transaction
+      messageContext = MessageContext (config^.network)
+      txMessage = Message body messageContext
+  liftIO . atomically $ writeTBMChan (context^.writerChan) txMessage
+  
 
 getMostRecentHeader :: Connection BlockHeader
 getMostRecentHeader = do
