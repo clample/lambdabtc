@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module LamdaBTC.Server (runApplication, developmentConfig) where
+module LamdaBTC.Server (runApplication) where
 
 import LamdaBTC.Handlers 
 import General.Config
