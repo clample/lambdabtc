@@ -2,7 +2,7 @@
 module BitcoinCore.Transaction.Script where
 
 import BitcoinCore.Transaction.Optcodes (OPCODE(..))
-import BitcoinCore.Keys (PublicKeyRep, pubKeyHash)
+import BitcoinCore.Keys (PublicKeyRep, pubKeyHash, PubKeyHash(..))
 
 import Prelude hiding (concat, reverse, sequence)
 import qualified  Data.ByteString as BS
@@ -24,9 +24,9 @@ instance Binary ScriptComponent where
   put = putScriptComponent
   get = getScriptComponent
 
-payToPubkeyHash :: PublicKeyRep -> Script
-payToPubkeyHash pubKeyRep = Script
-  [OP OP_DUP, OP OP_HASH160, Txt (pubKeyHash pubKeyRep)  , OP OP_EQUALVERIFY, OP OP_CHECKSIG]
+payToPubkeyHash :: PubKeyHash -> Script
+payToPubkeyHash (PubKeyHash hash) = Script
+  [OP OP_DUP, OP OP_HASH160, Txt hash  , OP OP_EQUALVERIFY, OP OP_CHECKSIG]
 
 putScript :: Script -> Put
 putScript (Script script) =

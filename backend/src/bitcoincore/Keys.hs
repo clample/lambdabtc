@@ -18,6 +18,8 @@ module BitcoinCore.Keys
   , serializePublicKeyRep
   , deserializePublicKeyRep
   , PubKeyFormat(..)
+  , PubKeyHash(..)
+  , addressToPubKeyHash
   ) where
 
 import General.Persistence (KeySet(..))
@@ -62,6 +64,9 @@ data WIFPrivateKey  = WIF T.Text
 data Address = Address T.Text
   deriving (Eq, Show)
 
+newtype PubKeyHash = PubKeyHash ByteString
+  deriving (Eq, Show)
+
 -- Bitcoin uses a specefic eliptic curve, secp256k1,
 -- to generate public private key pairs
 btcCurve :: Curve
@@ -94,12 +99,16 @@ getPubKey privKey =
 getAddress :: PublicKeyRep  -> Network -> Address 
 getAddress pubKeyRep network =
   Address $ encodeBase58Check (addressPrefix network) payload
-  where payload = Payload $ pubKeyHash pubKeyRep
+  where payload = Payload $ hash
+        PubKeyHash hash = pubKeyHash pubKeyRep
         addressPrefix MainNet = prefix $ stringToHexByteString "00"
         addressPrefix TestNet3 = prefix $ stringToHexByteString "6F"
 
--- TODO: Add inverse of getAddress
-
+addressToPubKeyHash :: Address -> PubKeyHash
+addressToPubKeyHash (Address address) =
+  PubKeyHash hash
+  where
+    (_, Payload hash, _) = decodeBase58Check address
 
 getWIFPrivateKey :: PrivateKey -> WIFPrivateKey
 getWIFPrivateKey privateKey =
@@ -134,9 +143,10 @@ deserializePrivateKey =
   where
     getLazyBS bs = BL.fromChunks [bs]
 
-pubKeyHash :: PublicKeyRep -> ByteString
+pubKeyHash :: PublicKeyRep -> PubKeyHash
 pubKeyHash =
-  convert
+  PubKeyHash
+  . convert
   . hashWith RIPEMD160
   . hashWith SHA256
   . serializePublicKeyRep

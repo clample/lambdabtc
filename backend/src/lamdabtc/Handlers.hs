@@ -24,7 +24,7 @@ import BitcoinCore.Transaction.Script (payToPubkeyHash)
 import General.Persistence
 import General.Config
 import General.Types (HasNetwork(..))
-import General.Util (maybeRead)
+import General.Util (maybeRead, decodeBase58Check, Payload(..))
 
 import Network.HTTP.Types.Status (internalServerError500, ok200, badRequest400)
 import Data.Aeson ( object
@@ -121,24 +121,15 @@ buildTransaction :: TransactionRaw -> ActionT Error ConfigM Transaction
 buildTransaction txRaw = do
   let mVal = buildValue (transactionAmountRaw txRaw)
       val = fromJust mVal
-      -- TODO: Handle Nothing value appropriately
-      {--
-      outputScript' = payToPubkeyHash
-                    . compressed
-                    . addressToPubKey
-                    . fromJust -- TODO: do actual error handling here
-                    . buildAddress
-                    . recieverAddress
-                    $ txRaw
-      --}
+      mAddress = buildAddress (recieverAddress txRaw)
+      address = fromJust mAddress
   return Transaction
     { _txVersion = TX.defaultVersion
     , _outputs =
         [TxOutput
          { _value = val
-         , _outputScript = undefined }]
+         , _outputScript = payToPubkeyHash . addressToPubKeyHash $ address}]
     , _inputs = [TxInput {}]}
-  -- recieverAddress => outputScript
   -- transactionAmountRaw => Value
   -- db (query old utxo's, keys) => TxInput
   -- defaultVersion => txVersion 
@@ -147,4 +138,4 @@ buildValue :: String -> Maybe TX.Value
 buildValue str = TX.Satoshis <$> maybeRead str
 
 buildAddress :: String -> Maybe Address
-buildAddress = undefined
+buildAddress = Just . Address . T.pack

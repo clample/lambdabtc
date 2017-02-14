@@ -81,7 +81,7 @@ testPublicKey =
 pubKeyHashTest :: PublicKeyRep -> Assertion
 pubKeyHashTest pubKeyRep = assertEqual
   "public key hashing should give the expected output"
-  (stringToHexByteString "010966776006953D5567439E5E39F86A0D273BEE")
+  (PubKeyHash . stringToHexByteString $ "010966776006953D5567439E5E39F86A0D273BEE")
   (pubKeyHash pubKeyRep)
   
 
@@ -115,7 +115,7 @@ payToPubkeyHashTest :: Assertion
 payToPubkeyHashTest = assertEqual
   "payToPubkeyHash should have correct output"
   (fst . decode $ "76a914010966776006953d5567439e5e39f86a0d273bee88ac")
-  (BL.toStrict . runPut . putScript . payToPubkeyHash $ PublicKeyRep Uncompressed pubKey)
+  (BL.toStrict . runPut . putScript . payToPubkeyHash . pubKeyHash $ PublicKeyRep Uncompressed pubKey)
   where
     pubKey = case eitherPubKey of
                Right p -> p
