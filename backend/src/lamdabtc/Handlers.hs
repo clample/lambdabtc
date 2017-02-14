@@ -19,7 +19,7 @@ import BitcoinCore.Transaction.Transactions ( Transaction(..)
                                             , TxIndex(..)
                                             , defaultVersion)
 import qualified BitcoinCore.Transaction.Transactions as TX
-import BitcoinCore.Transaction.Script (payToPubkeyHash)
+import BitcoinCore.Transaction.Script (payToPubkeyHash, Script(..), ScriptComponent(..))
 
 import General.Persistence
 import General.Config
@@ -41,6 +41,7 @@ import Control.Monad.Reader (ask)
 import Control.Monad.Trans.Class (lift)
 import Control.Lens ((^.), makeLenses)
 import Data.Maybe (fromJust)
+import Data.ByteString.Base16 (decode)
 
 defaultH :: Environment -> Error -> Action
 defaultH e x = do
@@ -123,16 +124,19 @@ buildTransaction txRaw = do
       val = fromJust mVal
       mAddress = buildAddress (recieverAddress txRaw)
       address = fromJust mAddress
+      utxo' = UTXO
+        { _outTxHash = TX.TxHash . fst . decode $ "e27cf7419b83e1e5710b2e6b21a7dc4d0a1308b6757a0ca2810349160de5c6dd"
+        , _outIndex = TxIndex 2}
   return Transaction
     { _txVersion = TX.defaultVersion
     , _outputs =
         [TxOutput
          { _value = val
          , _outputScript = payToPubkeyHash . addressToPubKeyHash $ address}]
-    , _inputs = [TxInput {}]}
-  -- transactionAmountRaw => Value
-  -- db (query old utxo's, keys) => TxInput
-  -- defaultVersion => txVersion 
+    , _inputs =
+        [TxInput
+         { _utxo = utxo'
+         , _signatureScript = Script [Txt "abcd"]}]}
 
 buildValue :: String -> Maybe TX.Value
 buildValue str = TX.Satoshis <$> maybeRead str
