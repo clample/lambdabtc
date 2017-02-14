@@ -1,23 +1,23 @@
 {-# Language OverloadedStrings #-}
 module BitcoinCore.Keys
   ( PublicKeyRep(..)
-  , PrivateKeyRep(..)
   , Address(..)
+  , WIFPrivateKey(..)
   , genKeys
   , getAddress
-  , uncompressed
-  , compressed
   , stringToHexByteString
   , pubKeyHash
   , getWIFPrivateKey
-  , getHexPrivateKey
-  , textToHexByteString
-  , getPrivateKeyFromHex
-  , genKeySet
   , getPrivateKeyFromWIF
-  , addressPrefix
+  , textToHexByteString
+  , genKeySet
   , getPubKey
   , btcCurve
+  , serializePrivateKey
+  , deserializePrivateKey
+  , serializePublicKeyRep
+  , deserializePublicKeyRep
+  , PubKeyFormat(..)
   ) where
 
 import General.Persistence (KeySet(..))
@@ -26,6 +26,7 @@ import General.Types (Network(..))
 
 import Prelude hiding (take, concat)
 import Data.ByteString (ByteString)
+import qualified Data.ByteString as BS
 import Data.ByteString.Char8 (unpack)
 import Crypto.PubKey.ECC.Types ( Curve
                                , getCurveByName
@@ -36,19 +37,26 @@ import Crypto.Hash.Algorithms (SHA256(..), RIPEMD160(..))
 import Crypto.PubKey.ECC.ECDSA ( PublicKey(..)
                                , PrivateKey(..))
 import Crypto.Hash (hashWith)
+import Crypto.OpenSSL.ECC (ecGroupFromCurveOID, EcGroup, ecPointFromOct, ecPointToAffineGFp)
 import Numeric (readHex)
 import Data.ByteString.Base16 (encode)
 import Control.Monad.IO.Class (liftIO)
 import qualified Data.Text as T
+import Data.ByteArray (convert)
+import Data.Binary.Put (runPut, putWord32be, putWord8, putByteString)
+import Data.Binary.Get (runGet, getWord32be, getWord8, getByteString)
+import qualified Data.ByteString.Lazy as BL
 
-data PublicKeyRep =
-  Compressed T.Text
-  | Uncompressed T.Text
+
+data PublicKeyRep = PublicKeyRep PubKeyFormat PublicKey
   deriving (Eq, Show)
 
-data PrivateKeyRep =
-  WIF T.Text
-  | Hex T.Text 
+data PubKeyFormat = Compressed | Uncompressed
+  deriving (Eq, Show)
+
+-- WIFPrivateKey and Address have base58 -> use text rep
+-- TODO: add base58 type?
+data WIFPrivateKey  = WIF T.Text
   deriving (Eq, Show)
 
 data Address = Address T.Text
@@ -59,16 +67,20 @@ data Address = Address T.Text
 btcCurve :: Curve
 btcCurve = getCurveByName SEC_p256k1
 
+btcEcGroup :: EcGroup
+btcEcGroup = case ecGroupFromCurveOID "secp256k1" of
+               Just ecGroup -> ecGroup
+               Nothing -> error "Unable to get secp256k1 ec group. This should never happen."
+
 genKeys :: IO (PublicKey, PrivateKey)
 genKeys = generate btcCurve
 
 genKeySet :: Network -> IO KeySet
 genKeySet network = do
   (pubKey, privKey) <- liftIO genKeys
-  let compressedPub@(Compressed pubKeyText) = compressed pubKey
-      (Hex privKeyText) = getHexPrivateKey privKey
-      (Address addressText) = getAddress compressedPub network
-  return (KeySet addressText privKeyText pubKeyText)
+  let WIF privKeyText = getWIFPrivateKey privKey
+      (Address addressText) = getAddress (PublicKeyRep Compressed pubKey) network
+  return (KeySet addressText privKeyText)
 
 getPubKey :: PrivateKey -> PublicKey
 getPubKey privKey =
@@ -83,73 +95,75 @@ getAddress :: PublicKeyRep  -> Network -> Address
 getAddress pubKeyRep network =
   Address $ encodeBase58Check (addressPrefix network) payload
   where payload = Payload $ pubKeyHash pubKeyRep
+        addressPrefix MainNet = prefix $ stringToHexByteString "00"
+        addressPrefix TestNet3 = prefix $ stringToHexByteString "6F"
 
-getHexPrivateKey :: PrivateKey -> PrivateKeyRep
-getHexPrivateKey privateKey =
-  Hex $ hexify (private_d privateKey) 64
+-- TODO: Add inverse of getAddress
 
-getPrivateKeyFromHex :: PrivateKeyRep -> PrivateKey
-getPrivateKeyFromHex (Hex privateKeyHex) = PrivateKey curve privateNumber
+
+getWIFPrivateKey :: PrivateKey -> WIFPrivateKey
+getWIFPrivateKey privateKey =
+  WIF $ encodeBase58Check privateKeyPrefix (Payload . serializePrivateKey $ privateKey)
+
+getPrivateKeyFromWIF :: WIFPrivateKey -> PrivateKey
+getPrivateKeyFromWIF (WIF wifText) =
+  if prefix == privateKeyPrefix
+  then deserializePrivateKey payload
+  else error $ "Unable to read WIF PrivateKey. Invalid prefix: " ++ show prefix
   where
-    curve = getCurveByName SEC_p256k1
-    privateNumber = fst . head . readHex . T.unpack $ privateKeyHex
-
-getPrivateKeyFromHex _ = error "getPrivateKeyFromHex: Unable to get private key"
-
-getWIFPrivateKey :: PrivateKeyRep -> PrivateKeyRep
-getWIFPrivateKey (Hex privateKey) =
-  WIF $ encodeBase58Check privateKeyPrefix (Payload $ textToHexByteString privateKey)
-
-getWIFPrivateKey _ = error "getWIFPrivateKey: Unable to get WIF private key"
-
-getPrivateKeyFromWIF :: PrivateKeyRep -> PrivateKey
-getPrivateKeyFromWIF (WIF privateKeyWIF) = PrivateKey curve privateNumber
-  where
-    curve = getCurveByName SEC_p256k1
-    privateNumber = (fst . head . readHex . unpack . encode) payload
-    (_, Payload payload, _) = decodeBase58Check privateKeyWIF
-
-getPrivateKeyFromWIF _ = error "getPrivateKeyFromWIF: Unable to get private key"
-
-byteStringPubKeyHash = undefined
-
--- TODO: This should return binary
-pubKeyHash :: PublicKeyRep -> ByteString
-pubKeyHash pubKeyRep =
-  stringToHexByteString . show . hashWith RIPEMD160 . hashWith SHA256 $ pubKey
-  where
-    pubKey = textToHexByteString $ case pubKeyRep of
-               Compressed bs -> bs
-               Uncompressed bs -> bs
-
--- The prefix 04 is prepended to uncompressed public keys.
--- The x and y coordinates of the point are represented in hexidecimal and concatenated
--- https://github.com/bitcoinbook/bitcoinbook/blob/first_edition/ch04.asciidoc#public-key-formats
-uncompressed :: PublicKey -> PublicKeyRep
-uncompressed pubKey =
-  Uncompressed $
-  "04"
-  `T.append` hexify x 64 
-  `T.append` hexify y 64 
-  where
-    Point x y = public_q pubKey
-
--- public keys can be represented using just the x value and the sign of y
--- https://github.com/bitcoinbook/bitcoinbook/blob/first_edition/ch04.asciidoc#compressed-public-keys
-compressed :: PublicKey -> PublicKeyRep
-compressed pubKey =
-  Compressed $  prfx `T.append` hexify x 64
-  where
-    Point x y = public_q pubKey
-    prfx = if isEven y
-           then "02"
-           else "03"
-    isEven n = n `mod` 2 == 0
-
-addressPrefix :: Network -> Prefix
-addressPrefix MainNet = prefix $ stringToHexByteString "00"
-addressPrefix TestNet3 = prefix $ stringToHexByteString "6F"
+    (prefix, Payload payload, checksum) = decodeBase58Check wifText
 
 privateKeyPrefix :: Prefix
 privateKeyPrefix = prefix $ stringToHexByteString "80"
 
+serializePrivateKey :: PrivateKey -> ByteString
+serializePrivateKey =
+  BL.toStrict
+  . runPut
+  . putByteString
+  . unrollWithPad BE 32
+  . fromIntegral
+  . private_d
+
+deserializePrivateKey :: ByteString -> PrivateKey
+deserializePrivateKey =
+  PrivateKey btcCurve
+  . roll BE
+  . runGet (getByteString 32)
+  . getLazyBS
+  where
+    getLazyBS bs = BL.fromChunks [bs]
+
+pubKeyHash :: PublicKeyRep -> ByteString
+pubKeyHash =
+  convert
+  . hashWith RIPEMD160
+  . hashWith SHA256
+  . serializePublicKeyRep
+
+serializePublicKeyRep :: PublicKeyRep -> ByteString
+
+-- See: https://github.com/bitcoinbook/bitcoinbook/blob/first_edition/ch04.asciidoc#public-key-formats
+serializePublicKeyRep (PublicKeyRep Uncompressed pubKey) = BL.toStrict . runPut $ do
+  putWord8  4
+  putByteString . unrollWithPad BE 32 $ x
+  putByteString . unrollWithPad BE 32 $ y
+  where Point x y = public_q pubKey
+
+-- See: https://github.com/bitcoinbook/bitcoinbook/blob/first_edition/ch04.asciidoc#compressed-public-keys
+serializePublicKeyRep (PublicKeyRep Compressed pubKey) = BL.toStrict . runPut $ do
+  putWord8 prefix
+  putByteString . unrollWithPad BE 32 $ x
+  where
+    Point x y = public_q pubKey
+    prefix = if isEven y
+             then 2
+             else 3
+    isEven n = n `mod` 2 == 0 
+
+deserializePublicKeyRep :: ByteString -> Either String PublicKey
+deserializePublicKeyRep bs = do
+  ecPoint <- ecPointFromOct btcEcGroup (bs)
+  let (x, y) = ecPointToAffineGFp btcEcGroup ecPoint
+      btcPubKey = PublicKey btcCurve (Point x y)
+  return btcPubKey

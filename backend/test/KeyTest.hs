@@ -23,6 +23,12 @@ instance Arbitrary PublicKey where
     privKey <-  arbitrary
     return (getPubKey privKey)
 
+instance Arbitrary PublicKeyRep where
+  arbitrary = do
+    pubKey <- arbitrary
+    format <- elements [Compressed, Uncompressed]
+    return $ PublicKeyRep format pubKey
+
 instance Arbitrary Prefix where
   arbitrary = do
     char <- arbitrary
@@ -34,13 +40,26 @@ instance Arbitrary Payload where
     return (Payload $ Char8.pack str)
 
 
-privateKeyInvertibleHex = testProperty
+privateKeyInvertible = testProperty
   "Private key should be invertible between hex and private key"
-  prop_privateKeyInvertibleHex
+  prop_privateKeyInvertible
 
-prop_privateKeyInvertibleHex :: PrivateKey -> Bool
-prop_privateKeyInvertibleHex privKey =
-  (getPrivateKeyFromHex . getHexPrivateKey) privKey == privKey
+prop_privateKeyInvertible :: PrivateKey -> Bool
+prop_privateKeyInvertible privKey =
+  (deserializePrivateKey . serializePrivateKey) privKey == privKey
+
+publicKeyInvertible = testProperty
+  "Public key should be invertible when serialized then deserialized"
+  prop_publicKeyInvertible
+
+prop_publicKeyInvertible :: PublicKeyRep -> Bool
+prop_publicKeyInvertible pubKeyRep@(PublicKeyRep format pubKey) =
+  pubKey == deserializedPubKey
+  where
+    deserializedPubKey =
+      case (deserializePublicKeyRep . serializePublicKeyRep) pubKeyRep of
+        Left err -> error err
+        Right dpk -> dpk
 
 privateKeyInvertibleWIF = testProperty
   "Private key should be invertible between WIF and private key"
@@ -48,7 +67,7 @@ privateKeyInvertibleWIF = testProperty
 
 prop_privateKeyInvertibleWIF :: PrivateKey -> Bool
 prop_privateKeyInvertibleWIF privKey =
-  (getPrivateKeyFromWIF . getWIFPrivateKey. getHexPrivateKey) privKey == privKey
+  (getPrivateKeyFromWIF . getWIFPrivateKey) privKey == privKey
 
 uncompressedPubKeyLength = testProperty
   "Uncompressed public key should always be 65 bytes"
@@ -56,29 +75,25 @@ uncompressedPubKeyLength = testProperty
 
 prop_uncompressedPubKeyLength :: PublicKey -> Bool
 prop_uncompressedPubKeyLength pubKey = 
-  BS.length (textToHexByteString key) == 65
-  where
-    (Uncompressed key) = uncompressed pubKey
-
+  (BS.length . serializePublicKeyRep) (PublicKeyRep Uncompressed pubKey) == 65
+  
 compressedPubKeyLength = testProperty
   "Compressed public key should always be 33 bytes"
   prop_compressedPubKeyLength
 
 prop_compressedPubKeyLength :: PublicKey -> Bool
 prop_compressedPubKeyLength pubKey = 
-  BS.length (textToHexByteString key) == 33
-  where
-    (Compressed key) = compressed pubKey
+  (BS.length . serializePublicKeyRep) (PublicKeyRep Compressed pubKey) == 33
 
 addressLength = testProperty
   "Address should always be 25 bytes"
   prop_addressLength
 
-prop_addressLength :: PublicKey-> Network -> Bool
-prop_addressLength pubKey network =
+prop_addressLength :: PublicKeyRep -> Network -> Bool
+prop_addressLength pubKeyRep network =
   addressLength == 25
   where
-    (Address b58) = (flip getAddress network . compressed) pubKey
+    (Address b58) = getAddress pubKeyRep network
     addressLength = (BS.length . toBytes . fromText) b58
 
 base58CheckInvertible = testProperty

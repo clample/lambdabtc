@@ -31,7 +31,6 @@ FundRequest json
 KeySet
     address Text
     privateKey Text
-    publicKey Text
     deriving Show
 PersistentBlockHeader
     blockVersion Int

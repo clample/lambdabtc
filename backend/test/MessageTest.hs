@@ -2,6 +2,7 @@ module MessageTest where
 
 import TestUtil
 import General.Types
+import General.Util
 import Protocol.Messages (Message(..), MessageBody(..), MessageContext(..))
 import Protocol.Network (Addr(..))
 import Protocol.MessageBodies
@@ -66,7 +67,7 @@ arbitraryHeadersMessage = do
 
 arbitraryFilterloadMessage = do
   fValue <- choose (0, 0xffffffffffffffff) -- upper limit is so the value is reasonably sized
-  let minEncodingLength = B.length . unroll $ fValue
+  let minEncodingLength = B.length . unroll LE $ fValue
   fLengthBytes <- choose (minEncodingLength, 2 * minEncodingLength)
   let filter = Filter { filterLengthBytes = fLengthBytes, filterValue = fValue}
   nHashFuncs <- choose (0, maxNHashFuncs)

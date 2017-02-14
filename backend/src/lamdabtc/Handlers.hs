@@ -63,12 +63,12 @@ postFundRequestsH = do
   config <- lift ask
   -- TODO: Refractor to use genKeySet
   (pubKey, privKey) <- liftIO genKeys
-  let compressedPub@(Compressed pubKeyText) = compressed pubKey
-      Hex privKeyText = getHexPrivateKey privKey
-      address@(Address addressText) = getAddress compressedPub (config^.network)
+  let WIF privKeyTxt = getWIFPrivateKey privKey
+      address@(Address addressText) =
+        getAddress (PublicKeyRep Compressed pubKey) (config^.network)
   fundRequestRaw <- jsonData
   let eitherFundRequest = validateFundRequest address fundRequestRaw
-      keyset = KeySet addressText privKeyText pubKeyText
+      keyset = KeySet addressText privKeyTxt
   case eitherFundRequest of
     Left errorMessage -> do
       status badRequest400

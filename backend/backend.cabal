@@ -34,6 +34,7 @@ library
                      , QuickCheck
                      , bytestring >= 0.10 && < 0.11
                      , cryptonite == 0.19
+                     , cryptonite-openssl == 0.5
                      , base58string == 0.10.0
                      , word8 == 0.1.2
                      , base16-bytestring >= 0.1.1 && < 0.1.2

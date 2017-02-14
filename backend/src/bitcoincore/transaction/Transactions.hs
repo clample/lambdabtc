@@ -156,17 +156,15 @@ putDerSignature signature = do
     putWord8 2
     putWithLength (
       putByteString
-      . BS.reverse
         -- TODO: Is this being put with correct endian?
-      . unroll
+      . unroll BE
       . sign_r
       $ signature)
     putWord8 2
     putWithLength (
       putByteString
-      . BS.reverse
         -- TODO: Is this being put with correct endian?
-      . unroll
+      . unroll BE
       . sign_s
       $ signature)
 
@@ -176,14 +174,14 @@ getDerSignature = do
   derLength <- fromIntegral <$> getWord8
   getWord8
   xLength <- fromIntegral <$> getWord8
-  x <- BS.reverse <$> getByteString xLength
+  x <- roll BE <$> getByteString xLength
     -- TODO: is the BS.reverse necessary?
   getWord8
   yLength <- fromIntegral <$> getWord8
-  y <- BS.reverse <$> getByteString yLength
+  y <- roll BE <$> getByteString yLength
     -- TODO: is the BS.reverse necessary?
   return $
-    Signature (roll x) (roll y)
+    Signature x y
 
 instance Binary TxVersion where
   put = putTxVersion

@@ -3,7 +3,7 @@
 module General.Util
   ( Payload(..)
   , prefix
-  , Prefix
+  , Prefix(..)
   , maybeRead
   , encodeBase58Check
   , decodeBase58Check
@@ -17,7 +17,9 @@ module General.Util
   , putWithLength
   , roll
   , unroll
-  , readFromTable) where
+  , unrollWithPad
+  , readFromTable
+  , Endian(..)) where
 
 import Prelude hiding (take)
 
@@ -96,7 +98,6 @@ stringToHexByteString = fst . decode . Char8.pack
 textToHexByteString :: T.Text -> ByteString
 textToHexByteString = stringToHexByteString . T.unpack
 
-
 -- Make sure that we include leading zeroes when converting an int to its string representatin in hexidecimal
 -- TODO: Get rid of this abomination!
 hexify :: Integer -> Int -> T.Text
@@ -153,18 +154,33 @@ putVarInt (VarInt i)
       putWord8 0xFF
       putWord64le . fromIntegral $ i
 
+data Endian = BE | LE
+  deriving (Show, Eq)
+
 -- Taken from src of Data.Binary
 -- http://hackage.haskell.org/package/binary-0.4.1/docs/src/Data-Binary.html#Binary
-unroll :: Integer -> ByteString
-unroll = BS.pack . unfoldr step
+unroll :: Endian -> Integer -> ByteString
+unroll LE = BS.pack . unfoldr step
   where
     step 0 = Nothing
     step i = Just (fromIntegral i, i `shiftR` 8)
+unroll BE = BS.reverse . unroll LE
 
-roll :: ByteString -> Integer
-roll   = foldr unstep 0 . BS.unpack
+
+unrollWithPad :: Endian -> Int -> Integer -> ByteString
+unrollWithPad BE paddingBytes i =
+  leadingNullBytes `BS.append` base
+  where
+    base = unroll BE i
+    leadingNullBytes = BS.pack $ replicate (paddingBytes - BS.length base) 0
+unrollWithPad LE paddingBytes i = BS.reverse $ unrollWithPad BE paddingBytes i
+
+roll :: Endian -> ByteString -> Integer
+roll LE = foldr unstep 0 . BS.unpack
   where
     unstep b a = a `shiftL` 8 .|. fromIntegral b
+
+roll BE = roll LE . BS.reverse
 
 readFromTable :: [(a, ByteString)] -> ByteString -> Maybe a
 readFromTable table = lookupInTable . uppercase

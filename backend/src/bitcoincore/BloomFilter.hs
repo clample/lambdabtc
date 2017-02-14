@@ -17,7 +17,7 @@ module BitcoinCore.BloomFilter
   , deserializeFilter
   )where
 
-import General.Util (roll, unroll)
+import General.Util (roll, unroll, Endian(..))
 
 import Data.Hash.Murmur (murmur3)
 import Data.Word (Word32)
@@ -121,14 +121,14 @@ blankFilter :: Int -> Probability -> Filter
 blankFilter n p = Filter { filterLengthBytes = filterSize n p, filterValue =  0 }
 
 serializeFilter :: Filter -> ByteString
-serializeFilter f = (unroll . filterValue $ f) `B.append` paddingNullBytes
-  where filterBase = unroll . filterValue $ f
+serializeFilter f = (unroll LE . filterValue $ f) `B.append` paddingNullBytes
+  where filterBase = unroll LE . filterValue $ f
         paddingNullBytes = B.replicate (filterLengthBytes f - B.length filterBase) 0
 
 deserializeFilter :: ByteString -> Filter
 deserializeFilter bs = Filter {filterLengthBytes = fLength, filterValue = fValue}
   where fLength = B.length bs
-        fValue = roll bs
+        fValue = roll LE bs
 
 {--
 setFilterTest :: IO ()
