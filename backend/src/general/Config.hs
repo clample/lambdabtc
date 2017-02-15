@@ -26,7 +26,6 @@ import Control.Lens (makeFields, makeLenses, (^.))
 import Control.Concurrent.STM.TBMChan (TBMChan, newTBMChan)
 import GHC.Conc (atomically)
 
-
 data Environment =
   Development |
   Production |
@@ -38,7 +37,8 @@ data Config =
          , _port :: Int -- port might belong elsewhere
          , _pool :: ConnectionPool
          , _configNetwork :: Network
-         , _appChan :: TBMChan InternalMessage}
+         , _appChan :: TBMChan InternalMessage
+         }
 
 makeLenses ''Config
 
@@ -84,4 +84,3 @@ loggingM :: Environment -> Middleware
 loggingM Development = logStdoutDev
 loggingM Production = logStdout
 loggingM Test = id
-

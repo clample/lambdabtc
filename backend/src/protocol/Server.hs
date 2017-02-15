@@ -24,7 +24,7 @@ import BitcoinCore.BloomFilter ( pDefault
                                , hardcodedTweak
                                , NFlags(..))
 import General.Config (ConfigM(..), Config(..), pool, appChan)
-import General.Persistence (runDB, PersistentBlockHeader(..), EntityField(..))
+import General.Persistence (runDB, PersistentBlockHeader(..), KeySet(..), EntityField(..))
 import General.Types (HasNetwork(..), HasVersion(..), HasRelay(..), HasTime(..), HasLastBlock(..))
 import General.InternalMessaging (InternalMessage(..))
 
@@ -297,11 +297,17 @@ setFilter = do
 synchronizeHeaders :: Integer -> Connection ()
 synchronizeHeaders lastBlockPeer = do
   context <- State.get
-  when ((context^.lastBlock) < lastBlockPeer) $ do
-    getHeaders
-    handleMessages
-    synchronizeHeaders lastBlockPeer
+  newSync <- isNewSync
+  when (outOfSync context) $
+    if newSync
+    then do
+      getHeaders
+      handleMessages
+      synchronizeHeaders lastBlockPeer
+    else do
+      getBlocks
   where
+    outOfSync context = (context^.lastBlock) < lastBlockPeer
     -- Keep reading messages until we get a headers message
     handleMessages = do
       context  <- State.get
@@ -330,19 +336,26 @@ haveHeader (BlockHash hash) = do
 
 
 getHeaders :: Connection ()
-getHeaders = do
+getHeaders = getHeadersOrBlocksMessage GetHeadersMessageBody GetHeadersMessage
+
+getBlocks :: Connection ()
+getBlocks = getHeadersOrBlocksMessage GetBlocksMessageBody GetBlocksMessage
+
+getHeadersOrBlocksMessage :: (a -> MessageBody) 
+                          -> (Int -> [BlockHash] -> BlockHash -> a)
+                          -> Connection ()
+getHeadersOrBlocksMessage bodyConstructor messageConstructor = do
   context <- State.get
   config <- ask
   let getHeadersMessage lastBlock' = do
         blockLocatorHashes <- queryBlockLocatorHashes lastBlock' config
         return $ Message
-          (GetHeadersMessageBody (GetHeadersMessage (context^.version) blockLocatorHashes
+          (bodyConstructor (messageConstructor (context^.version) blockLocatorHashes
             (BlockHash . fst . decode $
              "0000000000000000000000000000000000000000000000000000000000000000")))
           (MessageContext (config^.network))
   message <- liftIO $ getHeadersMessage (fromIntegral (context^.lastBlock))
   liftIO . atomically $ writeTBMChan (context^.writerChan) message
-
 
 queryBlockLocatorHashes :: Int -> Config -> IO [BlockHash]
 queryBlockLocatorHashes lastBlock' config =
@@ -365,3 +378,7 @@ blockLocatorIndicesStep c step (i:is)
   | otherwise = i:is
 blockLocatorIndicesStep _ _ [] =
   error "blockLocatorIndicesStep must be called with a nonempty accummulator array "
+
+isNewSync :: Connection Bool
+isNewSync = (== 0) <$> runDB (count allKeysFilter)
+  where allKeysFilter = [] :: [ Filter KeySet ]
