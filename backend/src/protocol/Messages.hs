@@ -134,6 +134,7 @@ putHeader (Header network command message) = do
 putMessageBody :: MessageBody -> Put
 putMessageBody (VersionMessageBody message) = put message
 putMessageBody (GetHeadersMessageBody message) = put message
+putMessageBody (GetBlocksMessageBody message) = put message
 putMessageBody (HeadersMessageBody message) = put message
 putMessageBody (FilterloadMessageBody message) = put message
 putMessageBody (InvMessageBody message) = put message
@@ -263,6 +264,7 @@ parseMessageBody expectedLength GetDataCommand =
   parseRemaining expectedLength >> return
     (GetDataMessageBody GetDataMessage)
 parseMessageBody _ GetHeadersCommand =  GetHeadersMessageBody <$> get
+parseMessageBody _ GetBlocksCommand = GetBlocksMessageBody <$> get
 parseMessageBody expectedLength BlockCommand =
   parseRemaining expectedLength >> return
     (BlockMessageBody BlockMessage)

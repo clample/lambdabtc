@@ -12,13 +12,19 @@ import BitcoinCore.BloomFilter (Tweak(..), Filter(..), NFlags(..), serializeFilt
 import BitcoinCore.Transaction.Transactions (Transaction(..))
 
 import Data.Time.Clock.POSIX (POSIXTime)
-import Control.Lens (makeLenses, makeFields, (^.))
+import Control.Lens (makeLenses, makeFields, (^.), Lens')
 import Data.Binary (Binary(..))
 import Data.Binary.Get (Get, getWord32le, getWord64be, getWord64le, getWord8, getByteString)
 import Data.Binary.Put (Put, putWord32le, putWord64le, putWord64be, putWord8, putByteString)
 import Data.ByteString (ByteString)
 import Control.Monad (replicateM)
 import Foreign.Marshal.Utils (toBool)
+
+class HasBlockLocatorHashes t where
+  blockLocatorHashes :: Lens' t [BlockHash]
+
+class HasHashStop t where
+  hashStop :: Lens' t BlockHash
 
 ----------------------------------
 data VersionMessage = VersionMessage
@@ -144,40 +150,63 @@ data GetDataMessage = GetDataMessage
 data NotFoundMessage = NotFoundMessage
   deriving (Show, Eq)
 
+---------------------------
 data GetBlocksMessage = GetBlocksMessage
+  { _getBlocksMessageVersion     :: Int
+  , _getBlocksBlockLocatorHashes :: [BlockHash]
+  , _getBlocksHashStop           :: BlockHash}
   deriving (Show, Eq)
 
--------------------------------
 data GetHeadersMessage = GetHeadersMessage
-    { _getHeadersMessageVersion            :: Int
-    , _blockLocatorHashes :: [BlockHash]
-    , _hashStop           :: BlockHash}
+    { _getHeadersMessageVersion     :: Int
+    , _getHeadersBlockLocatorHashes :: [BlockHash]
+    , _getHeadersHashStop           :: BlockHash}
   deriving (Show, Eq)
 
+makeLenses ''GetBlocksMessage
 makeLenses ''GetHeadersMessage
+
+instance HasVersion GetBlocksMessage where
+  version = getBlocksMessageVersion
+
+instance HasBlockLocatorHashes GetBlocksMessage where
+  blockLocatorHashes = getBlocksBlockLocatorHashes
+
+instance HasHashStop GetBlocksMessage where
+  hashStop = getBlocksHashStop
 
 instance HasVersion GetHeadersMessage where
   version = getHeadersMessageVersion
 
-instance Binary GetHeadersMessage where
-  put = putGetHeadersMessage
-  get = getGetHeadersMessage
+instance HasBlockLocatorHashes GetHeadersMessage where
+  blockLocatorHashes = getHeadersBlockLocatorHashes
 
-putGetHeadersMessage :: GetHeadersMessage -> Put
-putGetHeadersMessage message = do
+instance HasHashStop GetHeadersMessage where
+  hashStop = getHeadersHashStop
+
+instance Binary GetHeadersMessage where
+  put = putGetHeadersOrBlocksMessage
+  get = getGetHeadersOrBlocksMessage GetHeadersMessage
+
+instance Binary GetBlocksMessage where
+  put = putGetHeadersOrBlocksMessage
+  get = getGetHeadersOrBlocksMessage GetBlocksMessage
+
+putGetHeadersOrBlocksMessage :: (HasVersion a, HasBlockLocatorHashes a, HasHashStop a)
+                     => a -> Put
+putGetHeadersOrBlocksMessage message = do
   putWord32le . fromIntegral $ (message^.version)
   put . VarInt . length $ (message^.blockLocatorHashes)
   mapM_ put (message^.blockLocatorHashes)
   put (message^.hashStop)
 
-getGetHeadersMessage :: Get GetHeadersMessage
-getGetHeadersMessage = do
+getGetHeadersOrBlocksMessage :: (Int -> [BlockHash] -> BlockHash -> a) -> Get a
+getGetHeadersOrBlocksMessage constructor = do
   version'            <- fromIntegral <$> getWord32le
   VarInt nHashes     <- get
   blockLocatorHashes' <- replicateM nHashes get
   hashStop'           <- get
-  return
-    (GetHeadersMessage version' blockLocatorHashes' hashStop')
+  return $ constructor version' blockLocatorHashes' hashStop'
 --------------------------------
 
 data BlockMessage = BlockMessage
