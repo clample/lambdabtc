@@ -67,46 +67,6 @@ hashBlock blockHeader = BlockHash $
   BS.reverse . doubleSHA . BL.toStrict . runPut $ putBlockHeaderWithoutTxCount blockHeader
   -- HELP: Why do we need reverse here?
 
-{--
-decodeBlockHeader :: PersistentBlockHeader -> BlockHeader
-decodeBlockHeader
-  (PersistentBlockHeader
-    blockVersion
-    prevBlockHash
-    merkleRoot
-    timestamp
-    difficulty
-    nonce
-    txCount) =
-  BlockHeader
-    (BlockVersion blockVersion)
-    (BlockHash prevBlockHash)
-    (MerkleRoot merkleRoot)
-    (Timestamp . fromIntegral $ timestamp)
-    (Difficulty difficulty)
-    (Nonce nonce)
-    (TxCount . VarInt $ txCount)
-
-encodeBlockHeader :: BlockHeader -> PersistentBlockHeader
-encodeBlockHeader
-  (BlockHeader
-    (BlockVersion blockVersion)
-    (BlockHash prevBlockHash)
-    (MerkleRoot merkleRoot)
-    (Timestamp timestamp)
-    (Difficulty difficulty)
-    (Nonce nonce)
-    (TxCount (VarInt txCount))) =
-  PersistentBlockHeader
-    blockVersion
-    prevBlockHash
-    merkleRoot
-    (fromIntegral . floor $ timestamp)
-    difficulty
-    nonce
-    txCount
---}
-
 putBlockHeaderWithoutTxCount :: BlockHeader -> Put
 putBlockHeaderWithoutTxCount (BlockHeader version prevHash merkleRoot time difficulty nonce _) = do
   put version

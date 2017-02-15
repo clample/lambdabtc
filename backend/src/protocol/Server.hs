@@ -24,7 +24,7 @@ import BitcoinCore.BloomFilter ( pDefault
                                , hardcodedTweak
                                , NFlags(..))
 import General.Config (ConfigM(..), Config(..), pool, appChan)
-import General.Persistence (runDB, PersistentBlockHeader(..))
+import General.Persistence (runDB, PersistentBlockHeader(..), EntityField(..))
 import General.Types (HasNetwork(..), HasVersion(..), HasRelay(..), HasTime(..), HasLastBlock(..))
 import General.InternalMessaging (InternalMessage(..))
 
@@ -49,8 +49,17 @@ import Control.Concurrent.STM (atomically)
 import Control.Concurrent (forkIO)
 import Data.Binary (Binary(..))
 import Data.ByteString.Base16 (decode)
-import Database.Persist.Sql (insertMany_, count, runSqlPool, Filter, toSqlKey, insert_)
+import Database.Persist.Sql ( insertMany_
+                            , count
+                            , runSqlPool
+                            , Filter
+                            , toSqlKey
+                            , insert_
+                            , selectList
+                            , (==.)
+                            , (>=.))
 import qualified Database.Persist.Sql as DB
+import Database.Persist.Types (SelectOpt(..))
 import Data.List.Split (chunksOf)
 import Data.Maybe (fromJust)
 import Control.Lens (makeLenses, (^.), (+=))
@@ -211,7 +220,24 @@ handleResponse (Message (HeadersMessageBody (HeadersMessage headers)) _) = do
       runDB $ mapM_ insertMany_ chunkedPersistentHeaders
       lastBlock += newHeaders
     else fail "We recieved invalid headers"
-    
+
+
+handleResponse (Message (GetHeadersMessageBody message) _) = do
+  config <- ask
+  context <- State.get
+  DB.Entity headerId _ <- firstHeaderMatch (message^.blockLocatorHashes)
+  matchingHeaderEntities <- runDB $
+    selectList [ PersistentBlockHeaderId >=. headerId ] [LimitTo 2000]
+  let getHeaderFromEntity (DB.Entity _ persistentHeader) = decodeBlockHeader persistentHeader
+      matchingHeaders = map getHeaderFromEntity matchingHeaderEntities
+      headersMessage =
+        Message
+        (HeadersMessageBody (HeadersMessage {_blockHeaders = matchingHeaders}))
+        (MessageContext (config^.network))
+  liftIO . atomically $ writeTBMChan (context^.writerChan) headersMessage
+  
+
+
 handleResponse _ = return ()
 
 handleInternalMessage :: InternalMessage -> Connection ()
@@ -284,7 +310,23 @@ synchronizeHeaders lastBlockPeer = do
         Nothing -> fail "listenChan is closed and empty"
         Just response@(Message (HeadersMessageBody _) _) -> handleResponse response
         Just response -> handleResponse response >> handleMessages
-      
+
+
+firstHeaderMatch :: [BlockHash] -> Connection (DB.Entity PersistentBlockHeader)
+firstHeaderMatch [] = fail "No matching hash was found"
+firstHeaderMatch (hash:hashes) = do
+  mHeader <- haveHeader hash
+  case mHeader of
+    Just header -> return header
+    Nothing -> firstHeaderMatch hashes
+
+haveHeader :: BlockHash -> Connection (Maybe (DB.Entity PersistentBlockHeader))
+haveHeader (BlockHash hash) = do
+  matches <- runDB $ selectList [PersistentBlockHeaderHash ==. hash] []
+  case matches of
+    []       -> return Nothing
+    [header] -> return $ Just header
+    _        -> fail "Multiple blocks found with same hash"
 
 
 getHeaders :: Connection ()

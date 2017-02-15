@@ -36,6 +36,7 @@ KeySet
 PersistentBlockHeader
     blockVersion Int
     prevBlockHash ByteString
+    hash ByteString
     merkleRoot ByteString
     timestamp Int
     difficulty ByteString

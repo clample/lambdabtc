@@ -9,7 +9,8 @@ import BitcoinCore.BlockHeaders  ( BlockHeader(..)
                                  , Difficulty(..)
                                  , Nonce(..)
                                  , Timestamp(..)
-                                 , TxCount(..))
+                                 , TxCount(..)
+                                 , hashBlock)
 
 
 decodeBlockHeader :: PersistentBlockHeader -> BlockHeader
@@ -17,6 +18,7 @@ decodeBlockHeader
   (PersistentBlockHeader
     blockVersion
     prevBlockHash
+    hash
     merkleRoot
     timestamp
     difficulty
@@ -33,7 +35,7 @@ decodeBlockHeader
 
 encodeBlockHeader :: BlockHeader -> PersistentBlockHeader
 encodeBlockHeader
-  (BlockHeader
+  header@(BlockHeader
     (BlockVersion blockVersion)
     (BlockHash prevBlockHash)
     (MerkleRoot merkleRoot)
@@ -44,8 +46,10 @@ encodeBlockHeader
   PersistentBlockHeader
     blockVersion
     prevBlockHash
+    hash
     merkleRoot
     (fromIntegral . floor $ timestamp)
     difficulty
     nonce
     txCount
+  where BlockHash hash = hashBlock header
