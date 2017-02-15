@@ -229,13 +229,13 @@ readCommand bs = fromMaybe UnknownCommand (readFromTable commandTable bs)
 
 getPayload :: Get ByteString
 getPayload = do
-  length <- fromIntegral <$> getWord8
-  getByteString length
+  payloadLength <- fromIntegral <$> getWord8
+  getByteString payloadLength
 
 parseRemaining :: Int -> Get ()
 parseRemaining expectedLength = do
-  read <- fromIntegral <$> bytesRead 
-  getByteString (expectedLength - read)
+  bytesRead' <- fromIntegral <$> bytesRead 
+  getByteString (expectedLength - bytesRead')
   return ()
 
 parseMessageBody :: Int -> Command -> Get MessageBody
@@ -248,7 +248,7 @@ parseMessageBody expectedLength VerackCommand =
 parseMessageBody expectedLength AddrCommand =
   parseRemaining expectedLength >> return
     (AddrMessageBody AddrMessage)
-parseMessageBody expectedLength TxCommand =
+parseMessageBody _ TxCommand =
   TxMessageBody <$> get
 parseMessageBody expectedLength RejectCommand =
   parseRemaining expectedLength >> return
