@@ -6,6 +6,7 @@ import General.Util
 import Protocol.Messages (Message(..), MessageBody(..), MessageContext(..))
 import Protocol.Network (Addr(..))
 import Protocol.MessageBodies
+import Protocol.Util
 import qualified Data.ByteString.Char8 as Char8
 import Data.Time.Clock (NominalDiffTime(..))
 import Data.Binary (Binary(..))
@@ -28,6 +29,7 @@ instance Arbitrary MessageBody where
     , arbitraryGetHeadersMessage
     , arbitraryFilterloadMessage
     , arbitraryInvMessage
+    , arbitraryRejectMessage
     , return (VerackMessageBody VerackMessage)]
 
 instance Arbitrary MessageContext where
@@ -81,6 +83,14 @@ arbitraryFilterloadMessage = do
 
 arbitraryInvMessage = 
   InvMessageBody . InvMessage <$> arbitrary
+
+arbitraryRejectMessage = do
+  RejectMessageBody <$>
+    (RejectMessage <$> arbitrary <*> arbitrary <*> arbitrary)
+  
+
+instance Arbitrary CCode where
+  arbitrary = elements . map fst $ ccodeTable
   
 instance Arbitrary InventoryVector where
   arbitrary = do

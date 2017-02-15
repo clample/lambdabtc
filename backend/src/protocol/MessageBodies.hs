@@ -4,6 +4,7 @@
 module Protocol.MessageBodies where
 
 import Protocol.Network (Addr, putServices, putAddr, getAddr)
+import Protocol.Util (CCode(..))
 import General.Types (HasRelay(..), HasTime(..), HasLastBlock(..), HasVersion(..))
 import General.Util (VarInt(..))
 import BitcoinCore.Inventory (InventoryVector(..))
@@ -17,6 +18,7 @@ import Data.Binary (Binary(..))
 import Data.Binary.Get (Get, getWord32le, getWord64be, getWord64le, getWord8, getByteString)
 import Data.Binary.Put (Put, putWord32le, putWord64le, putWord64be, putWord8, putByteString)
 import Data.ByteString (ByteString)
+import qualified Data.ByteString.Char8 as Char8
 import Control.Monad (replicateM)
 import Foreign.Marshal.Utils (toBool)
 
@@ -116,7 +118,36 @@ getTxMessage = TxMessage <$> get
   
 ----------------------------
 data RejectMessage = RejectMessage
+  { _rejectMessage :: String
+  , _cCode :: CCode
+  , _reason :: String }
   deriving (Show, Eq)
+
+makeLenses ''RejectMessage
+
+instance Binary RejectMessage where
+  put = putRejectMessage
+  get = getRejectMessage
+
+putRejectMessage :: RejectMessage -> Put
+putRejectMessage message = do
+  put . VarInt . length $ message^.rejectMessage
+  putByteString . Char8.pack $ message^.rejectMessage
+  putWord8 . fromIntegral  . fromEnum $ message^.cCode
+  put . VarInt . length $ message^.reason
+  putByteString . Char8.pack $ message^.reason
+  -- TODO: factor out var_str method
+
+getRejectMessage :: Get RejectMessage
+getRejectMessage = do
+  VarInt msgLength <- get
+  rejectMessage' <- Char8.unpack <$> getByteString msgLength
+  cCode' <- toEnum . fromIntegral <$> getWord8
+  VarInt reasonLength' <- get
+  reason' <- Char8.unpack <$> getByteString reasonLength'
+  return $ RejectMessage rejectMessage' cCode' reason'
+  
+---------------------------
 
 data PingMessage = PingMessage
   deriving (Show, Eq)

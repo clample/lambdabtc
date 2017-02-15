@@ -236,7 +236,6 @@ handleResponse (Message (GetHeadersMessageBody message) _) = do
         (HeadersMessageBody (HeadersMessage {_blockHeaders = matchingHeaders}))
         (MessageContext (config^.network))
   liftIO . atomically $ writeTBMChan (context^.writerChan) headersMessage
-  return ()
   
 handleResponse (Message (InvMessageBody message) _) = do
   config <- ask

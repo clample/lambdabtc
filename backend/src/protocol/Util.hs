@@ -13,6 +13,10 @@ import BitcoinCore.BlockHeaders  ( BlockHeader(..)
                                  , hashBlock)
 
 
+import Data.Maybe (fromJust)
+import Data.Tuple (swap)
+import Data.List (lookup)
+
 decodeBlockHeader :: PersistentBlockHeader -> BlockHeader
 decodeBlockHeader
   (PersistentBlockHeader
@@ -53,3 +57,29 @@ encodeBlockHeader
     nonce
     txCount
   where BlockHash hash = hashBlock header
+
+data CCode
+  = REJECT_MALFORMED
+  | REJECT_INVALID
+  | REJECT_OBSOLETE
+  | REJECT_DUPLICATE
+  | REJECT_NONSTANDARD
+  | REJECT_DUST
+  | REJECT_INSUFFICIENTFEE
+  | REJECT_CHECKPOINT
+  deriving (Show, Eq)
+
+instance Enum CCode where
+  fromEnum = fromJust . flip lookup ccodeTable
+  toEnum = fromJust . flip lookup (map swap ccodeTable)
+
+ccodeTable :: [(CCode, Int)]
+ccodeTable =
+  [ (REJECT_MALFORMED, 0x01)
+  , (REJECT_INVALID,   0x10)
+  , (REJECT_OBSOLETE,  0x11)
+  , (REJECT_DUPLICATE, 0x12)
+  , (REJECT_NONSTANDARD, 0x40)
+  , (REJECT_DUST, 0x41)
+  , (REJECT_INSUFFICIENTFEE, 0x42)
+  , (REJECT_CHECKPOINT, 0x43)]

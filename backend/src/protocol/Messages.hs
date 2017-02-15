@@ -138,6 +138,7 @@ putMessageBody (GetBlocksMessageBody message) = put message
 putMessageBody (HeadersMessageBody message) = put message
 putMessageBody (FilterloadMessageBody message) = put message
 putMessageBody (InvMessageBody message) = put message
+putMessageBody (RejectMessageBody message) = put message
 putMessageBody _ = putByteString ""
 
 getCommand :: MessageBody -> Command
@@ -250,9 +251,12 @@ parseMessageBody expectedLength AddrCommand =
     (AddrMessageBody AddrMessage)
 parseMessageBody _ TxCommand =
   TxMessageBody <$> get
-parseMessageBody expectedLength RejectCommand =
-  parseRemaining expectedLength >> return
-    (RejectMessageBody RejectMessage)
+parseMessageBody expectedLength RejectCommand = do
+  message <- RejectMessageBody <$> get
+  parseRemaining expectedLength
+  -- TODO: The reject message may or may not have a data field
+  --       That is why parseRemaining is used here
+  return message
 parseMessageBody expectedLength PingCommand =
   parseRemaining expectedLength >> return
     (PingMessageBody PingMessage)
