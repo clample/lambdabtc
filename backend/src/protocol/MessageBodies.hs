@@ -26,6 +26,9 @@ class HasBlockLocatorHashes t where
 class HasHashStop t where
   hashStop :: Lens' t BlockHash
 
+class HasInvVectors t where
+  invVectors :: Lens' t [InventoryVector]
+
 ----------------------------------
 data VersionMessage = VersionMessage
     { _versionMessageVersion    :: Int
@@ -123,29 +126,42 @@ data PongMessage = PongMessage
 
 ----------------------------
 data InvMessage = InvMessage
-  { _invVectors :: [InventoryVector]}
+  { _invMessageInvVectors :: [InventoryVector]}
+  deriving (Show, Eq)
+
+data GetDataMessage = GetDataMessage
+  { _getDataInvVectors :: [InventoryVector]}
   deriving (Show, Eq)
 
 makeLenses ''InvMessage
+makeLenses ''GetDataMessage
+
+instance HasInvVectors InvMessage where
+  invVectors = invMessageInvVectors
+
+instance HasInvVectors GetDataMessage where
+  invVectors = getDataInvVectors
 
 instance Binary InvMessage where
-  put = putInvMessage 
-  get = getInvMessage
+  put = putInvOrDataMessage 
+  get = getInvOrDataMessage InvMessage
 
-putInvMessage :: InvMessage -> Put
-putInvMessage message = do
+instance Binary GetDataMessage where
+  put = putInvOrDataMessage
+  get = getInvOrDataMessage GetDataMessage
+
+putInvOrDataMessage :: HasInvVectors a => a -> Put
+putInvOrDataMessage message = do
   put . VarInt . length $ message^.invVectors
   mapM_ put (message^.invVectors)
 
-getInvMessage :: Get InvMessage
-getInvMessage = do
+getInvOrDataMessage :: ([InventoryVector] -> a) -> Get a
+getInvOrDataMessage constructor = do
    VarInt count <- get
    inventoryVectors <- replicateM count get
-   return $ (InvMessage inventoryVectors)
-
----------------------------
-data GetDataMessage = GetDataMessage
-  deriving (Show, Eq)
+   return $ constructor inventoryVectors
+   
+-----------------------------
 
 data NotFoundMessage = NotFoundMessage
   deriving (Show, Eq)

@@ -23,6 +23,7 @@ import BitcoinCore.BloomFilter ( pDefault
                                , filterSize
                                , hardcodedTweak
                                , NFlags(..))
+import BitcoinCore.Inventory (InventoryVector(..), ObjectType(..), ObjectHash(..))
 import General.Config (ConfigM(..), Config(..), pool, appChan)
 import General.Persistence (runDB, PersistentBlockHeader(..), KeySet(..), EntityField(..))
 import General.Types (HasNetwork(..), HasVersion(..), HasRelay(..), HasTime(..), HasLastBlock(..))
@@ -32,7 +33,7 @@ import Network.Socket (Socket)
 import Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
 import Control.Monad.State.Lazy (StateT(..), runStateT, liftIO)
 import Control.Monad.Reader (runReaderT, ask)
-import Control.Monad (when)
+import Control.Monad (when, filterM)
 import qualified Control.Monad.State.Lazy as State
 import System.Random (randomR, StdGen, getStdGen)
 import Conduit (runConduit, (.|), mapC, mapMC, Conduit)
@@ -235,8 +236,22 @@ handleResponse (Message (GetHeadersMessageBody message) _) = do
         (HeadersMessageBody (HeadersMessage {_blockHeaders = matchingHeaders}))
         (MessageContext (config^.network))
   liftIO . atomically $ writeTBMChan (context^.writerChan) headersMessage
+  return ()
   
-
+handleResponse (Message (InvMessageBody message) _) = do
+  config <- ask
+  context <- State.get
+  desiredInvs <- map toFilteredBlock <$> filterM (desiredData) (message^.invVectors)
+  let getDataMessage =
+        Message
+        (GetDataMessageBody (GetDataMessage desiredInvs))
+        (MessageContext (config^.network))
+  liftIO . atomically $ writeTBMChan (context^.writerChan) getDataMessage
+  where
+    -- TODO: query db, etc to see if we need the data
+    desiredData _ = return True
+    toFilteredBlock (InventoryVector MSG_BLOCK hash) = InventoryVector MSG_FILTERED_BLOCK hash
+    toFilteredBlock invVector = invVector
 
 handleResponse _ = return ()
 
@@ -248,7 +263,7 @@ handleInternalMessage (SendTX transaction) = do
       messageContext = MessageContext (config^.network)
       txMessage = Message body messageContext
   liftIO . atomically $ writeTBMChan (context^.writerChan) txMessage
-  
+
 
 getMostRecentHeader :: Connection BlockHeader
 getMostRecentHeader = do

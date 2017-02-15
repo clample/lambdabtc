@@ -260,9 +260,7 @@ parseMessageBody expectedLength PongCommand =
   parseRemaining expectedLength >> return
     (PongMessageBody PongMessage)
 parseMessageBody _ InvCommand = InvMessageBody <$> get  
-parseMessageBody expectedLength GetDataCommand =
-  parseRemaining expectedLength >> return
-    (GetDataMessageBody GetDataMessage)
+parseMessageBody _ GetDataCommand = GetDataMessageBody <$> get
 parseMessageBody _ GetHeadersCommand =  GetHeadersMessageBody <$> get
 parseMessageBody _ GetBlocksCommand = GetBlocksMessageBody <$> get
 parseMessageBody expectedLength BlockCommand =
