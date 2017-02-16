@@ -1,3 +1,4 @@
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
 module BitcoinCore.BlockHeaders where
 
@@ -11,6 +12,7 @@ import Data.Binary.Put (Put, putWord32le, putByteString, runPut)
 import Data.Binary.Get (Get, getWord32le, getByteString)
 import Data.Binary (Binary(..))
 import Data.ByteString.Base16 (decode, encode)
+import Control.Lens (makeLenses, (^.))
 ------
 import Test.QuickCheck.Arbitrary (Arbitrary(..))
 import Test.QuickCheck.Gen (choose, vectorOf, Gen)
@@ -18,13 +20,15 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Char8 as Char8
 
-data BlockHeader =
-  BlockHeader BlockVersion PrevBlockHash MerkleRoot Timestamp Difficulty Nonce TxCount
-  deriving (Eq, Show)
-
--- TODO: Just make BlockHeader a record? use lenses?
-prevBlockHash :: BlockHeader -> BlockHash
-prevBlockHash (BlockHeader _ hash _ _ _ _ _) = hash
+data BlockHeader = BlockHeader
+  { _blockVersion :: BlockVersion
+  , _prevBlockHash :: PrevBlockHash
+  , _merkleRoot :: MerkleRoot
+  , _timestamp :: Timestamp
+  , _difficulty :: Difficulty
+  , _nonce :: Nonce
+  , _txCount :: TxCount
+  } deriving (Eq, Show)
 
 data BlockVersion = BlockVersion Int
   deriving (Eq, Show)
@@ -62,36 +66,38 @@ instance Show Nonce where
 data TxCount = TxCount VarInt -- Always 0 for block headers
   deriving (Eq, Show)
 
+makeLenses ''BlockHeader
+
 hashBlock :: BlockHeader -> BlockHash
 hashBlock blockHeader = BlockHash $
   BS.reverse . doubleSHA . BL.toStrict . runPut $ putBlockHeaderWithoutTxCount blockHeader
   -- HELP: Why do we need reverse here?
 
 putBlockHeaderWithoutTxCount :: BlockHeader -> Put
-putBlockHeaderWithoutTxCount (BlockHeader version prevHash merkleRoot time difficulty nonce _) = do
-  put version
-  put prevHash
-  put merkleRoot
-  put time
-  put difficulty
-  put nonce
+putBlockHeaderWithoutTxCount blockHeader = do
+  put $ blockHeader^.blockVersion
+  put $ blockHeader^.prevBlockHash
+  put $ blockHeader^.merkleRoot
+  put $ blockHeader^.timestamp
+  put $ blockHeader^.difficulty
+  put $ blockHeader^.nonce
 
 
 putBlockHeader :: BlockHeader -> Put
-putBlockHeader blockHeader@(BlockHeader version prevHash merkleRoot time difficulty nonce txCount) = do
+putBlockHeader blockHeader = do
   putBlockHeaderWithoutTxCount blockHeader
-  put txCount
+  put $ blockHeader^.txCount
 
 getBlockHeader :: Get BlockHeader
 getBlockHeader = do
-  version <- get
-  prevHash <- get
-  merkleRoot <- get
-  time <- get
-  difficulty <- get
-  nonce <- get
-  txCount <- get
-  return $ BlockHeader version prevHash merkleRoot time difficulty nonce txCount
+  blockVersion' <- get
+  prevBlockHash' <- get
+  merkleRoot' <- get
+  timestamp' <- get
+  difficulty' <- get
+  nonce' <- get
+  txCount' <- get
+  return $ BlockHeader blockVersion' prevBlockHash' merkleRoot' timestamp' difficulty' nonce' txCount'
 
 instance Binary BlockHeader where
   put = putBlockHeader
@@ -181,7 +187,7 @@ getTxCount =
 verifyHeaders :: [BlockHeader] -> Bool
 verifyHeaders [newest] = True
 verifyHeaders (old:new:rest) =
-  (hashBlock old == prevBlockHash new) &&
+  (hashBlock old == (new^.prevBlockHash)) &&
   verifyHeaders (new:rest)
 
 instance Binary TxCount where
