@@ -154,10 +154,8 @@ handleResponse (Message (VersionMessageBody body) _) = do
   let verackMessage =
         Message (VerackMessageBody VerackMessage) (MessageContext (config^.network))
       lastBlockPeer = body^.lastBlock
-      lastBlockSelf = context^.lastBlock
   writeMessage verackMessage
-  when (lastBlockPeer > lastBlockSelf) $
-    synchronizeHeaders lastBlockPeer
+  synchronizeHeaders lastBlockPeer
 
 handleResponse (Message (PingMessageBody _) _) = do
   config  <- ask
@@ -274,6 +272,8 @@ synchronizeHeaders lastBlockPeer = do
       synchronizeHeaders lastBlockPeer
     else do
       getBlocks
+      handleMessages
+      synchronizeHeaders lastBlockPeer
   where
     outOfSync context = (context^.lastBlock) < lastBlockPeer
     -- Keep reading messages until we get a headers message
