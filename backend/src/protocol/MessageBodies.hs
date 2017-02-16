@@ -8,7 +8,9 @@ import Protocol.Util (CCode(..))
 import General.Types (HasRelay(..), HasTime(..), HasLastBlock(..), HasVersion(..))
 import General.Util (VarInt(..))
 import BitcoinCore.Inventory (InventoryVector(..))
-import BitcoinCore.BlockHeaders (BlockHash(..), BlockHeader(..))
+import BitcoinCore.BlockHeaders ( BlockHash(..)
+                                , BlockHeader(..))
+import BitcoinCore.MerkleTrees (MerkleHash(..), MerkleFlags(..))
 import BitcoinCore.BloomFilter (Tweak(..), Filter(..), NFlags(..), serializeFilter, deserializeFilter)
 import BitcoinCore.Transaction.Transactions (Transaction(..))
 
@@ -18,6 +20,7 @@ import Data.Binary (Binary(..))
 import Data.Binary.Get (Get, getWord32le, getWord64be, getWord64le, getWord8, getByteString)
 import Data.Binary.Put (Put, putWord32le, putWord64le, putWord64be, putWord8, putByteString)
 import Data.ByteString (ByteString)
+import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as Char8
 import Control.Monad (replicateM)
 import Foreign.Marshal.Utils (toBool)
@@ -259,6 +262,40 @@ getGetHeadersOrBlocksMessage constructor = do
 data BlockMessage = BlockMessage
   deriving (Show, Eq)
 
+-----------------------
+data MerkleblockMessage = MerkleblockMessage
+  { _blockHeader   :: BlockHeader
+  , _merkleHashes  :: [MerkleHash]
+  , _flags         :: MerkleFlags}
+  deriving (Show, Eq)
+
+makeLenses ''MerkleblockMessage
+
+instance Binary MerkleblockMessage where
+  get = getMerkleblockMessage
+  put = putMerkleblockMessage
+
+getMerkleblockMessage :: Get MerkleblockMessage
+getMerkleblockMessage = do
+  blockHeader' <- get
+  txCount' <- fromIntegral <$> getWord32le
+  VarInt nMerkleHashes <- get
+  merkleHashes' <- replicateM nMerkleHashes get
+  VarInt flagsLengthBytes <- get
+  flags' <- MerkleFlags <$> getByteString flagsLengthBytes
+  return $ MerkleblockMessage blockHeader' merkleHashes' flags'
+  
+
+putMerkleblockMessage :: MerkleblockMessage -> Put 
+putMerkleblockMessage message = do
+  put (message^.blockHeader)
+  putWord32le 0
+  put . VarInt . length $ message^.merkleHashes
+  mapM_ put (message^.merkleHashes)
+  let MerkleFlags flagsBS = message^.flags
+  put . VarInt . BS.length $ flagsBS
+  putByteString flagsBS
+
 ------------------------
 data HeadersMessage = HeadersMessage
   { _blockHeaders :: [BlockHeader]}
@@ -346,9 +383,6 @@ data FilteraddMessage = FilteraddMessage
   deriving (Show, Eq)
 
 data FilterclearMessage = FilterclearMessage
-  deriving (Show, Eq)
-
-data MerkleblockMessage = MerkleblockMessage
   deriving (Show, Eq)
 
 data SendheadersMessage = SendheadersMessage

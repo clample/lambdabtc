@@ -27,8 +27,10 @@ instance Arbitrary MessageBody where
     [ arbitraryVersionMessage
     , arbitraryGetHeadersMessage
     , arbitraryGetHeadersMessage
+    , arbitraryMerkleblockMessage
     , arbitraryFilterloadMessage
     , arbitraryInvMessage
+    , arbitraryGetDataMessage
     , arbitraryRejectMessage
     , return (VerackMessageBody VerackMessage)]
 
@@ -61,6 +63,14 @@ arbitraryGetHeadersMessage = do
     (GetHeadersMessage version blockLocatorHashes hashStop)
   where maxVersion = 0xffffffff -- 4 bytes
 
+arbitraryMerkleblockMessage = do
+  blockHeader' <- arbitrary
+  nMerkleHashes <- choose (0, 100)
+  merkleHashes' <- vectorOf  nMerkleHashes arbitrary
+  flags' <- arbitrary
+  return $ MerkleblockMessageBody
+    (MerkleblockMessage blockHeader' merkleHashes' flags')
+
 arbitraryHeadersMessage = do
   n            <- choose (0, 2000) -- A headers message contains at most 2000 block headers
   blockHeaders <- vectorOf n arbitrary
@@ -83,6 +93,9 @@ arbitraryFilterloadMessage = do
 
 arbitraryInvMessage = 
   InvMessageBody . InvMessage <$> arbitrary
+
+arbitraryGetDataMessage =
+  GetDataMessageBody . GetDataMessage <$> arbitrary
 
 arbitraryRejectMessage = do
   RejectMessageBody <$>

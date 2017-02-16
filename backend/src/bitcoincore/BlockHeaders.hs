@@ -4,6 +4,7 @@ module BitcoinCore.BlockHeaders where
 
 import General.Util (VarInt(..), doubleSHA)
 import General.Types (Network(..))
+import BitcoinCore.MerkleTrees (MerkleHash(..))
 
 import Data.ByteString (ByteString)
 import Data.Time.Clock.POSIX (POSIXTime)
@@ -12,7 +13,7 @@ import Data.Binary.Get (Get, getWord32le, getByteString)
 import Data.Binary (Binary(..))
 import Data.ByteString.Base16 (decode, encode)
 import Control.Lens (makeLenses, (^.))
-------
+-----------
 import Test.QuickCheck.Arbitrary (Arbitrary(..))
 import Test.QuickCheck.Gen (choose, vectorOf, Gen)
 import qualified Data.ByteString as BS
@@ -22,7 +23,7 @@ import qualified Data.ByteString.Char8 as Char8
 data BlockHeader = BlockHeader
   { _blockVersion :: BlockVersion
   , _prevBlockHash :: PrevBlockHash
-  , _merkleRoot :: MerkleRoot
+  , _merkleRoot :: MerkleHash
   , _timestamp :: Timestamp
   , _difficulty :: Difficulty
   , _nonce :: Nonce
@@ -39,12 +40,6 @@ data BlockHash = BlockHash ByteString
 
 instance Show BlockHash where
   show (BlockHash bs) = "BlockHash " ++ (show . encode $ bs)
-
-data MerkleRoot = MerkleRoot ByteString
-  deriving (Eq)
-
-instance Show MerkleRoot where
-  show (MerkleRoot bs) = "MerkleRoot " ++ (show . encode $ bs)
 
 data Timestamp = Timestamp POSIXTime
   deriving (Eq, Show)
@@ -115,18 +110,6 @@ instance Binary BlockHash where
   put = putBlockHash
   get = getBlockHash
 
-putMerkleRoot :: MerkleRoot -> Put
-putMerkleRoot (MerkleRoot bs) =
-  putByteString bs
-
-getMerkleRoot :: Get MerkleRoot
-getMerkleRoot =
-  MerkleRoot <$> getByteString 32
-
-instance Binary MerkleRoot where
-  put = putMerkleRoot
-  get = getMerkleRoot
-
 putTimestamp :: Timestamp -> Put
 putTimestamp (Timestamp posixTime) =
   putWord32le . floor $ posixTime
@@ -187,9 +170,6 @@ instance Arbitrary BlockVersion where
 instance Arbitrary BlockHash where
   arbitrary = BlockHash . BS.pack <$> vectorOf 32 arbitrary
 
-instance Arbitrary MerkleRoot where
-  arbitrary = MerkleRoot . BS.pack <$> vectorOf 32 arbitrary
-
 instance Arbitrary Timestamp where
   arbitrary = Timestamp . realToFrac <$> (choose (0, maxTime) :: Gen Integer)
     where maxTime = 0xffffffff -- 4 bytes
@@ -206,7 +186,7 @@ genesisBlock :: Network -> BlockHeader
 genesisBlock MainNet = BlockHeader
   (BlockVersion 1)
   (BlockHash . fst . decode $ "0000000000000000000000000000000000000000000000000000000000000000" )
-  (MerkleRoot . fst . decode $ "3BA3EDFD7A7B12B27AC72C3E67768F617FC81BC3888A51323A9FB8AA4B1E5E4A")
+  (MerkleHash . fst . decode $ "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b")
   (Timestamp . fromIntegral $ 1231006505)
   (Difficulty . fst . decode $ "FFFF001D")
   (Nonce . fst . decode . Char8.pack $ "1DAC2B7C")
@@ -214,7 +194,7 @@ genesisBlock MainNet = BlockHeader
 genesisBlock TestNet3 = BlockHeader
   (BlockVersion 1)
   (BlockHash . fst . decode $ "0000000000000000000000000000000000000000000000000000000000000000" )
-  (MerkleRoot . fst . decode $ "3BA3EDFD7A7B12B27AC72C3E67768F617FC81BC3888A51323A9FB8AA4B1E5E4A")
+  (MerkleHash . fst . decode $ "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b")
   (Timestamp . fromIntegral $ 1296688602)
   (Difficulty . fst . decode $ "FFFF001D")
   (Nonce . fst . decode $ "1aa4ae18")

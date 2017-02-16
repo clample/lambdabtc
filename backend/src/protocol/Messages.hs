@@ -130,7 +130,8 @@ putHeader (Header network command message) = do
   putByteString $ getCommand' command
   putWord32le $ fromIntegral (BS.length message)
   putByteString $ checkSum message
-  
+
+
 putMessageBody :: MessageBody -> Put
 putMessageBody (VersionMessageBody message) = put message
 putMessageBody (GetHeadersMessageBody message) = put message
@@ -138,7 +139,9 @@ putMessageBody (GetBlocksMessageBody message) = put message
 putMessageBody (HeadersMessageBody message) = put message
 putMessageBody (FilterloadMessageBody message) = put message
 putMessageBody (InvMessageBody message) = put message
+putMessageBody (GetDataMessageBody message) = put message
 putMessageBody (RejectMessageBody message) = put message
+putMessageBody (MerkleblockMessageBody message) = put message
 putMessageBody _ = putByteString ""
 
 getCommand :: MessageBody -> Command
@@ -290,9 +293,7 @@ parseMessageBody expectedLength FilteraddCommand =
 parseMessageBody expectedLength FilterclearCommand =
   parseRemaining expectedLength >> return
     (FilterclearMessageBody FilterclearMessage)
-parseMessageBody expectedLength MerkleblockCommand =
-  parseRemaining expectedLength >> return
-    (MerkleblockMessageBody MerkleblockMessage)
+parseMessageBody _ MerkleblockCommand = MerkleblockMessageBody <$> get
 parseMessageBody expectedLength SendheadersCommand =
   parseRemaining expectedLength >> return
     (SendheadersMessageBody SendheadersMessage)

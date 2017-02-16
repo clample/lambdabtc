@@ -27,6 +27,7 @@ library
                      , BitcoinCore.BlockHeaders
                      , BitcoinCore.BloomFilter
                      , BitcoinCore.Inventory
+                     , BitcoinCore.MerkleTrees
                      , Protocol.Messages
                      , Protocol.MessageBodies
                      , Protocol.Server

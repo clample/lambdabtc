@@ -5,11 +5,11 @@ import General.Util (VarInt(..))
 import BitcoinCore.BlockHeaders  ( BlockHeader(..)
                                  , BlockVersion(..)
                                  , BlockHash(..)
-                                 , MerkleRoot(..)
                                  , Difficulty(..)
                                  , Nonce(..)
                                  , Timestamp(..)
                                  , hashBlock)
+import BitcoinCore.MerkleTrees (MerkleHash(..))
 
 
 import Data.Maybe (fromJust)
@@ -29,7 +29,7 @@ decodeBlockHeader
   BlockHeader
     (BlockVersion blockVersion)
     (BlockHash prevBlockHash)
-    (MerkleRoot merkleRoot)
+    (MerkleHash merkleRoot)
     (Timestamp . fromIntegral $ timestamp)
     (Difficulty difficulty)
     (Nonce nonce)
@@ -39,7 +39,7 @@ encodeBlockHeader
   header@(BlockHeader
     (BlockVersion blockVersion)
     (BlockHash prevBlockHash)
-    (MerkleRoot merkleRoot)
+    (MerkleHash merkleRoot)
     (Timestamp timestamp)
     (Difficulty difficulty)
     (Nonce nonce)) =

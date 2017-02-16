@@ -111,7 +111,7 @@ connectTestnet config = do
 
 getConnectionContext :: Config -> IO ConnectionContext
 getConnectionContext config = do
-  peer' <- connectToPeer 1
+  peer' <- connectToPeer 3
   writerChan' <- atomically $ newTBMChan 16
   listenChan' <- atomically $ newTBMChan 16
   time' <- getPOSIXTime
