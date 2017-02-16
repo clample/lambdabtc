@@ -273,13 +273,21 @@ instance Binary HeadersMessage where
 getHeadersMessage :: Get HeadersMessage
 getHeadersMessage = do
   VarInt nHeaders <- get
-  blockHeaders'    <- replicateM nHeaders get
+  blockHeaders'    <- replicateM nHeaders getHeaderAndTxCount
   return $ HeadersMessage blockHeaders'
+  where getHeaderAndTxCount = do
+          header <- get
+          get :: Get VarInt
+          return header
 
 putHeadersMessage :: HeadersMessage -> Put
 putHeadersMessage message = do
   put . VarInt . length $ (message^.blockHeaders)
-  mapM_ put (message^.blockHeaders)
+  mapM_ putHeaderAndTxCount (message^.blockHeaders)
+  where putHeaderAndTxCount header = do
+          put header
+          put $ VarInt 0
+          
 -------------------------
 
 data GetAddrMessage = GetAddrMessage

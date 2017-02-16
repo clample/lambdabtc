@@ -2,7 +2,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 module BitcoinCore.BlockHeaders where
 
---import General.Persistence
 import General.Util (VarInt(..), doubleSHA)
 import General.Types (Network(..))
 
@@ -27,7 +26,6 @@ data BlockHeader = BlockHeader
   , _timestamp :: Timestamp
   , _difficulty :: Difficulty
   , _nonce :: Nonce
-  , _txCount :: TxCount
   } deriving (Eq, Show)
 
 data BlockVersion = BlockVersion Int
@@ -63,18 +61,15 @@ data Nonce = Nonce ByteString
 instance Show Nonce where
   show (Nonce bs) = "Nonce " ++ (show . encode $ bs)
 
-data TxCount = TxCount VarInt -- Always 0 for block headers
-  deriving (Eq, Show)
-
 makeLenses ''BlockHeader
 
 hashBlock :: BlockHeader -> BlockHash
 hashBlock blockHeader = BlockHash $
-  BS.reverse . doubleSHA . BL.toStrict . runPut $ putBlockHeaderWithoutTxCount blockHeader
+  BS.reverse . doubleSHA . BL.toStrict . runPut $ put blockHeader
   -- HELP: Why do we need reverse here?
 
-putBlockHeaderWithoutTxCount :: BlockHeader -> Put
-putBlockHeaderWithoutTxCount blockHeader = do
+putBlockHeader :: BlockHeader -> Put
+putBlockHeader blockHeader = do
   put $ blockHeader^.blockVersion
   put $ blockHeader^.prevBlockHash
   put $ blockHeader^.merkleRoot
@@ -82,11 +77,6 @@ putBlockHeaderWithoutTxCount blockHeader = do
   put $ blockHeader^.difficulty
   put $ blockHeader^.nonce
 
-
-putBlockHeader :: BlockHeader -> Put
-putBlockHeader blockHeader = do
-  putBlockHeaderWithoutTxCount blockHeader
-  put $ blockHeader^.txCount
 
 getBlockHeader :: Get BlockHeader
 getBlockHeader = do
@@ -96,8 +86,7 @@ getBlockHeader = do
   timestamp' <- get
   difficulty' <- get
   nonce' <- get
-  txCount' <- get
-  return $ BlockHeader blockVersion' prevBlockHash' merkleRoot' timestamp' difficulty' nonce' txCount'
+  return $ BlockHeader blockVersion' prevBlockHash' merkleRoot' timestamp' difficulty' nonce'
 
 instance Binary BlockHeader where
   put = putBlockHeader
@@ -174,14 +163,6 @@ instance Binary Nonce where
   put = putNonce
   get = getNonce
 
-putTxCount :: TxCount -> Put
-putTxCount (TxCount count) =
-  put count
-
-getTxCount :: Get TxCount
-getTxCount =
-  TxCount <$> get
-
 -- We will assume that incoming headers are sorted [oldest ... newest]
 -- TODO: try take any order headers and sort them if needed
 verifyHeaders :: [BlockHeader] -> Bool
@@ -190,14 +171,9 @@ verifyHeaders (old:new:rest) =
   (hashBlock old == (new^.prevBlockHash)) &&
   verifyHeaders (new:rest)
 
-instance Binary TxCount where
-  put = putTxCount
-  get = getTxCount
-
 instance Arbitrary BlockHeader where
   arbitrary = BlockHeader
                 <$> arbitrary
-                <*> arbitrary
                 <*> arbitrary
                 <*> arbitrary
                 <*> arbitrary
@@ -224,10 +200,6 @@ instance Arbitrary Difficulty where
 instance Arbitrary Nonce where
   arbitrary = Nonce . BS.pack <$> vectorOf 4 arbitrary
 
-instance Arbitrary TxCount where
-  arbitrary = TxCount . VarInt <$> choose (0, maxCount)
-    where maxCount = 0xff -- 1 byte
-
 -- The genesis blocks were determined by hand, referencing
 -- https://github.com/bitcoin/bitcoin/blob/812714fd80e96e28cd288c553c83838cecbfc2d9/src/chainparams.cpp
 genesisBlock :: Network -> BlockHeader
@@ -238,7 +210,6 @@ genesisBlock MainNet = BlockHeader
   (Timestamp . fromIntegral $ 1231006505)
   (Difficulty . fst . decode $ "FFFF001D")
   (Nonce . fst . decode . Char8.pack $ "1DAC2B7C")
-  (TxCount . VarInt $ 1)
 
 genesisBlock TestNet3 = BlockHeader
   (BlockVersion 1)
@@ -247,4 +218,3 @@ genesisBlock TestNet3 = BlockHeader
   (Timestamp . fromIntegral $ 1296688602)
   (Difficulty . fst . decode $ "FFFF001D")
   (Nonce . fst . decode $ "1aa4ae18")
-  (TxCount . VarInt $ 1)

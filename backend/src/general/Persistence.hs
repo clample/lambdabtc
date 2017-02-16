@@ -9,7 +9,7 @@ module General.Persistence where
 import General.Config (ConfigM, Config(..), pool)
 
 import Data.Text (Text)
-import Database.Persist.Sqlite (runMigration)
+import Database.Persist.Sqlite (runMigration, runMigrationUnsafe)
 import Database.Persist.TH (mkPersist, mkMigrate, persistLowerCase,
                             share, sqlSettings)
 import Database.Persist.Sql ( SqlPersistT
@@ -41,13 +41,12 @@ PersistentBlockHeader
     timestamp Int
     difficulty ByteString
     nonce ByteString
-    txCount Int
 |]
 
 
 migrateSchema :: Config -> IO ()
 migrateSchema config =
-  liftIO $ flip runSqlPersistMPool (config^.pool) $ runMigration migrateTables
+  liftIO $ flip runSqlPersistMPool (config^.pool) $ runMigrationUnsafe migrateTables
 
 
 runDB :: (MonadTrans t, MonadIO (t ConfigM)) =>

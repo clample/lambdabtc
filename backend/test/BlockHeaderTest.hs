@@ -61,4 +61,3 @@ instance Arbitrary ValidHeaders where
         <*> arbitrary
         <*> arbitrary
         <*> arbitrary
-        <*> arbitrary
