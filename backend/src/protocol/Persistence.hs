@@ -8,6 +8,7 @@ import Protocol.ConnectionM (Connection)
 import Protocol.Util (encodeBlockHeader, decodeBlockHeader)
 
 import Database.Persist.Sql ( insertMany_
+                            , insert_
                             , count
                             , runSqlPool
                             , Filter
@@ -21,7 +22,6 @@ import Database.Persist.Types (SelectOpt(..))
 import Control.Lens ((^.))
 import Control.Monad (when)
 import Data.List.Split (chunksOf)
-import Control.Monad.Reader (ask)
 
 getLastBlock :: Config -> IO Int
 getLastBlock config =
@@ -34,6 +34,10 @@ persistGenesisBlock config = do
   lastBlock' <- getLastBlock config
   when (lastBlock' == -1) $
     runSqlPool (insert_ . encodeBlockHeader . genesisBlock $ (config^.network)) (config^.pool)
+
+persistHeader :: BlockHeader -> Connection ()
+persistHeader header = do
+  runDB $ insert_ $ encodeBlockHeader header
 
 persistHeaders :: [BlockHeader] -> Connection ()
 persistHeaders headers = do

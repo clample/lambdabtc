@@ -13,6 +13,7 @@ import Protocol.Util (decodeBlockHeader)
 import Protocol.Persistence ( getLastBlock
                             , persistGenesisBlock
                             , persistHeaders
+                            , persistHeader
                             , firstHeaderMatch
                             , haveHeader
                             , getBlockWithIndex
@@ -173,6 +174,15 @@ handleResponse (Message (HeadersMessageBody (HeadersMessage headers)) _) = do
       persistHeaders headers
       lastBlock += newHeadersN
     else fail "We recieved invalid headers"
+
+handleResponse (Message (MerkleblockMessageBody (message)) _) = do
+  mostRecentHeader <- getMostRecentHeader
+  let isValid = verifyHeaders [mostRecentHeader, (message^.blockHeader)]
+  if isValid
+    then do
+      persistHeader $ message^.blockHeader
+      lastBlock += 1
+    else fail "We recieved invalid header"
 
 handleResponse (Message (GetHeadersMessageBody message) _) = do
   config <- ask
