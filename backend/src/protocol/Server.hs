@@ -2,19 +2,32 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Protocol.Server where
 
 import Protocol.Messages (parseMessage, Message(..), MessageBody(..), MessageContext(..))
 import Protocol.MessageBodies 
-import Protocol.Network (Peer(..), connectToPeer, sock, addr, Addr(..))
-import Protocol.Util (encodeBlockHeader, decodeBlockHeader)
+import Protocol.Network (connectToPeer, sock, addr, Addr(..))
+import Protocol.Util (decodeBlockHeader)
+import Protocol.Persistence ( getLastBlock
+                            , persistGenesisBlock
+                            , persistHeaders
+                            , firstHeaderMatch
+                            , haveHeader
+                            , getBlockWithIndex
+                            , nHeadersSince
+                            , getHeaderFromEntity)
+import Protocol.ConnectionM ( ConnectionContext(..)
+                            , myAddr
+                            , peer
+                            , writerChan
+                            , listenChan
+                            , randGen
+                            , Connection
+                            , runConnection)
 import BitcoinCore.BlockHeaders ( BlockHash(..)
                                 , BlockHeader(..)
-                                , hashBlock
-                                , genesisBlock
                                 , verifyHeaders)
 import BitcoinCore.BloomFilter ( pDefault
                                , blankFilter
@@ -23,19 +36,19 @@ import BitcoinCore.BloomFilter ( pDefault
                                , filterSize
                                , hardcodedTweak
                                , NFlags(..))
-import BitcoinCore.Inventory (InventoryVector(..), ObjectType(..), ObjectHash(..))
-import General.Config (ConfigM(..), Config(..), pool, appChan)
-import General.Persistence (runDB, PersistentBlockHeader(..), KeySet(..), EntityField(..))
+import BitcoinCore.Inventory (InventoryVector(..), ObjectType(..))
+import General.Config (Config(..), appChan)
+import General.Persistence (runDB, PersistentBlockHeader(..), KeySet(..))
 import General.Types (HasNetwork(..), HasVersion(..), HasRelay(..), HasTime(..), HasLastBlock(..))
 import General.InternalMessaging (InternalMessage(..))
 
 import Network.Socket (Socket)
-import Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
-import Control.Monad.State.Lazy (StateT(..), runStateT, liftIO)
-import Control.Monad.Reader (runReaderT, ask)
+import Data.Time.Clock.POSIX (getPOSIXTime)
+import Control.Monad.State.Lazy (liftIO)
+import Control.Monad.Reader (ask)
 import Control.Monad (when, filterM)
 import qualified Control.Monad.State.Lazy as State
-import System.Random (randomR, StdGen, getStdGen)
+import System.Random (randomR, getStdGen)
 import Conduit (runConduit, (.|), mapC, mapMC, Conduit)
 import Data.Conduit.Network (sourceSocket, sinkSocket)
 import Data.Conduit.Serialization.Binary (conduitGet, conduitPut)
@@ -50,54 +63,10 @@ import Control.Concurrent.STM (atomically)
 import Control.Concurrent (forkIO)
 import Data.Binary (Binary(..))
 import Data.ByteString.Base16 (decode)
-import Database.Persist.Sql ( insertMany_
-                            , count
-                            , runSqlPool
-                            , Filter
-                            , toSqlKey
-                            , insert_
-                            , selectList
-                            , (==.)
-                            , (>=.))
-import qualified Database.Persist.Sql as DB
-import Database.Persist.Types (SelectOpt(..))
-import Data.List.Split (chunksOf)
+import Database.Persist.Sql ( count
+                            , Filter)
 import Data.Maybe (fromJust)
-import Control.Lens (makeLenses, (^.), (+=))
-
-data ConnectionContext = ConnectionContext
-  { _connectionContextVersion :: Int
-  , _connectionContextLastBlock :: Integer
-  , _myAddr :: Addr
-  , _peer :: Peer
-  , _connectionContextRelay :: Bool
-    -- https://github.com/bitcoin/bips/blob/master/bip-0037.mediawiki#extensions-to-existing-messages
-    -- Relay should be set to False when functioning as an SPV node
-  , _writerChan :: TBMChan Message
-  , _listenChan :: TBMChan Message
-  , _connectionContextTime :: POSIXTime
-  , _randGen :: StdGen
-  } 
-
-makeLenses ''ConnectionContext
-
-instance HasVersion ConnectionContext where
-  version = connectionContextVersion
-
-instance HasRelay ConnectionContext where
-  relay = connectionContextRelay
-
-instance HasTime ConnectionContext where
-  time = connectionContextTime
-
-instance HasLastBlock ConnectionContext where
-  lastBlock = connectionContextLastBlock
-
-type Connection a = StateT ConnectionContext ConfigM a
-
-runConnection :: Connection a -> ConnectionContext -> Config -> IO (a, ConnectionContext)
-runConnection connectionM state =
-  runReaderT (runConfigM (runStateT connectionM state))
+import Control.Lens ((^.), (+=))
 
 connectTestnet :: Config -> IO () 
 connectTestnet config = do
@@ -128,18 +97,6 @@ getConnectionContext config = do
         , _connectionContextTime = time'
         , _randGen = randGen'
         }
-
-getLastBlock :: Config -> IO Int
-getLastBlock config =
-  ((-1) +) <$> runSqlPool lastBlockQuery (config^.pool)
-  where lastBlockQuery = count allBlocksFilter
-        allBlocksFilter = [] :: [Filter PersistentBlockHeader]
-
-persistGenesisBlock :: Config -> IO ()
-persistGenesisBlock config = do
-  lastBlock' <- getLastBlock config
-  when (lastBlock' == -1) $
-    runSqlPool (insert_ . encodeBlockHeader . genesisBlock $ (config^.network)) (config^.pool)
 
 listener :: TBMChan Message -> Socket -> IO ()
 listener chan socket = runConduit
@@ -209,28 +166,21 @@ handleResponse (Message (PingMessageBody _) _) = do
   liftIO . atomically $ writeTBMChan (context^.writerChan) pongMessage
 
 handleResponse (Message (HeadersMessageBody (HeadersMessage headers)) _) = do
-  let persistentHeaders = map encodeBlockHeader headers
-      chunkedPersistentHeaders = chunksOf 100 persistentHeaders
-      -- Headers are inserted in chunks
-      -- sqlite rejects if we insert all at once
   mostRecentHeader <- getMostRecentHeader
   let isValid = verifyHeaders (mostRecentHeader:headers)
-      newHeaders = fromIntegral . length $ headers
+      newHeadersN = fromIntegral . length $ headers
   if isValid
     then do
-      runDB $ mapM_ insertMany_ chunkedPersistentHeaders
-      lastBlock += newHeaders
+      persistHeaders headers
+      lastBlock += newHeadersN
     else fail "We recieved invalid headers"
-
 
 handleResponse (Message (GetHeadersMessageBody message) _) = do
   config <- ask
   context <- State.get
-  DB.Entity headerId _ <- firstHeaderMatch (message^.blockLocatorHashes)
-  matchingHeaderEntities <- runDB $
-    selectList [ PersistentBlockHeaderId >=. headerId ] [LimitTo 2000]
-  let getHeaderFromEntity (DB.Entity _ persistentHeader) = decodeBlockHeader persistentHeader
-      matchingHeaders = map getHeaderFromEntity matchingHeaderEntities
+  match <- firstHeaderMatch (message^.blockLocatorHashes)
+  matchingHeaderEntities <- 2000 `nHeadersSince` match
+  let matchingHeaders = map getHeaderFromEntity matchingHeaderEntities
       headersMessage =
         Message
         (HeadersMessageBody (HeadersMessage {_blockHeaders = matchingHeaders}))
@@ -268,8 +218,7 @@ getMostRecentHeader :: Connection BlockHeader
 getMostRecentHeader = do
   config <- ask
   blockHeaderCount <- liftIO $ fromIntegral <$> getLastBlock config
-  mlastBlockHeader <- runDB $ DB.get (toSqlKey . fromIntegral $ blockHeaderCount + 1)
-  -- NOTE: we query by i + 1 since the genesis block (block 0) is in the db at index 1
+  mlastBlockHeader <- getBlockWithIndex blockHeaderCount
   case mlastBlockHeader of
     Nothing -> fail "Unable to get most recent block header. This should never happen"
     Just lastBlockHeader -> return (decodeBlockHeader lastBlockHeader)
@@ -331,24 +280,6 @@ synchronizeHeaders lastBlockPeer = do
         Just response@(Message (HeadersMessageBody _) _) -> handleResponse response
         Just response -> handleResponse response >> handleMessages
 
-
-firstHeaderMatch :: [BlockHash] -> Connection (DB.Entity PersistentBlockHeader)
-firstHeaderMatch [] = fail "No matching hash was found"
-firstHeaderMatch (hash:hashes) = do
-  mHeader <- haveHeader hash
-  case mHeader of
-    Just header -> return header
-    Nothing -> firstHeaderMatch hashes
-
-haveHeader :: BlockHash -> Connection (Maybe (DB.Entity PersistentBlockHeader))
-haveHeader (BlockHash hash) = do
-  matches <- runDB $ selectList [PersistentBlockHeaderHash ==. hash] []
-  case matches of
-    []       -> return Nothing
-    [header] -> return $ Just header
-    _        -> fail "Multiple blocks found with same hash"
-
-
 getHeaders :: Connection ()
 getHeaders = getHeadersOrBlocksMessage GetHeadersMessageBody GetHeadersMessage
 
@@ -361,24 +292,22 @@ getHeadersOrBlocksMessage :: (a -> MessageBody)
 getHeadersOrBlocksMessage bodyConstructor messageConstructor = do
   context <- State.get
   config <- ask
-  let getHeadersMessage lastBlock' = do
-        blockLocatorHashes <- queryBlockLocatorHashes lastBlock' config
+  let getHeadersMessage' lastBlock' = do
+        blockLocatorHashes <- queryBlockLocatorHashes lastBlock'
         return $ Message
           (bodyConstructor (messageConstructor (context^.version) blockLocatorHashes
             (BlockHash . fst . decode $
              "0000000000000000000000000000000000000000000000000000000000000000")))
           (MessageContext (config^.network))
-  message <- liftIO $ getHeadersMessage (fromIntegral (context^.lastBlock))
+  message <- getHeadersMessage' (fromIntegral (context^.lastBlock))
   liftIO . atomically $ writeTBMChan (context^.writerChan) message
 
-queryBlockLocatorHashes :: Int -> Config -> IO [BlockHash]
-queryBlockLocatorHashes lastBlock' config =
+queryBlockLocatorHashes :: Int -> Connection [BlockHash]
+queryBlockLocatorHashes lastBlock' =
   mapM queryBlockHash (blockLocatorIndices lastBlock')
   where
     queryBlockHash i =
-      (hashBlock . decodeBlockHeader . fromJust) <$>
-        runSqlPool (DB.get (toSqlKey . fromIntegral $  i + 1)) (config^.pool)
-    -- NOTE: we query by i + 1 since the genesis block (block 0) is in the db at index 1
+      (BlockHash . persistentBlockHeaderHash . fromJust) <$> getBlockWithIndex i
 
 blockLocatorIndices :: Int -> [Int]
 blockLocatorIndices lastBlock' = reverse . addGenesisIndiceIfNeeded $ blockLocatorIndicesStep 10 1 [lastBlock']

@@ -33,6 +33,8 @@ library
                      , Protocol.Server
                      , Protocol.Network
                      , Protocol.Util
+                     , Protocol.Persistence
+                     , Protocol.ConnectionM
   build-depends:       base >= 4.7 && < 5
                      , QuickCheck
                      , bytestring >= 0.10 && < 0.11
