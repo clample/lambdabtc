@@ -81,3 +81,4 @@ ccodeTable =
   , (REJECT_DUST, 0x41)
   , (REJECT_INSUFFICIENTFEE, 0x42)
   , (REJECT_CHECKPOINT, 0x43)]
+

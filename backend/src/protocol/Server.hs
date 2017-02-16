@@ -154,7 +154,7 @@ handleResponse (Message (VersionMessageBody body) _) = do
         Message (VerackMessageBody VerackMessage) (MessageContext (config^.network))
       lastBlockPeer = body^.lastBlock
       lastBlockSelf = context^.lastBlock
-  liftIO . atomically $ writeTBMChan (context^.writerChan) verackMessage
+  writeMessage verackMessage
   when (lastBlockPeer > lastBlockSelf) $
     synchronizeHeaders lastBlockPeer
 
@@ -163,7 +163,7 @@ handleResponse (Message (PingMessageBody _) _) = do
   config  <- ask
   let pongMessage =
         Message (PongMessageBody PongMessage) (MessageContext (config^.network))
-  liftIO . atomically $ writeTBMChan (context^.writerChan) pongMessage
+  writeMessage pongMessage
 
 handleResponse (Message (HeadersMessageBody (HeadersMessage headers)) _) = do
   mostRecentHeader <- getMostRecentHeader
@@ -185,7 +185,7 @@ handleResponse (Message (GetHeadersMessageBody message) _) = do
         Message
         (HeadersMessageBody (HeadersMessage {_blockHeaders = matchingHeaders}))
         (MessageContext (config^.network))
-  liftIO . atomically $ writeTBMChan (context^.writerChan) headersMessage
+  writeMessage headersMessage
   
 handleResponse (Message (InvMessageBody message) _) = do
   config <- ask
@@ -195,7 +195,7 @@ handleResponse (Message (InvMessageBody message) _) = do
         Message
         (GetDataMessageBody (GetDataMessage desiredInvs))
         (MessageContext (config^.network))
-  liftIO . atomically $ writeTBMChan (context^.writerChan) getDataMessage
+  writeMessage getDataMessage
   where
     -- TODO: query db, etc to see if we need the data
     desiredData _ = return True
@@ -211,7 +211,7 @@ handleInternalMessage (SendTX transaction) = do
   let body = TxMessageBody . TxMessage $ transaction
       messageContext = MessageContext (config^.network)
       txMessage = Message body messageContext
-  liftIO . atomically $ writeTBMChan (context^.writerChan) txMessage
+  writeMessage txMessage
 
 
 getMostRecentHeader :: Connection BlockHeader
@@ -238,12 +238,11 @@ sendVersion = do
             (context^.relay)
             (context^.time)))
           (MessageContext (config^.network))
-  liftIO . atomically $ writeTBMChan (context^.writerChan) versionMessage
+  writeMessage versionMessage
 
 
 setFilter :: Connection ()
 setFilter = do
-  context <- State.get
   config <- ask
   let
     blank = blankFilter 1 pDefault
@@ -254,7 +253,7 @@ setFilter = do
     filterloadMessage = Message
       (FilterloadMessageBody (FilterloadMessage filter' nHashFuncs hardcodedTweak BLOOM_UPDATE_NONE))
       (MessageContext (config^.network))
-  liftIO . atomically $ writeTBMChan (context^.writerChan) filterloadMessage
+  writeMessage filterloadMessage
 
 
 synchronizeHeaders :: Integer -> Connection ()
@@ -300,7 +299,7 @@ getHeadersOrBlocksMessage bodyConstructor messageConstructor = do
              "0000000000000000000000000000000000000000000000000000000000000000")))
           (MessageContext (config^.network))
   message <- getHeadersMessage' (fromIntegral (context^.lastBlock))
-  liftIO . atomically $ writeTBMChan (context^.writerChan) message
+  writeMessage message
 
 queryBlockLocatorHashes :: Int -> Connection [BlockHash]
 queryBlockLocatorHashes lastBlock' =
@@ -325,3 +324,8 @@ blockLocatorIndicesStep _ _ [] =
 isNewSync :: Connection Bool
 isNewSync = (== 0) <$> runDB (count allKeysFilter)
   where allKeysFilter = [] :: [ Filter KeySet ]
+
+writeMessage :: Message -> Connection ()
+writeMessage message = do
+  context <- State.get
+  liftIO . atomically $ writeTBMChan (context^.writerChan) message
