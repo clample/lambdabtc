@@ -159,7 +159,6 @@ handleResponse (Message (VersionMessageBody body) _) = do
     synchronizeHeaders lastBlockPeer
 
 handleResponse (Message (PingMessageBody _) _) = do
-  context <- State.get
   config  <- ask
   let pongMessage =
         Message (PongMessageBody PongMessage) (MessageContext (config^.network))
@@ -177,7 +176,6 @@ handleResponse (Message (HeadersMessageBody (HeadersMessage headers)) _) = do
 
 handleResponse (Message (GetHeadersMessageBody message) _) = do
   config <- ask
-  context <- State.get
   match <- firstHeaderMatch (message^.blockLocatorHashes)
   matchingHeaderEntities <- 2000 `nHeadersSince` match
   let matchingHeaders = map getHeaderFromEntity matchingHeaderEntities
@@ -189,7 +187,6 @@ handleResponse (Message (GetHeadersMessageBody message) _) = do
   
 handleResponse (Message (InvMessageBody message) _) = do
   config <- ask
-  context <- State.get
   desiredInvs <- map toFilteredBlock <$> filterM (desiredData) (message^.invVectors)
   let getDataMessage =
         Message
@@ -205,10 +202,9 @@ handleResponse (Message (InvMessageBody message) _) = do
 handleResponse _ = return ()
 
 handleInternalMessage :: InternalMessage -> Connection ()
-handleInternalMessage (SendTX transaction) = do
-  context <- State.get
+handleInternalMessage (SendTX transaction') = do
   config <- ask
-  let body = TxMessageBody . TxMessage $ transaction
+  let body = TxMessageBody . TxMessage $ transaction'
       messageContext = MessageContext (config^.network)
       txMessage = Message body messageContext
   writeMessage txMessage

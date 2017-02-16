@@ -1,8 +1,6 @@
 module Protocol.Util where
 
 import General.Persistence (PersistentBlockHeader(..))
-import General.Util (VarInt(..))
-import General.Config (ConfigM(..), Config)
 import BitcoinCore.BlockHeaders  ( BlockHeader(..)
                                  , BlockVersion(..)
                                  , BlockHash(..)
@@ -11,13 +9,10 @@ import BitcoinCore.BlockHeaders  ( BlockHeader(..)
                                  , Timestamp(..)
                                  , hashBlock)
 import BitcoinCore.MerkleTrees (MerkleHash(..))
-import Protocol.Network (Addr(..), Peer(..))
 
 import Data.Maybe (fromJust)
 import Data.Tuple (swap)
 import Data.List (lookup)
-import Control.Monad.State.Lazy (StateT(..), runStateT, liftIO)
-import Control.Lens (makeLenses)
 
 decodeBlockHeader :: PersistentBlockHeader -> BlockHeader
 decodeBlockHeader
