@@ -149,7 +149,6 @@ connectionLoop = do
 handleResponse :: Message -> Connection ()
 
 handleResponse (Message (VersionMessageBody body) _) = do
-  context <- State.get
   config  <- ask
   let verackMessage =
         Message (VerackMessageBody VerackMessage) (MessageContext (config^.network))

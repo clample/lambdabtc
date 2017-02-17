@@ -11,7 +11,12 @@ import BitcoinCore.Inventory (InventoryVector(..))
 import BitcoinCore.BlockHeaders ( BlockHash(..)
                                 , BlockHeader(..))
 import BitcoinCore.MerkleTrees (MerkleHash(..), MerkleFlags(..))
-import BitcoinCore.BloomFilter (Tweak(..), Filter(..), NFlags(..), serializeFilter, deserializeFilter)
+import BitcoinCore.BloomFilter ( Tweak(..)
+                               , Filter(..)
+                               , NFlags(..)
+                               , serializeFilter
+                               , deserializeFilter
+                               , filterLengthBytes)
 import BitcoinCore.Transaction.Transactions (Transaction(..))
 
 import Data.Time.Clock.POSIX (POSIXTime)
@@ -356,7 +361,7 @@ instance Binary FilterloadMessage where
 
 putFilterloadMessage :: FilterloadMessage -> Put
 putFilterloadMessage message = do
-  put . VarInt . filterLengthBytes $ (message^.bloomFilter)
+  put . VarInt $ (message^.bloomFilter.filterLengthBytes)
   putByteString . serializeFilter $ (message^.bloomFilter)
   putWord32le . fromIntegral $ (message^.hashFuncs)
   let Tweak t = message^.nTweak

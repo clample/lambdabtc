@@ -81,7 +81,7 @@ arbitraryFilterloadMessage = do
   fValue <- choose (0, 0xffffffffffffffff) -- upper limit is so the value is reasonably sized
   let minEncodingLength = B.length . unroll LE $ fValue
   fLengthBytes <- choose (minEncodingLength, 2 * minEncodingLength)
-  let filter = Filter { filterLengthBytes = fLengthBytes, filterValue = fValue}
+  let filter = Filter { _filterLengthBytes = fLengthBytes, _filterValue = fValue}
   nHashFuncs <- choose (0, maxNHashFuncs)
   nTweak <- Tweak <$> choose (0, maxNTweak)
   nFlags <- arbitraryBoundedEnum

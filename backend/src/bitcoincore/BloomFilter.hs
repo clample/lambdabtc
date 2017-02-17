@@ -1,3 +1,4 @@
+{-# LANGUAGE TemplateHaskell #-}
 {-# Language OverloadedStrings #-}
 module BitcoinCore.BloomFilter
   ( Filter(..)
@@ -15,6 +16,7 @@ module BitcoinCore.BloomFilter
   , roll
   , serializeFilter
   , deserializeFilter
+  , filterLengthBytes
   )where
 
 import General.Util (roll, unroll, Endian(..))
@@ -24,23 +26,24 @@ import Data.Word (Word32)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import Data.ByteString.Base16 (encode)
-import Data.Bits (setBit, shiftR, shiftL, (.|.))
-import Data.List (unfoldr)
+import Data.Bits (setBit)
+import Control.Lens (makeLenses, (^.), over)
 
 
--- TODO: rewrite with lenses
 data Filter = Filter
-  { filterLengthBytes :: Int
-  , filterValue       :: Integer
+  { _filterLengthBytes :: Int
+  , _filterValue       :: Integer
   } deriving (Eq)
 
+makeLenses ''Filter
+
 filterLengthBits :: Filter -> Int
-filterLengthBits f = 8 * filterLengthBytes f
+filterLengthBits f = 8 * (f^.filterLengthBytes)
 
 instance Show Filter where
   show f =
-    "Filter { filterLengthBytes = " ++ (show . filterLengthBytes) f
-    ++ " filterValue = " ++ (show . filterValue) f
+    "Filter { filterLengthBytes = " ++ show  (f^.filterLengthBytes)
+    ++ " filterValue = " ++ show (f^.filterValue)
     ++ " hexEncoded = " ++ (show . encode . serializeFilter) f
     ++ " } "
 
@@ -106,7 +109,7 @@ updateFilter numberHashes tweak hashData fltr =
 
 updateFilterStep :: Int -> Tweak -> ByteString -> Filter -> Filter
 updateFilterStep hashNum tweak hashData f =
-    f { filterValue = setBit  (filterValue f) index }
+    over filterValue (`setBit` index) f
     where
       index = bloomHash hashNum tweak hashData (filterLengthBits f)
 
@@ -118,15 +121,15 @@ bloomHash hashNum tweak hashData fLengthBits =
     seedValue = seed hashNum tweak      
 
 blankFilter :: Int -> Probability -> Filter
-blankFilter n p = Filter { filterLengthBytes = filterSize n p, filterValue =  0 }
+blankFilter n p = Filter { _filterLengthBytes = filterSize n p, _filterValue =  0 }
 
 serializeFilter :: Filter -> ByteString
-serializeFilter f = (unroll LE . filterValue $ f) `B.append` paddingNullBytes
-  where filterBase = unroll LE . filterValue $ f
-        paddingNullBytes = B.replicate (filterLengthBytes f - B.length filterBase) 0
+serializeFilter f = (unroll LE  (f^.filterValue)) `B.append` paddingNullBytes
+  where filterBase = unroll LE  (f^.filterValue)
+        paddingNullBytes = B.replicate ((f^.filterLengthBytes) - B.length filterBase) 0
 
 deserializeFilter :: ByteString -> Filter
-deserializeFilter bs = Filter {filterLengthBytes = fLength, filterValue = fValue}
+deserializeFilter bs = Filter {_filterLengthBytes = fLength, _filterValue = fValue}
   where fLength = B.length bs
         fValue = roll LE bs
 
