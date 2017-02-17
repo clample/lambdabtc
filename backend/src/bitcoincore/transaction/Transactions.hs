@@ -7,12 +7,12 @@ import BitcoinCore.Transaction.Script
 
 import Prelude hiding (concat, reverse, sequence)
 import Data.ByteString (ByteString)
+import Data.ByteString.Base16 (encode)
 import qualified Data.ByteString as BS
-import Crypto.Hash (hashWith)
-import Crypto.Hash.Algorithms (SHA256(..))
+import qualified Data.ByteString.Lazy as BL
 import Crypto.PubKey.ECC.ECDSA (signWith, Signature(..), PrivateKey(..))
-import Control.Lens (makeLenses, (^.))
-import Data.Binary.Put (Put, putWord8, putWord32le, putWord64le, putByteString)
+import Control.Lens (makeLenses, (^.), to)
+import Data.Binary.Put (Put, putWord8, putWord32le, putWord64le, putByteString, runPut)
 import Data.Binary.Get (Get, getWord32le, getByteString, getWord64le, getWord8)
 import Data.Binary (Binary(..))
 import Control.Monad (replicateM)
@@ -46,7 +46,10 @@ newtype TxVersion = TxVersion Int
   deriving (Eq, Show)
 
 newtype TxHash = TxHash ByteString
-  deriving (Eq, Show)
+  deriving (Eq)
+
+instance Show TxHash where
+  show (TxHash bs) = "TxHash " ++ (show . encode $ bs)
 
 newtype TxIndex = TxIndex Int
   deriving (Eq, Show)
@@ -55,6 +58,9 @@ makeLenses ''Transaction
 makeLenses ''TxInput
 makeLenses ''TxOutput
 makeLenses ''UTXO
+
+outputScripts :: Transaction -> [Script]
+outputScripts transaction = map (^.outputScript) (transaction^.outputs)
 
 instance Binary Transaction where
   put = putTransaction
@@ -197,6 +203,10 @@ getTxVersion = do
 
 defaultVersion :: TxVersion 
 defaultVersion = TxVersion 1
+
+hashTransaction :: Transaction -> TxHash
+hashTransaction transaction = TxHash $
+  BS.reverse . doubleSHA . BL.toStrict . runPut $ put transaction
 
 instance Binary TxHash where
   put = putTxHash

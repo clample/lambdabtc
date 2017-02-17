@@ -41,6 +41,13 @@ PersistentBlockHeader
     timestamp Int
     difficulty ByteString
     nonce ByteString
+PersistentUTXO
+    outTxHash ByteString
+    outIndex Int
+    script ByteString
+    keySetId Int
+PersistentTransaction
+    hash ByteString
 |]
 
 

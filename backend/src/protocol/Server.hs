@@ -9,7 +9,7 @@ module Protocol.Server where
 import Protocol.Messages (parseMessage, Message(..), MessageBody(..), MessageContext(..))
 import Protocol.MessageBodies 
 import Protocol.Network (connectToPeer, sock, addr, Addr(..))
-import Protocol.Util (decodeBlockHeader)
+import Protocol.Util (decodeBlockHeader, getUTXOS)
 import Protocol.Persistence ( getLastBlock
                             , persistGenesisBlock
                             , persistHeaders
@@ -19,7 +19,10 @@ import Protocol.Persistence ( getLastBlock
                             , getBlockWithIndex
                             , nHeadersSince
                             , getHeaderFromEntity
-                            , getAllAddresses)
+                            , getAllAddresses
+                            , isTransactionHandled
+                            , persistUTXOs
+                            , persistTransaction)
 import Protocol.ConnectionM ( ConnectionContext(..)
                             , myAddr
                             , peer
@@ -211,6 +214,22 @@ handleResponse (Message (InvMessageBody message) _) = do
     desiredData _ = return True
     toFilteredBlock (InventoryVector MSG_BLOCK hash) = InventoryVector MSG_FILTERED_BLOCK hash
     toFilteredBlock invVector = invVector
+
+-- TODO: two threads may see isHandled False
+--       and then go on to persist duplicate UTXOs
+handleResponse (Message (TxMessageBody message) _) = do
+  isHandled <- isTransactionHandled (message^.transaction)
+  when (not isHandled) $ do
+    addUTXOS
+    persistTransaction (message^.transaction)
+  where
+    addUTXOS = do
+      let getPubKeyHashBS (PubKeyHash bs) = bs
+      pubKeyHashes <- map (getPubKeyHashBS . addressToPubKeyHash) <$> getAllAddresses
+      let indexedPubkeyHashes = zip [1..] pubKeyHashes
+      let persistentUTXOs = getUTXOS indexedPubkeyHashes (message^.transaction)
+      persistUTXOs persistentUTXOs
+  
 
 handleResponse _ = return ()
 

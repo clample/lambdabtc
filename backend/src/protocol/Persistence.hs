@@ -1,10 +1,18 @@
 module Protocol.Persistence where
 
 import General.Config (Config(..), pool)
-import General.Persistence (runDB, PersistentBlockHeader(..), KeySet(..), EntityField(..))
+import General.Persistence ( runDB
+                           , PersistentBlockHeader(..)
+                           , KeySet(..)
+                           , EntityField(..)
+                           , PersistentUTXO
+                           , PersistentTransaction(..))
 import General.Types (HasNetwork(..))
 import BitcoinCore.Keys (Address(..))
 import BitcoinCore.BlockHeaders (genesisBlock, BlockHeader(..), BlockHash(..))
+import BitcoinCore.Transaction.Transactions ( Transaction(..)
+                                            , TxHash(..)
+                                            , hashTransaction)
 import Protocol.ConnectionM (Connection)
 import Protocol.Util (encodeBlockHeader, decodeBlockHeader)
 
@@ -65,6 +73,21 @@ haveHeader (BlockHash hash) = do
     [header] -> return $ Just header
     _        -> fail "Multiple blocks found with same hash"
 
+isTransactionHandled :: Transaction -> Connection Bool
+isTransactionHandled transaction = do
+  let TxHash hash = hashTransaction transaction
+  matches <- runDB $ selectList [PersistentTransactionHash ==. hash] []
+  case matches of
+    []   -> return False
+    [_] -> return True
+    _    -> fail "Multiple transactions found with same hash"
+
+persistTransaction :: Transaction -> Connection ()
+persistTransaction transaction =
+  runDB $ insert_ persistentTransaction
+  where persistentTransaction = PersistentTransaction hash
+        TxHash hash = hashTransaction transaction
+
 getBlockWithIndex :: Int -> Connection (Maybe PersistentBlockHeader)
 getBlockWithIndex i =
   runDB $ DB.get (toSqlKey . fromIntegral $  i + 1)
@@ -83,3 +106,6 @@ getAllAddresses = do
   keySetEntities <- runDB $ selectList allAddressFilter []
   let getAddress (DB.Entity _ keySet) = Address . keySetAddress $ keySet
   return $ map getAddress keySetEntities
+
+persistUTXOs :: [PersistentUTXO] -> Connection ()
+persistUTXOs utxos = runDB $ insertMany_ utxos
