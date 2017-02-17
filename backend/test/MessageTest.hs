@@ -85,8 +85,9 @@ arbitraryFilterloadMessage = do
   nHashFuncs <- choose (0, maxNHashFuncs)
   nTweak <- Tweak <$> choose (0, maxNTweak)
   nFlags <- arbitraryBoundedEnum
+  let filterContext' = FilterContext { _tweak = nTweak, _nHashFunctions = nHashFuncs}
   return $ FilterloadMessageBody
-    (FilterloadMessage  filter nHashFuncs nTweak nFlags)
+    (FilterloadMessage  filter filterContext' nFlags)
   where
     maxNHashFuncs = 0xffffffff -- 4 bytes
     maxNTweak     = 0xffffffff -- 4 bytes

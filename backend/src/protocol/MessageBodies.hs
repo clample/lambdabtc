@@ -13,6 +13,9 @@ import BitcoinCore.BlockHeaders ( BlockHash(..)
 import BitcoinCore.MerkleTrees (MerkleHash(..), MerkleFlags(..))
 import BitcoinCore.BloomFilter ( Tweak(..)
                                , Filter(..)
+                               , FilterContext(..)
+                               , tweak
+                               , nHashFunctions
                                , NFlags(..)
                                , serializeFilter
                                , deserializeFilter
@@ -347,8 +350,7 @@ data SubmitorderMessage = SubmitorderMessage
 ------------------------
 data FilterloadMessage = FilterloadMessage
     { _filterloadMessageBloomFilter :: Filter
-    , _filterloadMessageHashFuncs :: Int
-    , _filterloadMessageNTweak :: Tweak
+    , _filterloadMessageFilterContext      :: FilterContext
     , _filterloadMessageNFlags :: NFlags
     }
   deriving (Show, Eq)
@@ -363,8 +365,8 @@ putFilterloadMessage :: FilterloadMessage -> Put
 putFilterloadMessage message = do
   put . VarInt $ (message^.bloomFilter.filterLengthBytes)
   putByteString . serializeFilter $ (message^.bloomFilter)
-  putWord32le . fromIntegral $ (message^.hashFuncs)
-  let Tweak t = message^.nTweak
+  putWord32le . fromIntegral $ (message^.filterContext.nHashFunctions)
+  let Tweak t = message^.filterContext.tweak
   putWord32le . fromIntegral $ t
     -- TODO: It's not clear if nTweak should be litle or big endian
     --       This won't be a problem when nTweak is 0, but it may cause bugs later
@@ -377,8 +379,9 @@ getFilterloadMessage = do
   nHashFuncs <- fromIntegral <$> getWord32le
   nTweak     <- Tweak . fromIntegral <$> getWord32le
   nFlags <- toEnum . fromIntegral <$> getWord8
+  let filterContext' = FilterContext {_tweak = nTweak, _nHashFunctions = nHashFuncs}
   return
-    (FilterloadMessage filter nHashFuncs nTweak nFlags)
+    (FilterloadMessage filter filterContext' nFlags)
 
   
 ------------------------

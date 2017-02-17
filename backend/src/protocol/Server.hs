@@ -36,7 +36,9 @@ import BitcoinCore.BloomFilter ( pDefault
                                , numberHashFunctions
                                , filterSize
                                , hardcodedTweak
-                               , NFlags(..))
+                               , NFlags(..)
+                               , FilterContext(..)
+                               , defaultFilterWithElements)
 import BitcoinCore.Inventory (InventoryVector(..), ObjectType(..))
 import General.Config (Config(..), appChan)
 import General.Persistence (runDB, PersistentBlockHeader(..), KeySet(..))
@@ -248,13 +250,10 @@ setFilter :: Connection ()
 setFilter = do
   config <- ask
   let
-    blank = blankFilter 1 pDefault
-    s = filterSize 1 pDefault
-    nHashFuncs = numberHashFunctions s 1
     txId = fst . decode $ "b73619d208b4f7b91cc93185b1e2f5057bacbe9b5c0b63c36159e0354be0a77f"
-    filter' = updateFilter nHashFuncs hardcodedTweak txId blank
+    (filter', filterContext') = defaultFilterWithElements [txId]
     filterloadMessage = Message
-      (FilterloadMessageBody (FilterloadMessage filter' nHashFuncs hardcodedTweak BLOOM_UPDATE_NONE))
+      (FilterloadMessageBody (FilterloadMessage filter' filterContext' BLOOM_UPDATE_NONE))
       (MessageContext (config^.network))
   writeMessage filterloadMessage
 

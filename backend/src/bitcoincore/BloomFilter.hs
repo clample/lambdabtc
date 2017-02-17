@@ -17,6 +17,10 @@ module BitcoinCore.BloomFilter
   , serializeFilter
   , deserializeFilter
   , filterLengthBytes
+  , FilterContext(..)
+  , tweak
+  , nHashFunctions
+  , defaultFilterWithElements
   )where
 
 import General.Util (roll, unroll, Endian(..))
@@ -35,7 +39,17 @@ data Filter = Filter
   , _filterValue       :: Integer
   } deriving (Eq)
 
+data FilterContext = FilterContext
+  { _tweak :: Tweak
+  , _nHashFunctions :: Int
+  } deriving (Eq, Show)
+  -- TODO: Include NFlags?
+
+newtype Tweak = Tweak Int
+  deriving (Show, Eq)
+
 makeLenses ''Filter
+makeLenses ''FilterContext
 
 filterLengthBits :: Filter -> Int
 filterLengthBits f = 8 * (f^.filterLengthBytes)
@@ -46,9 +60,6 @@ instance Show Filter where
     ++ " filterValue = " ++ show (f^.filterValue)
     ++ " hexEncoded = " ++ (show . encode . serializeFilter) f
     ++ " } "
-
-newtype Tweak = Tweak Int
-  deriving (Show, Eq)
 
 newtype Probability = Probability Float
   deriving (Show, Eq)
@@ -87,32 +98,33 @@ seed hashNum (Tweak tweak) = fromIntegral $ (hashNum * 0xFBA4C795) + tweak
 -- p: probability of false positive. 1.0 is match everything, 0 is unachievable
 -- returns the filter size in bytes
 filterSize :: Int -> Probability -> Int
-filterSize n (Probability p) =
+filterSize nElements (Probability p) =
   min (floor (numerator / denominator)) maxFilterBytes
   where
-    numerator = (-1) * fromIntegral n * log p 
+    numerator = (-1) * fromIntegral nElements * log p 
     denominator = (log 2 ^ 2) * 8
     
   
 -- s: filter size (Bytes)
 numberHashFunctions :: Int -> Int -> Int
-numberHashFunctions s n = min calculatedHashFunctions maxHashFuncs
-  where calculatedHashFunctions = floor $ (fromIntegral s * 8 * log 2) / fromIntegral n
+numberHashFunctions s nElements = min calculatedHashFunctions maxHashFuncs
+  where calculatedHashFunctions = floor $ (fromIntegral s * 8 * log 2) / fromIntegral nElements
 
-updateFilter :: Int -> Tweak -> ByteString -> Filter -> Filter
-updateFilter numberHashes tweak hashData fltr =
+updateFilter :: FilterContext -> ByteString -> Filter -> Filter
+updateFilter  filterContext hashData fltr=
   foldl (\fltr' updateFunc -> updateFunc fltr') fltr updateFuncs
   where
     updateFuncs = map
-      (\hashNum -> updateFilterStep hashNum tweak hashData)
-      [0..(numberHashes - 1)]
+      (updateFilterStep filterContext hashData)
+      [0..((filterContext^.nHashFunctions) - 1)]
 
-updateFilterStep :: Int -> Tweak -> ByteString -> Filter -> Filter
-updateFilterStep hashNum tweak hashData f =
+updateFilterStep :: FilterContext -> ByteString -> Int -> Filter -> Filter
+updateFilterStep filterContext hashData hashNum f =
     over filterValue (`setBit` index) f
     where
-      index = bloomHash hashNum tweak hashData (filterLengthBits f)
+      index = bloomHash hashNum (filterContext^.tweak) hashData (filterLengthBits f)
 
+-- Performs a single hash and returns the hash value
 bloomHash :: Int -> Tweak -> ByteString -> Int -> Int
 bloomHash hashNum tweak hashData fLengthBits =
   hash `mod` fLengthBits
@@ -120,8 +132,24 @@ bloomHash hashNum tweak hashData fLengthBits =
     hash = fromIntegral $ murmur3 seedValue hashData
     seedValue = seed hashNum tweak      
 
-blankFilter :: Int -> Probability -> Filter
-blankFilter n p = Filter { _filterLengthBytes = filterSize n p, _filterValue =  0 }
+defaultFilterWithElements :: [ByteString] -> (Filter, FilterContext)
+defaultFilterWithElements elements = (filter, context)
+  where
+    filter = foldr (updateFilter context) blank elements
+    (blank, context) = blankFilter nElements pDefault
+    nElements = length elements
+
+blankFilter :: Int -> Probability -> (Filter, FilterContext)
+blankFilter nElements p = (bloomFilter, context)
+  where bloomFilter = Filter
+          { _filterLengthBytes = size
+          , _filterValue =  0}
+        context = FilterContext
+          { _nHashFunctions = nHashFunctions'
+          , _tweak = tweak' }
+        size = filterSize nElements p
+        nHashFunctions' = numberHashFunctions size nElements
+        tweak' = hardcodedTweak
 
 serializeFilter :: Filter -> ByteString
 serializeFilter f = (unroll LE  (f^.filterValue)) `B.append` paddingNullBytes
@@ -129,7 +157,10 @@ serializeFilter f = (unroll LE  (f^.filterValue)) `B.append` paddingNullBytes
         paddingNullBytes = B.replicate ((f^.filterLengthBytes) - B.length filterBase) 0
 
 deserializeFilter :: ByteString -> Filter
-deserializeFilter bs = Filter {_filterLengthBytes = fLength, _filterValue = fValue}
+deserializeFilter bs = Filter
+  {_filterLengthBytes = fLength
+  , _filterValue = fValue
+  }
   where fLength = B.length bs
         fValue = roll LE bs
 
