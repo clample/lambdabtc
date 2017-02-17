@@ -27,8 +27,6 @@ import General.Types (Network(..))
 
 import Prelude hiding (take, concat)
 import Data.ByteString (ByteString)
-import qualified Data.ByteString as BS
-import Data.ByteString.Char8 (unpack)
 import Crypto.PubKey.ECC.Types ( Curve
                                , getCurveByName
                                , Point(..)
@@ -39,13 +37,10 @@ import Crypto.PubKey.ECC.ECDSA ( PublicKey(..)
                                , PrivateKey(..))
 import Crypto.Hash (hashWith)
 import Crypto.OpenSSL.ECC (ecGroupFromCurveOID, EcGroup, ecPointFromOct, ecPointToAffineGFp)
-import Numeric (readHex)
-import Data.ByteString.Base16 (encode)
-import Control.Monad.IO.Class (liftIO)
 import qualified Data.Text as T
 import Data.ByteArray (convert)
-import Data.Binary.Put (runPut, putWord32be, putWord8, putByteString)
-import Data.Binary.Get (runGet, getWord32be, getWord8, getByteString)
+import Data.Binary.Put (runPut, putWord8, putByteString)
+import Data.Binary.Get (runGet, getWord8, getByteString)
 import qualified Data.ByteString.Lazy as BL
 
 

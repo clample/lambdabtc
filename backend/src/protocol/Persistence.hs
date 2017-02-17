@@ -3,6 +3,7 @@ module Protocol.Persistence where
 import General.Config (Config(..), pool)
 import General.Persistence (runDB, PersistentBlockHeader(..), KeySet(..), EntityField(..))
 import General.Types (HasNetwork(..))
+import BitcoinCore.Keys (Address(..))
 import BitcoinCore.BlockHeaders (genesisBlock, BlockHeader(..), BlockHash(..))
 import Protocol.ConnectionM (Connection)
 import Protocol.Util (encodeBlockHeader, decodeBlockHeader)
@@ -67,7 +68,7 @@ haveHeader (BlockHash hash) = do
 getBlockWithIndex :: Int -> Connection (Maybe PersistentBlockHeader)
 getBlockWithIndex i =
   runDB $ DB.get (toSqlKey . fromIntegral $  i + 1)
-  -- NOTE: we query by i + 1 since the genesis block (block 0) is in the db at index 1§w
+  -- NOTE: we query by i + 1 since the genesis block (block 0) is in the db at index 1
 
 nHeadersSince :: Int -> DB.Entity PersistentBlockHeader -> Connection [DB.Entity PersistentBlockHeader]
 nHeadersSince n (DB.Entity headerId _) =
@@ -75,3 +76,10 @@ nHeadersSince n (DB.Entity headerId _) =
 
 getHeaderFromEntity :: DB.Entity PersistentBlockHeader -> BlockHeader
 getHeaderFromEntity (DB.Entity _ persistentHeader) = decodeBlockHeader persistentHeader
+
+getAllAddresses :: Connection [Address]
+getAllAddresses = do
+  let allAddressFilter = [] :: [Filter KeySet]
+  keySetEntities <- runDB $ selectList allAddressFilter []
+  let getAddress (DB.Entity _ keySet) = Address . keySetAddress $ keySet
+  return $ map getAddress keySetEntities

@@ -18,7 +18,8 @@ import Protocol.Persistence ( getLastBlock
                             , haveHeader
                             , getBlockWithIndex
                             , nHeadersSince
-                            , getHeaderFromEntity)
+                            , getHeaderFromEntity
+                            , getAllAddresses)
 import Protocol.ConnectionM ( ConnectionContext(..)
                             , myAddr
                             , peer
@@ -39,6 +40,7 @@ import BitcoinCore.BloomFilter ( pDefault
                                , NFlags(..)
                                , FilterContext(..)
                                , defaultFilterWithElements)
+import BitcoinCore.Keys (PubKeyHash(..), addressToPubKeyHash)
 import BitcoinCore.Inventory (InventoryVector(..), ObjectType(..))
 import General.Config (Config(..), appChan)
 import General.Persistence (runDB, PersistentBlockHeader(..), KeySet(..))
@@ -128,7 +130,9 @@ logMessages context =
 connection :: Connection ()
 connection = do
   sendVersion
-  setFilter
+  addresses <- getAllAddresses
+  when (not $ null addresses)
+    setFilter
   connectionLoop
 
 connectionLoop :: Connection ()
@@ -249,9 +253,10 @@ sendVersion = do
 setFilter :: Connection ()
 setFilter = do
   config <- ask
+  let getPubKeyHashBS (PubKeyHash bs) = bs
+  pubKeyHashes <- map (getPubKeyHashBS . addressToPubKeyHash) <$> getAllAddresses
   let
-    txId = fst . decode $ "b73619d208b4f7b91cc93185b1e2f5057bacbe9b5c0b63c36159e0354be0a77f"
-    (filter', filterContext') = defaultFilterWithElements [txId]
+    (filter', filterContext') = defaultFilterWithElements pubKeyHashes
     filterloadMessage = Message
       (FilterloadMessageBody (FilterloadMessage filter' filterContext' BLOOM_UPDATE_NONE))
       (MessageContext (config^.network))
