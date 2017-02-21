@@ -17,15 +17,17 @@ import BitcoinCore.Transaction.Transactions ( Transaction(..)
                                             , Value(..)
                                             , TxVersion(..)
                                             , TxIndex(..)
-                                            , defaultVersion)
+                                            , defaultVersion
+                                            , signedTransaction)
 import qualified BitcoinCore.Transaction.Transactions as TX
-import BitcoinCore.Transaction.Script (payToPubkeyHash, Script(..), ScriptComponent(..))
+import BitcoinCore.Transaction.Script (payToPubkeyHash, getScript, Script(..), ScriptComponent(..))
 import General.InternalMessaging (InternalMessage(..))
 
 import General.Persistence
 import General.Config
 import General.Types (HasNetwork(..), Network(..))
 import General.Util (maybeRead, decodeBase58Check, Payload(..))
+import Crypto.PubKey.ECC.ECDSA (PrivateKey(..), PublicKey(..))
 
 import Network.HTTP.Types.Status (internalServerError500, ok200, badRequest400)
 import Data.Aeson ( object
@@ -37,14 +39,18 @@ import GHC.Generics
 import Control.Monad.IO.Class (liftIO)
 import qualified Data.Text as T 
 import Database.Persist.Sql (insert_, selectList)
-import Database.Persist (Entity)
+import Database.Persist (Entity(..), get)
 import Control.Monad.Reader (ask)
 import Control.Monad.Trans.Class (lift)
 import Control.Lens ((^.), makeLenses)
 import Data.Maybe (fromJust)
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString as BS
 import Data.ByteString.Base16 (decode)
 import Control.Concurrent.STM.TBMChan (writeTBMChan)
 import GHC.Conc (atomically)
+import Data.Binary.Get (runGet)
+import qualified Data.Binary as Binary
 
 defaultH :: Environment -> Error -> Action
 defaultH e x = do
@@ -136,20 +142,33 @@ buildTransaction txRaw = do
       val = fromJust mVal
       mAddress = buildAddress (recieverAddress txRaw)
       address = fromJust mAddress
-      utxo' = UTXO
-        { _outTxHash = TX.TxHash . fst . decode $ "e27cf7419b83e1e5710b2e6b21a7dc4d0a1308b6757a0ca2810349160de5c6dd"
-        , _outIndex = TxIndex 2}
-  return Transaction
-    { _txVersion = TX.defaultVersion
-    , _outputs =
-        [TxOutput
-         { _value = val
-         , _outputScript = payToPubkeyHash . addressToPubKeyHash $ address}]
-    , _inputs =
-        [TxInput
-         { _utxo = utxo'
-         , _signatureScript = Script [Txt "abcd"]}]}
+      outputs' = [TxOutput
+                  { _value = val
+                  , _outputScript = payToPubkeyHash . addressToPubKeyHash $ address}]
+  (utxo', keys', oldInputScript) <- getUTXOAndKeys 
+  return $ signedTransaction utxo' oldInputScript keys' outputs'
 
+-- TODO: Improve getting UTXO's
+--       We currently only get 1 hardcoded UTXO
+getUTXOAndKeys :: ActionT Error ConfigM (UTXO, (PublicKey, PrivateKey), Script)
+getUTXOAndKeys = do
+  mpUTXO <- runDB $ get (PersistentUTXOKey 1)
+  let putxo = case mpUTXO of
+                Nothing -> error $ "There are no utxo's in the db"
+                Just pUTXO -> pUTXO
+      utxo = UTXO {_outTxHash = TX.TxHash . persistentUTXOOutTxHash $ putxo
+                  , _outIndex = TxIndex . persistentUTXOOutIndex $ putxo}
+      scriptBS = persistentUTXOScript putxo
+      oldInputScript = runGet (getScript . BS.length $ scriptBS) (BL.fromChunks [scriptBS]) 
+  mpKeySet <- runDB $ get (KeySetKey . fromIntegral . persistentUTXOKeySetId $ putxo)
+  let (KeySet address privKeyT) = case mpKeySet of
+                                    Nothing -> error $ "unable to find keyset with id "
+                                      ++ (show . persistentUTXOKeySetId) putxo
+                                    Just pKeySet -> pKeySet
+      privKey = getPrivateKeyFromWIF . WIF $ privKeyT
+      keySet = (getPubKey privKey, privKey)
+  return (utxo, keySet, oldInputScript)
+  
 buildValue :: String -> Maybe TX.Value
 buildValue str = TX.Satoshis <$> maybeRead str
 

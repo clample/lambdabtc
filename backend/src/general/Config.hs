@@ -15,6 +15,7 @@ import Control.Monad.Reader (ReaderT, MonadReader)
 import Control.Monad.IO.Class (MonadIO)
 import Web.Scotty.Trans (ActionT, Options(..))
 import qualified Data.Text.Lazy as LT
+import Data.Text (Text)
 import Network.Wai (Middleware)
 import Network.Wai.Middleware.RequestLogger (logStdout, logStdoutDev)
 import Network.Wai.Handler.Warp (Settings, setPort, defaultSettings)
@@ -22,7 +23,7 @@ import Data.Default (def)
 import Database.Persist.Sql (ConnectionPool)
 import Database.Persist.Sqlite (createSqlitePool)
 import Control.Monad.Logger (runStdoutLoggingT)
-import Control.Lens (makeFields, makeLenses, (^.))
+import Control.Lens (makeLenses, (^.))
 import Control.Concurrent.STM.TBMChan (TBMChan, newTBMChan)
 import GHC.Conc (atomically)
 
@@ -48,15 +49,20 @@ instance HasNetwork Config where
 developmentConfig :: IO Config
 developmentConfig = do
   let env = Development
+      network' = TestNet3
   pool' <- runStdoutLoggingT $
-    createSqlitePool "file:resources/sqlite3.db" (getConnectionSize env)
+    createSqlitePool (dbFile network') (getConnectionSize env)
   chan <- atomically $ newTBMChan 16
-  return $ Config Development 49535 pool' TestNet3 chan
+  return $ Config Development 49535 pool' network' chan
 
 getConnectionSize :: Environment -> Int
 getConnectionSize Development = 1
 getConnectionSize Production = 8
 getConnectionSize Test = 1
+
+dbFile :: Network -> Text
+dbFile TestNet3 = "file:resources/sqlite3-testnet3.db"
+dbFile MainNet = "file:resources/sqlite3-mainnet.db"
 
 type Error = LT.Text
 

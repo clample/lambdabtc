@@ -142,6 +142,7 @@ putMessageBody (InvMessageBody message) = put message
 putMessageBody (GetDataMessageBody message) = put message
 putMessageBody (RejectMessageBody message) = put message
 putMessageBody (MerkleblockMessageBody message) = put message
+putMessageBody (TxMessageBody message) = put message
 putMessageBody _ = putByteString ""
 
 getCommand :: MessageBody -> Command

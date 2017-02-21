@@ -5,6 +5,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Protocol.Network where
 
+import General.Config (Config(..), configNetwork)
+import General.Types (Network(..))
+
 import Network.Socket ( socket
                       , SocketType(..)
                       , defaultProtocol
@@ -16,8 +19,9 @@ import Network.Socket ( socket
                       , Socket
                       , SockAddr(..)
                       , hostAddressToTuple
+                      , Family(..)
                       )
-import Control.Lens (makeFields)
+import Control.Lens (makeFields, (^.))
 import Data.Binary (Binary(..))
 import Data.Binary.Get (Get, getWord64be, getWord16be, getByteString, getWord8)
 import Data.Binary.Put (Put, putByteString, putWord8, putWord16be,  putWord64le)
@@ -38,12 +42,17 @@ type Port = Int
 
 makeFields ''Peer
 
-connectToPeer :: Int -> IO Peer
-connectToPeer n = do
-  addrInfo <- (!! n) <$> getAddrInfo Nothing (Just "testnet-seed.bitcoin.petertodd.org") (Just "18333")
+connectToPeer :: Int -> Config -> IO Peer
+connectToPeer n config = do
+  let seed' = Just . seed $ config^.configNetwork
+      port' = Just . networkPort $ config^.configNetwork
+  addrInfo <- (!! n) <$> getAddrInfo Nothing seed' port'
   peerSocket <- socket (addrFamily addrInfo) Stream defaultProtocol
+    -- connect to local node: AF_INET Stream 0
   setSocketOption peerSocket KeepAlive 1
   connect peerSocket (addrAddress addrInfo)
+    -- connect to local node: (SockAddrInet 8333 0x0100007f)
+    -- connect to local node
   return $ Peer peerSocket (addrFromSock $ addrAddress addrInfo)
 
 addrFromSock :: SockAddr -> Addr
@@ -87,4 +96,10 @@ putAddr (Addr (a, b, c, d) port) = do
 putServices :: Put
 putServices = putWord64le 1
 
+seed :: Network -> String
+seed TestNet3 = "testnet-seed.bitcoin.petertodd.org"
+seed MainNet = "seed.bitcoin.sipa.be"
 
+networkPort :: Network -> String
+networkPort TestNet3 = "18333"
+networkPort MainNet = "8333"

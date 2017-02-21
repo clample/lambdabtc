@@ -4,17 +4,19 @@ module BitcoinCore.Transaction.Transactions where
 
 import General.Util
 import BitcoinCore.Transaction.Script
+import BitcoinCore.Keys (serializePublicKeyRep, PublicKeyRep(..), PubKeyFormat(..))
 
 import Prelude hiding (concat, reverse, sequence)
 import Data.ByteString (ByteString)
-import Data.ByteString.Base16 (encode)
+import Data.ByteString.Base16 (encode, decode)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
-import Crypto.PubKey.ECC.ECDSA (signWith, Signature(..), PrivateKey(..))
-import Control.Lens (makeLenses, (^.), to)
+import Crypto.PubKey.ECC.ECDSA (signWith, Signature(..), PrivateKey(..), PublicKey(..))
+import Crypto.Hash.Algorithms (SHA256(..))
+import Control.Lens (makeLenses, (^.), to, mapped, set)
 import Data.Binary.Put (Put, putWord8, putWord32le, putWord64le, putByteString, runPut)
-import Data.Binary.Get (Get, getWord32le, getByteString, getWord64le, getWord8)
-import Data.Binary (Binary(..))
+import Data.Binary.Get (Get, getWord32le, getByteString, getWord64le, getWord8, runGet)
+import Data.Binary (Binary(..), Word32)
 import Control.Monad (replicateM)
 
 
@@ -61,6 +63,45 @@ makeLenses ''UTXO
 
 outputScripts :: Transaction -> [Script]
 outputScripts transaction = map (^.outputScript) (transaction^.outputs)
+
+signedTransaction :: UTXO -> Script -> (PublicKey, PrivateKey) -> [TxOutput] -> Transaction
+signedTransaction utxo' oldInputScript keys outputs'  = 
+  (set (inputs.mapped.signatureScript) newInputScript transaction)
+  where
+    fillerTransactionBS = BL.toStrict . runPut $ do
+      put (set (inputs.mapped.signatureScript) oldInputScript transaction)
+      putWord32le sighashAll
+    hash = doubleSHA fillerTransactionBS
+
+    -- TODO: k should be a random number, not a hardcoded 100!
+    signedHash = case signWith 100 (snd keys) SHA256 hash of
+                   Nothing -> error "Unable to sign hash"
+                   Just sig -> sig
+    newInputScript = scriptSig signedHash (fst keys)
+
+    -- TODO: is there a cleaner way to do this?  
+    transaction = Transaction
+      {_inputs = [TxInput {_utxo = utxo'}]
+      , _outputs = outputs'
+      , _txVersion = TxVersion 1}
+
+------------------- For testing
+utxo' = UTXO
+  { _outTxHash = TxHash . BS.reverse . fst . decode $ "eccf7e3034189b851985d871f91384b8ee357cd47c3024736e5676eb2debb3f2"
+  , _outIndex = TxIndex 1
+  }
+
+outputs' = [TxOutput
+             { _value = Satoshis 99900000
+             , _outputScript = outputScript'}]
+
+oldInputScript = runGet (getScript 25) ( BL.fromChunks [fst . decode $ "76a914010966776006953d5567439e5e39f86a0d273bee88ac"]) :: Script
+
+outputScript' = runGet (getScript 25) ( BL.fromChunks [fst . decode $ "76a914097072524438d003d23a2f23edb65aae1bb3e46988ac"]) :: Script
+--------------------
+
+sighashAll :: Word32
+sighashAll = 0x00000001
 
 instance Binary Transaction where
   put = putTransaction
@@ -155,18 +196,29 @@ getTxValue :: Get Value
 getTxValue =
   Satoshis . fromIntegral <$> getWord64le
 
+scriptSig :: Signature -> PublicKey -> Script
+scriptSig signature pubKey = Script [Txt der, Txt compressedPubkey]
+  where der = (BL.toStrict . runPut $ putDerSignature signature >> putWord8 1)
+        compressedPubkey = serializePublicKeyRep
+          $ PublicKeyRep Compressed pubKey
+          -- TODO: This scriptSig will only be valid for
+          -- pay to pub key hash scripts where the compressed pub key is hashed
+          -- make sure that I'm making addresses using compressed pubkeys also
+          
+-- See https://github.com/bitcoin/bips/blob/master/bip-0066.mediawiki
+-- for a description of requiered der format
 putDerSignature :: Signature -> Put
 putDerSignature signature = do
-  putWord8 30
+  putWord8 0x30
   putWithLength $ do
-    putWord8 2
+    putWord8 0x02
     putWithLength (
       putByteString
         -- TODO: Is this being put with correct endian?
       . unroll BE
       . sign_r
       $ signature)
-    putWord8 2
+    putWord8 0x02
     putWithLength (
       putByteString
         -- TODO: Is this being put with correct endian?
@@ -174,7 +226,7 @@ putDerSignature signature = do
       . sign_s
       $ signature)
 
-getDerSignature :: Get  Signature
+getDerSignature :: Get Signature
 getDerSignature = do
   sequenceCode <- getWord8
   derLength <- fromIntegral <$> getWord8

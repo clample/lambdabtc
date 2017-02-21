@@ -70,7 +70,9 @@ import Data.Conduit.TMChan ( sourceTBMChan
 import Control.Concurrent.STM (atomically)
 import Control.Concurrent (forkIO)
 import Data.Binary (Binary(..))
-import Data.ByteString.Base16 (decode)
+import Data.Binary.Put (runPut)
+import Data.ByteString.Base16 (decode, encode)
+import Data.ByteString.Lazy (toStrict)
 import Database.Persist.Sql ( count
                             , Filter)
 import Data.Maybe (fromJust)
@@ -88,7 +90,7 @@ connectTestnet config = do
 
 getConnectionContext :: Config -> IO ConnectionContext
 getConnectionContext config = do
-  peer' <- connectToPeer 3
+  peer' <- connectToPeer 1 config
   writerChan' <- atomically $ newTBMChan 16
   listenChan' <- atomically $ newTBMChan 16
   time' <- getPOSIXTime
@@ -235,12 +237,13 @@ handleResponse _ = return ()
 
 handleInternalMessage :: InternalMessage -> Connection ()
 handleInternalMessage (SendTX transaction') = do
+  liftIO . putStrLn $ "Sending transaction " ++
+    (show . encode . toStrict . runPut . put) transaction'
   config <- ask
   let body = TxMessageBody . TxMessage $ transaction'
       messageContext = MessageContext (config^.network)
       txMessage = Message body messageContext
   writeMessage txMessage
-
 
 getMostRecentHeader :: Connection BlockHeader
 getMostRecentHeader = do
