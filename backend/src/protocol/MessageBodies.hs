@@ -388,7 +388,27 @@ getFilterloadMessage = do
   
 
 data FilteraddMessage = FilteraddMessage
+  { _filteraddData :: ByteString }
   deriving (Show, Eq)
+
+makeLenses ''FilteraddMessage
+
+instance Binary FilteraddMessage where
+  put = putFilteraddMessage
+  get = getFilteraddMessage
+
+putFilteraddMessage :: FilteraddMessage -> Put
+putFilteraddMessage message = do
+  put . VarInt . BS.length $ message^.filteraddData
+  putByteString $ message^.filteraddData
+
+getFilteraddMessage :: Get FilteraddMessage
+getFilteraddMessage = do
+  VarInt lengthData <- get
+  filteraddData' <- getByteString lengthData
+  return $ FilteraddMessage filteraddData'
+
+------------------------
 
 data FilterclearMessage = FilterclearMessage
   deriving (Show, Eq)

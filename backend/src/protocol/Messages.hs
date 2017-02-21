@@ -138,6 +138,7 @@ putMessageBody (GetHeadersMessageBody message) = put message
 putMessageBody (GetBlocksMessageBody message) = put message
 putMessageBody (HeadersMessageBody message) = put message
 putMessageBody (FilterloadMessageBody message) = put message
+putMessageBody (FilteraddMessageBody message) = put message
 putMessageBody (InvMessageBody message) = put message
 putMessageBody (GetDataMessageBody message) = put message
 putMessageBody (RejectMessageBody message) = put message
@@ -288,9 +289,7 @@ parseMessageBody expectedLength SubmitorderCommand =
   parseRemaining expectedLength >> return
     (SubmitorderMessageBody SubmitorderMessage)
 parseMessageBody _ FilterloadCommand = FilterloadMessageBody <$> get  
-parseMessageBody expectedLength FilteraddCommand =
-  parseRemaining expectedLength >> return
-    (FilteraddMessageBody FilteraddMessage)
+parseMessageBody _ FilteraddCommand = FilteraddMessageBody <$> get
 parseMessageBody expectedLength FilterclearCommand =
   parseRemaining expectedLength >> return
     (FilterclearMessageBody FilterclearMessage)

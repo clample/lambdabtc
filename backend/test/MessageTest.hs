@@ -29,6 +29,7 @@ instance Arbitrary MessageBody where
     , arbitraryGetHeadersMessage
     , arbitraryMerkleblockMessage
     , arbitraryFilterloadMessage
+    , arbitraryFilteraddMessage
     , arbitraryInvMessage
     , arbitraryGetDataMessage
     , arbitraryRejectMessage
@@ -91,6 +92,11 @@ arbitraryFilterloadMessage = do
   where
     maxNHashFuncs = 0xffffffff -- 4 bytes
     maxNTweak     = 0xffffffff -- 4 bytes
+
+arbitraryFilteraddMessage = do
+  filterdataLength <- choose (1, 520)
+  filterdata <- Char8.pack <$> vector filterdataLength
+  return $ FilteraddMessageBody $ FilteraddMessage filterdata
 
 arbitraryInvMessage = 
   InvMessageBody . InvMessage <$> arbitrary
