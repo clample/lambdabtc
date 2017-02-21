@@ -46,7 +46,7 @@ import BitcoinCore.BloomFilter ( pDefault
 import BitcoinCore.Keys (PubKeyHash(..), addressToPubKeyHash)
 import BitcoinCore.Inventory (InventoryVector(..), ObjectType(..))
 import General.Config (Config(..), appChan)
-import General.Persistence (runDB, PersistentBlockHeader(..), KeySet(..))
+import General.Persistence (runDB, PersistentBlockHeader(..), KeySet(..), FundRequest(..))
 import General.Types (HasNetwork(..), HasVersion(..), HasRelay(..), HasTime(..), HasLastBlock(..))
 import General.InternalMessaging (InternalMessage(..))
 
@@ -135,9 +135,7 @@ logMessages context =
 connection :: Connection ()
 connection = do
   sendVersion
-  addresses <- getAllAddresses
-  when (not $ null addresses)
-    setFilter
+  setFilter
   connectionLoop
 
 connectionLoop :: Connection ()
@@ -244,6 +242,17 @@ handleInternalMessage (SendTX transaction') = do
       messageContext = MessageContext (config^.network)
       txMessage = Message body messageContext
   writeMessage txMessage
+handleInternalMessage (AddAddress address) = do
+  config <- ask
+  let getPubKeyHashBS (PubKeyHash bs) = bs
+      body = FilteraddMessageBody
+             . FilteraddMessage
+             . getPubKeyHashBS
+             . addressToPubKeyHash
+             $ address
+      messageContext = MessageContext (config ^. network)
+      filterAddMessage = Message body messageContext
+  writeMessage filterAddMessage
 
 getMostRecentHeader :: Connection BlockHeader
 getMostRecentHeader = do
@@ -354,7 +363,9 @@ blockLocatorIndicesStep _ _ [] =
 
 isNewSync :: Connection Bool
 isNewSync = (== 0) <$> runDB (count allKeysFilter)
-  where allKeysFilter = [] :: [ Filter KeySet ]
+  where allKeysFilter = [] :: [ Filter FundRequest ]
+  -- When there are no fund requests,
+  -- we can assume that no transactions have been sent to our addresses
 
 writeMessage :: Message -> Connection ()
 writeMessage message = do

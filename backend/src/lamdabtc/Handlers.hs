@@ -86,6 +86,7 @@ postFundRequestsH = do
     Right fundRequest -> do
       runDB (insert_ keyset)
       runDB (insert_ fundRequest)
+      sendInternalMessage $ AddAddress address
       json fundRequest
       status ok200
 
@@ -132,8 +133,7 @@ postTransactionsH :: Action
 postTransactionsH = do
   transactionRaw <- jsonData
   transaction <- buildTransaction transactionRaw
-  config <- lift ask
-  liftIO . atomically $ writeTBMChan (config^.appChan) (SendTX transaction)
+  sendInternalMessage (SendTX transaction)
   status ok200
 
 buildTransaction :: TransactionRaw -> ActionT Error ConfigM Transaction
@@ -174,3 +174,8 @@ buildValue str = TX.Satoshis <$> maybeRead str
 
 buildAddress :: String -> Maybe Address
 buildAddress = Just . Address . T.pack
+
+sendInternalMessage :: InternalMessage -> Action
+sendInternalMessage internalMessage = do
+  config <- lift ask
+  liftIO . atomically $ writeTBMChan (config^.appChan) internalMessage

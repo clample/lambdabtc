@@ -133,11 +133,11 @@ bloomHash hashNum tweak hashData fLengthBits =
     seedValue = seed hashNum tweak      
 
 defaultFilterWithElements :: [ByteString] -> (Filter, FilterContext)
-defaultFilterWithElements elements = (filter, context)
+defaultFilterWithElements elements = (filter', context)
   where
-    filter = foldr (updateFilter context) blank elements
+    filter' = foldr (updateFilter context) blank elements
     (blank, context) = blankFilter nElements pDefault
-    nElements = length elements
+    nElements = min 10 (length elements)
 
 blankFilter :: Int -> Probability -> (Filter, FilterContext)
 blankFilter nElements p = (bloomFilter, context)
