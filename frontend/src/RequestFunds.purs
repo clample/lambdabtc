@@ -188,6 +188,7 @@ renderRequests state = HH.div_
           [ HH.th_ [HH.text "Label"]
           , HH.th_ [HH.text "Message"]
           , HH.th_ [HH.text "Amount"]
+          , HH.th_ [HH.text "Address"]
           ]
         ]
       , HH.tbody_ (map renderRequest state.fundRequestList)
@@ -199,6 +200,7 @@ renderRequest (FundRequest fundRequest') = HH.tr_
   [ HH.th_ [HH.text fundRequest'.label]
   , HH.th_ [HH.text fundRequest'.message]
   , HH.th_ [HH.text (show fundRequest'.amount)]
+  , HH.th_ [HH.text fundRequest'.address]
   ]
 
 appendFundRequestOrError :: AffjaxResponse String -> RequestFundsState -> RequestFundsState
