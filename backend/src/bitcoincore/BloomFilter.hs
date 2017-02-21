@@ -92,7 +92,7 @@ pDefault :: Probability
 pDefault = probability 0.0001
 
 seed :: Int -> Tweak -> Word32
-seed hashNum (Tweak tweak) = fromIntegral $ (hashNum * 0xFBA4C795) + tweak
+seed hashNum (Tweak tweak') = fromIntegral $ (hashNum * 0xFBA4C795) + tweak'
 
 -- n: number of elements to be added to the set
 -- p: probability of false positive. 1.0 is match everything, 0 is unachievable
@@ -108,7 +108,7 @@ filterSize nElements (Probability p) =
 -- s: filter size (Bytes)
 numberHashFunctions :: Int -> Int -> Int
 numberHashFunctions s nElements = min calculatedHashFunctions maxHashFuncs
-  where calculatedHashFunctions = floor $ (fromIntegral s * 8 * log 2) / fromIntegral nElements
+  where calculatedHashFunctions = floor $ (fromIntegral s * 8 * (log 2 :: Double)) / fromIntegral nElements
 
 updateFilter :: FilterContext -> ByteString -> Filter -> Filter
 updateFilter  filterContext hashData fltr=
@@ -137,7 +137,9 @@ defaultFilterWithElements elements = (filter', context)
   where
     filter' = foldr (updateFilter context) blank elements
     (blank, context) = blankFilter nElements pDefault
-    nElements = min 10 (length elements)
+    nElements = max 10 (length elements)
+      -- in case there are no elements to add to the filter
+      -- we still use nElements 10, so the filter isn't blank
 
 blankFilter :: Int -> Probability -> (Filter, FilterContext)
 blankFilter nElements p = (bloomFilter, context)
@@ -163,18 +165,3 @@ deserializeFilter bs = Filter
   }
   where fLength = B.length bs
         fValue = roll LE bs
-
-{--
-setFilterTest :: IO ()
-setFilterTest = do
-  let
-    blank = blankFilter 1 pDefault
-    s = filterSize 1 pDefault
-    nHashFuncs = numberHashFunctions s 1
-    txId = fst . decode $ "019f5b01d4195ecbc9398fbf3c3b1fa9bb3183301d7a1fb3bd174fcfa40a2b65"
-    filter' = updateFilter nHashFuncs hardcodedTweak txId blank
-  putStrLn $ "Blank: " ++ show blank
-  putStrLn $ "Filter size " ++ show s
-  putStrLn $ "number of hash functions " ++ show nHashFuncs
-  putStrLn $ "Final filter " ++ show filter'
---}
