@@ -18,6 +18,7 @@ import Data.Binary.Put (Put, putWord8, putWord32le, putWord64le, putByteString, 
 import Data.Binary.Get (Get, getWord32le, getByteString, getWord64le, getWord8, runGet)
 import Data.Binary (Binary(..), Word32)
 import Control.Monad (replicateM)
+import Data.Bits ((.&.))
 
 
 data Transaction = Transaction
@@ -226,19 +227,28 @@ putDerSignature signature = do
   putWord8 0x30
   putWithLength $ do
     putWord8 0x02
-    putWithLength (
-      putByteString
-        -- TODO: Is this being put with correct endian?
-      . unroll BE
-      . sign_r
-      $ signature)
+    putWithLength
+      (putDERInt . sign_r $ signature)
     putWord8 0x02
-    putWithLength (
-      putByteString
-        -- TODO: Is this being put with correct endian?
-      . unroll BE
-      . sign_s
-      $ signature)
+    putWithLength
+      (putDERInt . getLowS . sign_s $ signature)
+  where
+    putDERInt int = do
+      let intBS = unroll BE int
+          headByte = BS.head intBS
+      if (headByte .&. 0x80 == 0x80)
+        then putByteString $ 0x00 `BS.cons` intBS
+        else putByteString intBS                    
+
+-- Multiple s values can yield the same signature
+-- to prevent transaction malleability, s values are required to use the "low s" value
+-- See: https://github.com/bitcoin/bips/blob/master/bip-0062.mediawiki#low-s-values-in-signatures
+getLowS :: Integer -> Integer
+getLowS s = if s <= maxS
+            then s
+            else constant - s
+  where maxS = 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0
+        constant =  0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
 
 getDerSignature :: Get Signature
 getDerSignature = do
