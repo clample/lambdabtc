@@ -42,9 +42,11 @@ instance Arbitrary TxInput where
   arbitrary = do
     utxo' <- arbitrary
     script <- arbitrary
+    sequence' <- Sequence <$> arbitrary
     return TxInput
       { _utxo = utxo'
-      , _signatureScript = script }
+      , _signatureScript = script
+      , _sequence = sequence'}
 
 instance Arbitrary TxVersion where
   arbitrary = TxVersion <$> choose (0, 0xffffffff)
@@ -54,10 +56,12 @@ instance Arbitrary Transaction where
     inputs' <- arbitrary
     outputs' <- arbitrary
     txVersion' <- arbitrary
+    locktime' <- LockTime <$> arbitrary
     return Transaction
       { _inputs = inputs'
       , _outputs = outputs'
-      , _txVersion = txVersion' }
+      , _txVersion = txVersion'
+      , _locktime = locktime'}
 
 instance Arbitrary OPCODE where
   arbitrary = do

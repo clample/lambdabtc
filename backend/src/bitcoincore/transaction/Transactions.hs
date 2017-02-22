@@ -24,11 +24,13 @@ data Transaction = Transaction
   { _inputs :: [TxInput]
   , _outputs :: [TxOutput]
   , _txVersion :: TxVersion
+  , _locktime :: LockTime
   } deriving (Eq, Show)
 
 data TxInput = TxInput
   { _utxo :: UTXO
   , _signatureScript :: Script
+  , _sequence :: Sequence
   } deriving (Eq, Show)
 
 data TxOutput = TxOutput
@@ -56,6 +58,12 @@ instance Show TxHash where
 newtype TxIndex = TxIndex Int
   deriving (Eq, Show)
 
+newtype Sequence = Sequence Word32
+  deriving (Eq, Show)
+
+newtype LockTime = LockTime Word32
+  deriving (Eq, Show)
+
 makeLenses ''Transaction
 makeLenses ''TxInput
 makeLenses ''TxOutput
@@ -81,11 +89,14 @@ signedTransaction utxo' oldInputScript keys outputs'  =
 
     -- TODO: is there a cleaner way to do this?  
     transaction = Transaction
-      {_inputs = [TxInput {_utxo = utxo'}]
+      {_inputs = [TxInput { _utxo = utxo'
+                          , _sequence = defaultSequence}]
       , _outputs = outputs'
-      , _txVersion = TxVersion 1}
+      , _txVersion = TxVersion 1
+      , _locktime = defaultLockTime}
 
 ------------------- For testing
+{--
 utxo' = UTXO
   { _outTxHash = TxHash . BS.reverse . fst . decode $ "eccf7e3034189b851985d871f91384b8ee357cd47c3024736e5676eb2debb3f2"
   , _outIndex = TxIndex 1
@@ -98,6 +109,7 @@ outputs' = [TxOutput
 oldInputScript = runGet (getScript 25) ( BL.fromChunks [fst . decode $ "76a914010966776006953d5567439e5e39f86a0d273bee88ac"]) :: Script
 
 outputScript' = runGet (getScript 25) ( BL.fromChunks [fst . decode $ "76a914097072524438d003d23a2f23edb65aae1bb3e46988ac"]) :: Script
+--}
 --------------------
 
 sighashAll :: Word32
@@ -114,7 +126,7 @@ putTransaction tx = do
   mapM_ put (tx^.inputs)
   put . VarInt . fromIntegral . length $ (tx^.outputs)
   mapM_ put (tx^.outputs)
-  putBlockLockTime
+  put $ tx^.locktime
 
 getTransaction :: Get Transaction
 getTransaction = do
@@ -123,11 +135,12 @@ getTransaction = do
   inputArray <- replicateM inputCount get
   VarInt outputCount <- get
   outputArray <- replicateM outputCount get
-  getBlockLockTime
+  locktime' <- get
   return Transaction
     { _inputs = inputArray
     , _outputs = outputArray
-    , _txVersion = v }
+    , _txVersion = v
+    , _locktime = locktime'}
 
 instance Binary TxInput where
   put = putInput
@@ -138,17 +151,18 @@ putInput txInput = do
   put (txInput^.utxo)
   putWithLength
     (putScript (txInput^.signatureScript))
-  putSequence
+  put $ txInput^.sequence
 
 getInput :: Get TxInput
 getInput = do
   outPoint <- get
   VarInt scriptLength <- get
   script <- getScript scriptLength
-  getSequence
+  sequence' <- get
   return TxInput
     { _utxo = outPoint
-    , _signatureScript = script}
+    , _signatureScript = script
+    , _sequence = sequence' }
 
 instance Binary TxOutput where
   put = putOutput
@@ -271,23 +285,32 @@ putTxHash (TxHash hash) =
 getTxHash :: Get TxHash
 getTxHash = TxHash . BS.reverse <$> getByteString 32
 
-putSequence :: Put
-putSequence =
-  putWord32le 0xffffffff
+defaultSequence :: Sequence
+defaultSequence = Sequence 0xffffffff
 
-getSequence :: Get ()
-getSequence = do
-  getWord32le
-  return ()
+instance Binary Sequence where
+  put = putSequence
+  get = getSequence
 
-putBlockLockTime :: Put
-putBlockLockTime =
-  putWord32le 0x00000000
+putSequence :: Sequence -> Put
+putSequence (Sequence sequence') =
+  putWord32le sequence'
 
-getBlockLockTime :: Get ()
-getBlockLockTime = do
-  getWord32le
-  return ()
+getSequence :: Get Sequence
+getSequence = Sequence <$> getWord32le
+
+defaultLockTime = LockTime 0x00000000
+
+instance Binary LockTime where
+  put = putBlockLockTime
+  get = getBlockLockTime
+
+putBlockLockTime :: LockTime -> Put
+putBlockLockTime (LockTime locktime') =
+  putWord32le locktime'
+
+getBlockLockTime :: Get LockTime
+getBlockLockTime = LockTime <$> getWord32le
 
 putSighashAll :: Put
 putSighashAll =
