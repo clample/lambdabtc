@@ -21,7 +21,6 @@ import Data.Binary.Get (Get, getWord32le, getByteString, getWord64le, getWord8)
 import Data.Binary (Binary(..), Word32)
 import Control.Monad (replicateM)
 import Data.Bits ((.&.))
-import Debug.Trace (trace)
 import Crypto.Hash (hashWith)
 import Data.ByteArray (convert)
 
@@ -91,6 +90,10 @@ signedTransaction utxo' oldInputScript keys outputs'  =
       , _txVersion = TxVersion 1
       , _locktime = defaultLockTime}
 
+-- We need to sign the double SHA the intermediateTransaction.
+-- Since `signWith` always performs a SHA, we achieve correct
+-- behaviour by performing one SHA in `intermediateHash`
+-- and allowing `signWith` to perform the second hash
 signedHash :: Script -> PrivateKey -> Transaction -> Signature
 signedHash oldInputScript privateKey intermediateTransaction =
   case signWith 100 privateKey SHA256 intermediateHash' of
@@ -99,9 +102,9 @@ signedHash oldInputScript privateKey intermediateTransaction =
   where intermediateHash' = intermediateHash intermediateTransaction oldInputScript
 
 intermediateHash :: Transaction -> Script -> ByteString
-intermediateHash intermediateTransaction oldInputScript = (trace $ " doubleSHA': " ++ (show . encode) doubleSHA' ) $ doubleSHA'
-  where doubleSHA' = convert . (hashWith SHA256) . (trace $ " intermediate transaction: " ++ (show . encode) bs) $ bs
-        bs = BL.toStrict . runPut $ do
+intermediateHash intermediateTransaction oldInputScript =
+  convert . (hashWith SHA256) $ bs
+  where bs = BL.toStrict . runPut $ do
           put (set (inputs.mapped.signatureScript) oldInputScript intermediateTransaction)
           putWord32le sighashAll
 
@@ -216,8 +219,7 @@ scriptSig signature pubKey = Script [Txt der, Txt compressedPubkey]
 -- for a description of requiered der format
 putDerSignature :: Signature -> Put
 putDerSignature signature = do
-  trace ("signature: " ++ show signature )
-    putWord8 0x30
+  putWord8 0x30
   putWithLength (putDERContents signature)
   putWord8 0x01 -- one byte hashcode type
 
