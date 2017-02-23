@@ -12,19 +12,15 @@ import BitcoinCore.BlockHeaders  ( BlockHeader(..)
 import BitcoinCore.MerkleTrees (MerkleHash(..))
 import BitcoinCore.Transaction.Transactions ( Transaction(..)
                                             , TxHash(..)
-                                            , outputs
-                                            , outputScript
                                             , hashTransaction
                                             , outputScripts)
 import BitcoinCore.Transaction.Script (Script(..), ScriptComponent(..), putScript)
 
 import Data.Maybe (fromJust)
 import Data.Tuple (swap)
-import Data.List (lookup, findIndex)
-import Control.Lens (over, mapped, (^.))
+import Data.List (lookup)
 import Data.ByteString (ByteString)
 import Data.ByteString.Lazy (toStrict)
-import Data.Binary (Binary(..))
 import Data.Binary.Put (runPut)
 
 decodeBlockHeader :: PersistentBlockHeader -> BlockHeader

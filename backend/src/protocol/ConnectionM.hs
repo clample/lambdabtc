@@ -3,8 +3,7 @@ module Protocol.ConnectionM where
 
 import Protocol.Network (Addr(..), Peer(..))
 import Protocol.Messages (Message(..))
-import General.Types ( HasNetwork(..)
-                     , HasVersion(..)
+import General.Types ( HasVersion(..)
                      , HasRelay(..)
                      , HasTime(..)
                      , HasLastBlock(..))

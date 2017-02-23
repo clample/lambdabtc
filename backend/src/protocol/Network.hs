@@ -61,6 +61,10 @@ addrFromSock (SockAddrInet port host) =
   where
     hostIP = (fromIntegral a, fromIntegral b, fromIntegral c, fromIntegral d)
     (a, b, c, d) = hostAddressToTuple host
+addrFromSock sockAddr = error
+  $  "Error getting address from sock "
+  ++ show sockAddr
+  ++ " It is currentently only possible to get address from SockAddrInet."
 
 ---------------------------------
 

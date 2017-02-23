@@ -93,6 +93,8 @@ data Command
   | GetblocktxnCommand
   | BlocktxnCommand
   | UnknownCommand -- If we are unable to find the incoming command
+                   -- TODO: Maybe it is misleading to have this extra constructor
+                   --       and it would make more sense to use Maybe
   deriving (Show, Eq)
 
 makeLenses ''MessageContext
@@ -106,12 +108,13 @@ instance Binary Message where
 
 parseMessage :: Get Message
 parseMessage = do
-  network <- getNetwork
-  command  <- readCommand . encode <$> getByteString 12
-  messageLength <- fromIntegral <$> getWord32le
-  checksum <- getWord32le
-  messageBody <- isolate messageLength (parseMessageBody messageLength command)
-  return $ Message messageBody (MessageContext network)
+  network' <- getNetwork
+  command'  <- readCommand . encode <$> getByteString 12
+  messageLength' <- fromIntegral <$> getWord32le
+  checksum' <- getWord32le
+  -- TODO: Checksum for the message should maybe be verified
+  messageBody' <- isolate messageLength' (parseMessageBody messageLength' command')
+  return $ Message messageBody' (MessageContext network')
 
 putMessage :: Message -> Put
 putMessage (Message messageBody context) = do
@@ -125,11 +128,11 @@ putMessage (Message messageBody context) = do
     messageBodyEncode = putMessageBody messageBody
 
 putHeader :: Header -> Put
-putHeader (Header network command message) = do
-  putByteString $ getNetwork' network
-  putByteString $ getCommand' command
-  putWord32le $ fromIntegral (BS.length message)
-  putByteString $ checkSum message
+putHeader (Header network' command' message') = do
+  putByteString $ getNetwork' network'
+  putByteString $ getCommand' command'
+  putWord32le $ fromIntegral (BS.length message')
+  putByteString $ checkSum message'
 
 
 putMessageBody :: MessageBody -> Put
@@ -312,6 +315,9 @@ parseMessageBody expectedLength GetblocktxnCommand =
 parseMessageBody expectedLength BlocktxnCommand =
   parseRemaining expectedLength >> return
     (BlocktxnMessageBody BlocktxnMessage)
+parseMessageBody expectedLength NotFoundCommand =
+  parseRemaining expectedLength >> return
+    (NotFoundMessageBody NotFoundMessage)
 parseMessageBody expectedLength UnknownCommand =
   parseRemaining expectedLength >> return
     (UnknownMessageBody UnknownMessage)

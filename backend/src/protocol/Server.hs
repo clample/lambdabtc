@@ -15,7 +15,6 @@ import Protocol.Persistence ( getLastBlock
                             , persistHeaders
                             , persistHeader
                             , firstHeaderMatch
-                            , haveHeader
                             , getBlockWithIndex
                             , nHeadersSince
                             , getHeaderFromEntity
@@ -34,19 +33,12 @@ import Protocol.ConnectionM ( ConnectionContext(..)
 import BitcoinCore.BlockHeaders ( BlockHash(..)
                                 , BlockHeader(..)
                                 , verifyHeaders)
-import BitcoinCore.BloomFilter ( pDefault
-                               , blankFilter
-                               , updateFilter
-                               , numberHashFunctions
-                               , filterSize
-                               , hardcodedTweak
-                               , NFlags(..)
-                               , FilterContext(..)
+import BitcoinCore.BloomFilter ( NFlags(..)
                                , defaultFilterWithElements)
 import BitcoinCore.Keys (PubKeyHash(..), addressToPubKeyHash)
 import BitcoinCore.Inventory (InventoryVector(..), ObjectType(..))
 import General.Config (Config(..), appChan)
-import General.Persistence (runDB, PersistentBlockHeader(..), KeySet(..), FundRequest(..))
+import General.Persistence (runDB, PersistentBlockHeader(..), FundRequest(..))
 import General.Types (HasNetwork(..), HasVersion(..), HasRelay(..), HasTime(..), HasLastBlock(..))
 import General.InternalMessaging (InternalMessage(..))
 
@@ -332,9 +324,9 @@ getHeadersOrBlocksMessage bodyConstructor messageConstructor = do
   context <- State.get
   config <- ask
   let getHeadersMessage' lastBlock' = do
-        blockLocatorHashes <- queryBlockLocatorHashes lastBlock'
+        blockLocatorHashes' <- queryBlockLocatorHashes lastBlock'
         return $ Message
-          (bodyConstructor (messageConstructor (context^.version) blockLocatorHashes
+          (bodyConstructor (messageConstructor (context^.version) blockLocatorHashes'
             (BlockHash . fst . decode $
              "0000000000000000000000000000000000000000000000000000000000000000")))
           (MessageContext (config^.network))

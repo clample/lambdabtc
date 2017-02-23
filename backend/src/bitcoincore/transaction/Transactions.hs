@@ -8,18 +8,16 @@ import BitcoinCore.Keys (serializePublicKeyRep, PublicKeyRep(..), PubKeyFormat(.
 
 import Prelude hiding (concat, reverse, sequence)
 import Data.ByteString (ByteString)
-import Data.ByteString.Base16 (encode, decode)
+import Data.ByteString.Base16 (encode)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 
 import Crypto.PubKey.ECC.ECDSA (signWith, Signature(..), PrivateKey(..), PublicKey(..))
 import Crypto.Hash.Algorithms (SHA256(..))
-import Crypto.PubKey.ECC.Generate (generate)
-import Crypto.PubKey.ECC.Types (CurveName(..), getCurveByName)
 
-import Control.Lens (makeLenses, (^.), to, mapped, set)
+import Control.Lens (makeLenses, (^.), mapped, set)
 import Data.Binary.Put (Put, putWord8, putWord32le, putWord64le, putByteString, runPut)
-import Data.Binary.Get (Get, getWord32le, getByteString, getWord64le, getWord8, runGet)
+import Data.Binary.Get (Get, getWord32le, getByteString, getWord64le, getWord8)
 import Data.Binary (Binary(..), Word32)
 import Control.Monad (replicateM)
 import Data.Bits ((.&.))
@@ -222,7 +220,8 @@ putDerSignature signature = do
     putWord8 0x30
   putWithLength (putDERContents signature)
   putWord8 0x01 -- one byte hashcode type
- 
+
+putDERInt :: Integer -> Put
 putDERInt int = do
   let intBS = unroll BE int
       headByte = BS.head intBS
@@ -305,6 +304,7 @@ putSequence (Sequence sequence') =
 getSequence :: Get Sequence
 getSequence = Sequence <$> getWord32le
 
+defaultLockTime :: LockTime
 defaultLockTime = LockTime 0x00000000
 
 instance Binary LockTime where

@@ -11,22 +11,18 @@ module LamdaBTC.Handlers
 
 import BitcoinCore.Keys
 import BitcoinCore.Transaction.Transactions ( Transaction(..)
-                                            , TxInput(..)
                                             , TxOutput(..)
                                             , UTXO(..)
-                                            , Value(..)
-                                            , TxVersion(..)
                                             , TxIndex(..)
-                                            , defaultVersion
                                             , signedTransaction)
 import qualified BitcoinCore.Transaction.Transactions as TX
-import BitcoinCore.Transaction.Script (payToPubkeyHash, getScript, Script(..), ScriptComponent(..))
+import BitcoinCore.Transaction.Script (payToPubkeyHash, getScript, Script(..))
 import General.InternalMessaging (InternalMessage(..))
 
 import General.Persistence
 import General.Config
 import General.Types (HasNetwork(..), Network(..))
-import General.Util (maybeRead, decodeBase58Check, Payload(..))
+import General.Util (maybeRead)
 import Crypto.PubKey.ECC.ECDSA (PrivateKey(..), PublicKey(..))
 
 import Network.HTTP.Types.Status (internalServerError500, ok200, badRequest400)
@@ -42,15 +38,13 @@ import Database.Persist.Sql (insert_, selectList)
 import Database.Persist (Entity(..), get)
 import Control.Monad.Reader (ask)
 import Control.Monad.Trans.Class (lift)
-import Control.Lens ((^.), makeLenses)
+import Control.Lens ((^.))
 import Data.Maybe (fromJust)
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString as BS
-import Data.ByteString.Base16 (decode)
 import Control.Concurrent.STM.TBMChan (writeTBMChan)
 import GHC.Conc (atomically)
 import Data.Binary.Get (runGet)
-import qualified Data.Binary as Binary
 
 defaultH :: Environment -> Error -> Action
 defaultH e x = do
@@ -91,10 +85,10 @@ postFundRequestsH = do
       status ok200
 
 genKeySet :: Network -> IO KeySet
-genKeySet network = do
+genKeySet network' = do
   (pubKey, privKey) <- liftIO genKeys
   let WIF privKeyText = getWIFPrivateKey privKey
-      (Address addressText) = getAddress (PublicKeyRep Compressed pubKey) network
+      (Address addressText) = getAddress (PublicKeyRep Compressed pubKey) network'
   return (KeySet addressText privKeyText)
 
 -- FundRequest:  

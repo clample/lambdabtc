@@ -84,23 +84,23 @@ putVersionMessage versionMessage = do
 
 getVersionMessage :: Get VersionMessage
 getVersionMessage = do
-  version     <- fromIntegral <$> getWord32le
-  services    <- getWord64be
-  timestamp   <- fromIntegral <$> getWord64le
-  peer        <- getAddr
-  sender      <- getAddr
-  nonce       <- fromIntegral <$> getWord64be
-  userAgent   <- getPayload
-  startHeight <- fromIntegral <$> getWord32le
-  relay       <- toBool <$> getWord8 
+  version'     <- fromIntegral <$> getWord32le
+  services'    <- getWord64be
+  timestamp'   <- fromIntegral <$> getWord64le
+  peer'        <- getAddr
+  sender'      <- getAddr
+  nonce'       <- fromIntegral <$> getWord64be
+  userAgent'   <- getPayload
+  startHeight' <- fromIntegral <$> getWord32le
+  relay'       <- toBool <$> getWord8 
   return
-    (VersionMessage version nonce startHeight sender peer relay timestamp)
+    (VersionMessage version' nonce' startHeight' sender' peer' relay' timestamp')
 ------------------------------------
 
 getPayload :: Get ByteString
 getPayload = do
-  length <- fromIntegral <$> getWord8
-  getByteString length
+  lengthBytes <- fromIntegral <$> getWord8
+  getByteString lengthBytes
 
 data VerackMessage = VerackMessage
   deriving (Show, Eq)
@@ -375,13 +375,13 @@ putFilterloadMessage message = do
 getFilterloadMessage :: Get FilterloadMessage
 getFilterloadMessage = do
   VarInt lengthFilter <- get
-  filter <- deserializeFilter <$> getByteString lengthFilter
-  nHashFuncs <- fromIntegral <$> getWord32le
-  nTweak     <- Tweak . fromIntegral <$> getWord32le
-  nFlags <- toEnum . fromIntegral <$> getWord8
-  let filterContext' = FilterContext {_tweak = nTweak, _nHashFunctions = nHashFuncs}
+  filter' <- deserializeFilter <$> getByteString lengthFilter
+  nHashFuncs' <- fromIntegral <$> getWord32le
+  nTweak'     <- Tweak . fromIntegral <$> getWord32le
+  nFlags' <- toEnum . fromIntegral <$> getWord8
+  let filterContext' = FilterContext {_tweak = nTweak', _nHashFunctions = nHashFuncs'}
   return
-    (FilterloadMessage filter filterContext' nFlags)
+    (FilterloadMessage filter' filterContext' nFlags')
 
   
 ------------------------

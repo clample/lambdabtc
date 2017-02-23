@@ -9,7 +9,7 @@ module General.Persistence where
 import General.Config (ConfigM, Config(..), pool)
 
 import Data.Text (Text)
-import Database.Persist.Sqlite (runMigration, runMigrationUnsafe)
+import Database.Persist.Sqlite (runMigrationUnsafe)
 import Database.Persist.TH (mkPersist, mkMigrate, persistLowerCase,
                             share, sqlSettings)
 import Database.Persist.Sql ( SqlPersistT
