@@ -33,22 +33,25 @@ instance Arbitrary MessageBody where
     , arbitraryInvMessage
     , arbitraryGetDataMessage
     , arbitraryRejectMessage
+    , arbitraryPingMessage
     , return (VerackMessageBody VerackMessage)]
 
 instance Arbitrary MessageContext where
   arbitrary = MessageContext <$> arbitrary
 
+instance Arbitrary Nonce64 where
+  arbitrary = Nonce64 <$> arbitrary
 
 arbitraryVersionMessage = do
   version    <- choose (0, maxVersion)
-  nonceInt   <- choose (0, maxNonce) :: Gen Integer
+  nonce'     <- arbitrary
   lastBlockN <- choose (0, maxBlock)
   senderAddr <- arbitrary
   peerAddr   <- arbitrary
   relay      <- arbitrary
   time       <- choose (0, maxTime) :: Gen Integer
   return $ VersionMessageBody
-    (VersionMessage version nonceInt lastBlockN senderAddr peerAddr relay (realToFrac time))
+    (VersionMessage version nonce' lastBlockN senderAddr peerAddr relay (realToFrac time))
   where
     maxVersion = 0xffffffff         -- 4 bytes
     maxNonce   = 0xffffffffffffffff -- 8 bytes
@@ -92,6 +95,9 @@ arbitraryFilterloadMessage = do
   where
     maxNHashFuncs = 0xffffffff -- 4 bytes
     maxNTweak     = 0xffffffff -- 4 bytes
+
+arbitraryPingMessage = do
+  PingMessageBody . PingMessage <$> arbitrary
 
 arbitraryFilteraddMessage = do
   filterdataLength <- choose (1, 520)

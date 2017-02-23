@@ -147,6 +147,8 @@ putMessageBody (GetDataMessageBody message) = put message
 putMessageBody (RejectMessageBody message) = put message
 putMessageBody (MerkleblockMessageBody message) = put message
 putMessageBody (TxMessageBody message) = put message
+putMessageBody (PingMessageBody message) = put message
+putMessageBody (PongMessageBody message) = put message
 putMessageBody _ = putByteString ""
 
 getCommand :: MessageBody -> Command
@@ -265,12 +267,10 @@ parseMessageBody expectedLength RejectCommand = do
   -- TODO: The reject message may or may not have a data field
   --       That is why parseRemaining is used here
   return message
-parseMessageBody expectedLength PingCommand =
-  parseRemaining expectedLength >> return
-    (PingMessageBody PingMessage)
-parseMessageBody expectedLength PongCommand =
-  parseRemaining expectedLength >> return
-    (PongMessageBody PongMessage)
+parseMessageBody _ PingCommand =
+  PingMessageBody <$> get
+parseMessageBody _ PongCommand =
+  PongMessageBody <$> get
 parseMessageBody _ InvCommand = InvMessageBody <$> get  
 parseMessageBody _ GetDataCommand = GetDataMessageBody <$> get
 parseMessageBody _ GetHeadersCommand =  GetHeadersMessageBody <$> get

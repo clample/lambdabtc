@@ -157,10 +157,11 @@ handleResponse (Message (VersionMessageBody body) _) = do
   writeMessage verackMessage
   synchronizeHeaders lastBlockPeer
 
-handleResponse (Message (PingMessageBody _) _) = do
+handleResponse (Message (PingMessageBody message) _) = do
   config  <- ask
-  let pongMessage =
-        Message (PongMessageBody PongMessage) (MessageContext (config^.network))
+  let pongMessageBody = PongMessageBody . PongMessage $ message^.nonce64
+      pongMessage =
+        Message pongMessageBody (MessageContext (config^.network))
   writeMessage pongMessage
 
 handleResponse (Message (HeadersMessageBody (HeadersMessage headers)) _) = do
@@ -259,7 +260,7 @@ sendVersion :: Connection ()
 sendVersion = do
   context <- State.get
   config <- ask
-  let nonce' = fst $ randomR (0, 0xffffffffffffffff ) (context^.randGen)
+  let nonce' = Nonce64 . fst $ randomR (0, 0xffffffffffffffff ) (context^.randGen)
       versionMessage = Message
           (VersionMessageBody (VersionMessage
             (context^.version)

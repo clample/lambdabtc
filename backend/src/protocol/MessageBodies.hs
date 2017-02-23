@@ -32,6 +32,7 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as Char8
 import Control.Monad (replicateM)
 import Foreign.Marshal.Utils (toBool)
+import Data.Word (Word64)
 
 class HasBlockLocatorHashes t where
   blockLocatorHashes :: Lens' t [BlockHash]
@@ -42,10 +43,16 @@ class HasHashStop t where
 class HasInvVectors t where
   invVectors :: Lens' t [InventoryVector]
 
+class HasNonce64 t where
+  nonce64 :: Lens' t Nonce64
+
+newtype Nonce64 = Nonce64 Word64
+  deriving (Show, Eq)
+
 ----------------------------------
 data VersionMessage = VersionMessage
     { _versionMessageVersion    :: Int
-    , _nonce   :: Integer -- Nonce can be 8 bytes -> use integer 
+    , _versionMessageNonce64   :: Nonce64
     , _versionMessageLastBlock :: Integer
     , _senderAddr :: Addr
     , _peerAddr   :: Addr
@@ -66,6 +73,9 @@ instance HasTime VersionMessage where
 instance HasVersion VersionMessage where
   version = versionMessageVersion
 
+instance HasNonce64 VersionMessage where
+  nonce64 = versionMessageNonce64
+
 instance Binary VersionMessage where
   put = putVersionMessage
   get = getVersionMessage
@@ -77,7 +87,8 @@ putVersionMessage versionMessage = do
   putWord64le . floor $ versionMessage^.time
   putAddr (versionMessage^.peerAddr)
   putAddr (versionMessage^.senderAddr)
-  putWord64be . fromIntegral $ (versionMessage^.nonce)
+  let Nonce64 nonce' = versionMessage^.nonce64
+  putWord64be nonce'
   putWord8 0
   putWord32le . fromIntegral $ (versionMessage^.lastBlock)
   put (versionMessage^.relay)
@@ -89,7 +100,7 @@ getVersionMessage = do
   timestamp'   <- fromIntegral <$> getWord64le
   peer'        <- getAddr
   sender'      <- getAddr
-  nonce'       <- fromIntegral <$> getWord64be
+  nonce'       <- Nonce64 <$> getWord64be
   userAgent'   <- getPayload
   startHeight' <- fromIntegral <$> getWord32le
   relay'       <- toBool <$> getWord8 
@@ -161,10 +172,46 @@ getRejectMessage = do
 ---------------------------
 
 data PingMessage = PingMessage
+  { _pingNonce64 :: Nonce64 }
   deriving (Show, Eq)
+makeLenses ''PingMessage
+
+instance HasNonce64 PingMessage where
+  nonce64 = pingNonce64
+
+instance Binary PingMessage where
+  put = putPingMessage
+  get = getPingMessage
+
+putPingMessage :: PingMessage -> Put
+putPingMessage message =
+  putWord64be nonce'
+  where Nonce64 nonce' = message^.nonce64
+
+getPingMessage :: Get PingMessage
+getPingMessage =
+  PingMessage . Nonce64 <$> getWord64be
 
 data PongMessage = PongMessage
+  { _pongNonce64 :: Nonce64 }
   deriving (Show, Eq)
+makeLenses ''PongMessage
+
+instance HasNonce64 PongMessage where
+  nonce64 = pongNonce64
+
+instance Binary PongMessage where
+  put = putPongMessage
+  get = getPongMessage
+
+putPongMessage :: PongMessage -> Put
+putPongMessage message =
+  putWord64be nonce'
+  where Nonce64 nonce' = message^.nonce64
+
+getPongMessage :: Get PongMessage
+getPongMessage =
+  PongMessage . Nonce64 <$> getWord64be
 
 ----------------------------
 data InvMessage = InvMessage
