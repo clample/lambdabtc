@@ -7,6 +7,7 @@ import BitcoinCore.Keys (PublicKeyRep, pubKeyHash, PubKeyHash(..))
 import Prelude hiding (concat, reverse, sequence)
 import qualified  Data.ByteString as BS
 import Data.ByteString (ByteString)
+import Data.ByteString.Base16 (encode)
 import Data.Binary (Binary(..))
 import Data.Binary.Put (Put, putWord8, putByteString)
 import Data.Binary.Get (Get, getWord8, getByteString, isolate, bytesRead)
@@ -18,7 +19,11 @@ data Script = Script [ ScriptComponent ]
 data ScriptComponent
   = OP OPCODE
   | Txt ByteString
-  deriving (Eq, Show)
+  deriving (Eq)
+
+instance Show ScriptComponent where
+  show (OP opcode) = "OP " ++ show opcode
+  show (Txt bs) = "Txt " ++ (show . encode) bs
 
 instance Binary ScriptComponent where
   put = putScriptComponent
@@ -38,7 +43,7 @@ putScriptComponent (Txt bs)
   | BS.length bs < 76 = do
       putWord8 . fromIntegral . BS.length $ bs
       putByteString bs
-  | otherwise = error "Need to implement OP_PUSHDATA1, OP_PUSHDATA2, etc"
+  | otherwise = error $ "Need to implement OP_PUSHDATA1, OP_PUSHDATA2, etc. BS: " ++ (show . encode) bs
 
 
 getScript :: Int -> Get Script

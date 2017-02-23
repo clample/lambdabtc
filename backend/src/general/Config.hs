@@ -49,7 +49,7 @@ instance HasNetwork Config where
 developmentConfig :: IO Config
 developmentConfig = do
   let env = Development
-      network' = TestNet3
+      network' = MainNet -- TestNet3
   pool' <- runStdoutLoggingT $
     createSqlitePool (dbFile network') (getConnectionSize env)
   chan <- atomically $ newTBMChan 16

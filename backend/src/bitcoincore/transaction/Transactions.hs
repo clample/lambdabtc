@@ -11,15 +11,21 @@ import Data.ByteString (ByteString)
 import Data.ByteString.Base16 (encode, decode)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
+
 import Crypto.PubKey.ECC.ECDSA (signWith, Signature(..), PrivateKey(..), PublicKey(..))
 import Crypto.Hash.Algorithms (SHA256(..))
+import Crypto.PubKey.ECC.Generate (generate)
+import Crypto.PubKey.ECC.Types (CurveName(..), getCurveByName)
+
 import Control.Lens (makeLenses, (^.), to, mapped, set)
 import Data.Binary.Put (Put, putWord8, putWord32le, putWord64le, putByteString, runPut)
 import Data.Binary.Get (Get, getWord32le, getByteString, getWord64le, getWord8, runGet)
 import Data.Binary (Binary(..), Word32)
 import Control.Monad (replicateM)
 import Data.Bits ((.&.))
-
+import Debug.Trace (trace)
+import Crypto.Hash (hashWith)
+import Data.ByteArray (convert)
 
 data Transaction = Transaction
   { _inputs :: [TxInput]
@@ -73,22 +79,13 @@ makeLenses ''UTXO
 outputScripts :: Transaction -> [Script]
 outputScripts transaction = map (^.outputScript) (transaction^.outputs)
 
+-------------------- Transaction signing
 signedTransaction :: UTXO -> Script -> (PublicKey, PrivateKey) -> [TxOutput] -> Transaction
 signedTransaction utxo' oldInputScript keys outputs'  = 
   (set (inputs.mapped.signatureScript) newInputScript transaction)
   where
-    fillerTransactionBS = BL.toStrict . runPut $ do
-      put (set (inputs.mapped.signatureScript) oldInputScript transaction)
-      putWord32le sighashAll
-    hash = doubleSHA fillerTransactionBS
-
-    -- TODO: k should be a random number, not a hardcoded 100!
-    signedHash = case signWith 100 (snd keys) SHA256 hash of
-                   Nothing -> error "Unable to sign hash"
-                   Just sig -> sig
-    newInputScript = scriptSig signedHash (fst keys)
-
-    -- TODO: is there a cleaner way to do this?  
+    newInputScript = scriptSig (signedHash oldInputScript (snd keys) transaction) (fst keys)
+    
     transaction = Transaction
       {_inputs = [TxInput { _utxo = utxo'
                           , _sequence = defaultSequence}]
@@ -96,22 +93,19 @@ signedTransaction utxo' oldInputScript keys outputs'  =
       , _txVersion = TxVersion 1
       , _locktime = defaultLockTime}
 
-------------------- For testing
-{--
-utxo' = UTXO
-  { _outTxHash = TxHash . BS.reverse . fst . decode $ "eccf7e3034189b851985d871f91384b8ee357cd47c3024736e5676eb2debb3f2"
-  , _outIndex = TxIndex 1
-  }
+signedHash :: Script -> PrivateKey -> Transaction -> Signature
+signedHash oldInputScript privateKey intermediateTransaction =
+  case signWith 100 privateKey SHA256 intermediateHash' of
+    Nothing -> error "Unable to sign hash"
+    Just sig -> sig
+  where intermediateHash' = intermediateHash intermediateTransaction oldInputScript
 
-outputs' = [TxOutput
-             { _value = Satoshis 99900000
-             , _outputScript = outputScript'}]
-
-oldInputScript = runGet (getScript 25) ( BL.fromChunks [fst . decode $ "76a914010966776006953d5567439e5e39f86a0d273bee88ac"]) :: Script
-
-outputScript' = runGet (getScript 25) ( BL.fromChunks [fst . decode $ "76a914097072524438d003d23a2f23edb65aae1bb3e46988ac"]) :: Script
---}
---------------------
+intermediateHash :: Transaction -> Script -> ByteString
+intermediateHash intermediateTransaction oldInputScript = (trace $ " doubleSHA': " ++ (show . encode) doubleSHA' ) $ doubleSHA'
+  where doubleSHA' = convert . (hashWith SHA256) . (trace $ " intermediate transaction: " ++ (show . encode) bs) $ bs
+        bs = BL.toStrict . runPut $ do
+          put (set (inputs.mapped.signatureScript) oldInputScript intermediateTransaction)
+          putWord32le sighashAll
 
 sighashAll :: Word32
 sighashAll = 0x00000001
@@ -213,33 +207,37 @@ getTxValue =
 
 scriptSig :: Signature -> PublicKey -> Script
 scriptSig signature pubKey = Script [Txt der, Txt compressedPubkey]
-  where der = (BL.toStrict . runPut $ putDerSignature signature >> putWord8 1)
+  where der = (BL.toStrict . runPut $ putDerSignature signature)
         compressedPubkey = serializePublicKeyRep
           $ PublicKeyRep Compressed pubKey
           -- TODO: This scriptSig will only be valid for
           -- pay to pub key hash scripts where the compressed pub key is hashed
           -- make sure that I'm making addresses using compressed pubkeys also
-          
+
 -- See https://github.com/bitcoin/bips/blob/master/bip-0066.mediawiki
 -- for a description of requiered der format
 putDerSignature :: Signature -> Put
 putDerSignature signature = do
-  putWord8 0x30
-  putWithLength $ do
-    putWord8 0x02
-    putWithLength
-      (putDERInt . sign_r $ signature)
-    putWord8 0x02
-    putWithLength
-      (putDERInt . getLowS . sign_s $ signature)
-  where
-    putDERInt int = do
-      let intBS = unroll BE int
-          headByte = BS.head intBS
-      if (headByte .&. 0x80 == 0x80)
-        then putByteString $ 0x00 `BS.cons` intBS
-        else putByteString intBS                    
-
+  trace ("signature: " ++ show signature )
+    putWord8 0x30
+  putWithLength (putDERContents signature)
+  putWord8 0x01 -- one byte hashcode type
+ 
+putDERInt int = do
+  let intBS = unroll BE int
+      headByte = BS.head intBS
+  if (headByte .&. 0x80 == 0x80)
+    then putByteString $ 0x00 `BS.cons` intBS
+    else putByteString intBS
+    
+putDERContents signature = do
+  putWord8 0x02
+  putWithLength
+    (putDERInt . sign_r $ signature)
+  putWord8 0x02
+  putWithLength
+    (putDERInt . getLowS . sign_s $ signature)
+    
 -- Multiple s values can yield the same signature
 -- to prevent transaction malleability, s values are required to use the "low s" value
 -- See: https://github.com/bitcoin/bips/blob/master/bip-0062.mediawiki#low-s-values-in-signatures
@@ -257,11 +255,9 @@ getDerSignature = do
   getWord8
   xLength <- fromIntegral <$> getWord8
   x <- roll BE <$> getByteString xLength
-    -- TODO: is the BS.reverse necessary?
   getWord8
   yLength <- fromIntegral <$> getWord8
   y <- roll BE <$> getByteString yLength
-    -- TODO: is the BS.reverse necessary?
   return $
     Signature x y
 

@@ -53,7 +53,8 @@ tests =
       base58CheckInvertible
       ],
     testGroup "QuickCheck Transaction Tests" [
-      transactionInvertible
+      transactionInvertible,
+      signingVerifiable
       ],
     testGroup "QuickCheck Message Tests" [
       messageInvertible
