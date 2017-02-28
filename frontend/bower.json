@@ -14,7 +14,8 @@
     "purescript-affjax": "^3.0.2",
     "purescript-profunctor-lenses": "^2.5.0",
     "purescript-foreign": "^3.0.1",
-    "purescript-argonaut": "^2.0.0"
+    "purescript-argonaut": "^2.0.0",
+    "purescript-websocket-simple": "^1.0.1"
   },
   "devDependencies": {
     "purescript-psci-support": "^2.0.0"

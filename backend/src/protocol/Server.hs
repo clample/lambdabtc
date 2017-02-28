@@ -37,10 +37,11 @@ import BitcoinCore.BloomFilter ( NFlags(..)
                                , defaultFilterWithElements)
 import BitcoinCore.Keys (PubKeyHash(..), addressToPubKeyHash)
 import BitcoinCore.Inventory (InventoryVector(..), ObjectType(..))
-import General.Config (Config(..), appChan)
+import BitcoinCore.Transaction.Transactions (Value(..))
+import General.Config (Config(..), appChan, uiUpdaterChan)
 import General.Persistence (runDB, PersistentBlockHeader(..), FundRequest(..))
 import General.Types (HasNetwork(..), HasVersion(..), HasRelay(..), HasTime(..), HasLastBlock(..))
-import General.InternalMessaging (InternalMessage(..))
+import General.InternalMessaging (InternalMessage(..), UIUpdaterMessage(..))
 
 import Network.Socket (Socket)
 import Data.Time.Clock.POSIX (getPOSIXTime)
@@ -214,6 +215,7 @@ handleResponse (Message (TxMessageBody message) _) = do
   isHandled <- isTransactionHandled (message^.transaction)
   when (not isHandled) $ do
     addUTXOS
+    writeUiUpdaterMessage . IncomingFunds . Satoshis $ 1000
     persistTransaction (message^.transaction)
   where
     addUTXOS = do
@@ -364,3 +366,8 @@ writeMessage :: Message -> Connection ()
 writeMessage message = do
   context <- State.get
   liftIO . atomically $ writeTBMChan (context^.writerChan) message
+
+writeUiUpdaterMessage :: UIUpdaterMessage -> Connection ()
+writeUiUpdaterMessage message = do
+  config <- ask
+  liftIO . atomically $ writeTBMChan (config^.uiUpdaterChan) message

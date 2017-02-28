@@ -1,5 +1,5 @@
 {
-"main": "main.js",
+  "main": "main.js",
   "scripts": {
     "build": "pulp build",
     "start": "electron ."
@@ -10,7 +10,7 @@
     "pulp": "^10.0.0"
   },
   "dependencies": {
-    "virtual-dom": "^2.1.1"
-
+    "virtual-dom": "^2.1.1",
+    "ws": "^2.2.0"
   }
 }

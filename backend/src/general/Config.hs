@@ -9,7 +9,8 @@
 module General.Config where
 
 import General.Types (HasNetwork(..), Network(..))
-import General.InternalMessaging (InternalMessage(..))
+import General.InternalMessaging ( InternalMessage(..)
+                                 , UIUpdaterMessage(..))
 
 import Control.Monad.Reader (ReaderT, MonadReader)
 import Control.Monad.IO.Class (MonadIO)
@@ -35,10 +36,12 @@ data Environment =
 
 data Config =
   Config { _environment :: Environment
-         , _port :: Int -- port might belong elsewhere
+         , _port :: Int 
+         , _websocketPort :: Int
          , _pool :: ConnectionPool
          , _configNetwork :: Network
          , _appChan :: TBMChan InternalMessage
+         , _uiUpdaterChan :: TBMChan UIUpdaterMessage
          }
 
 makeLenses ''Config
@@ -49,11 +52,20 @@ instance HasNetwork Config where
 developmentConfig :: IO Config
 developmentConfig = do
   let env = Development
-      network' = MainNet -- TestNet3
+      network' = MainNet 
   pool' <- runStdoutLoggingT $
     createSqlitePool (dbFile network') (getConnectionSize env)
   chan <- atomically $ newTBMChan 16
-  return $ Config Development 49535 pool' network' chan
+  uiUpdaterChan' <- atomically $ newTBMChan 16
+  return $ Config
+    { _environment = Development
+    , _port = 49535
+    , _websocketPort = 49536
+    , _pool = pool'
+    , _configNetwork = network'
+    , _appChan = chan
+    , _uiUpdaterChan = uiUpdaterChan'
+    }
 
 getConnectionSize :: Environment -> Int
 getConnectionSize Development = 1
@@ -81,7 +93,7 @@ getOptions config =
                     Test -> 0
       }
   
-
+-- TODO: Port is duplicated between here and developmentConfig
 getSettings :: Settings
 getSettings = 
   setPort 49535 defaultSettings

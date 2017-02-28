@@ -6,9 +6,7 @@ import General.Persistence (migrateSchema)
 import General.Config (developmentConfig)
 import Protocol.Server (connectTestnet)
 import Control.Concurrent (forkIO)
---import BitcoinCore.Transaction.Transactions (derTest)
 
---main = derTest
 main :: IO ()
 main = do
   config <- developmentConfig

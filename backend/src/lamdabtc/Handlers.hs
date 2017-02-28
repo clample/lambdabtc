@@ -7,6 +7,8 @@ module LamdaBTC.Handlers
   , postFundRequestsH
   , getFundRequestsH
   , postTransactionsH
+  , handleIncomingFunds
+  , getStatusH
   ) where
 
 import BitcoinCore.Keys
@@ -17,7 +19,7 @@ import BitcoinCore.Transaction.Transactions ( Transaction(..)
                                             , signedTransaction)
 import qualified BitcoinCore.Transaction.Transactions as TX
 import BitcoinCore.Transaction.Script (payToPubkeyHash, getScript, Script(..))
-import General.InternalMessaging (InternalMessage(..))
+import General.InternalMessaging (InternalMessage(..), UIUpdaterMessage(..))
 
 import General.Persistence
 import General.Config
@@ -45,6 +47,7 @@ import qualified Data.ByteString as BS
 import Control.Concurrent.STM.TBMChan (writeTBMChan)
 import GHC.Conc (atomically)
 import Data.Binary.Get (runGet)
+import Network.WebSockets (Connection, sendTextData)
 
 defaultH :: Environment -> Error -> Action
 defaultH e x = do
@@ -54,7 +57,6 @@ defaultH e x = do
         Production -> Null
         Test -> object ["error" .= showError x]
   json o
-
 
 getFundRequestsH :: Action
 getFundRequestsH = do
@@ -173,3 +175,12 @@ sendInternalMessage :: InternalMessage -> Action
 sendInternalMessage internalMessage = do
   config <- lift ask
   liftIO . atomically $ writeTBMChan (config^.appChan) internalMessage
+
+handleIncomingFunds :: Connection -> TX.Value -> IO ()
+handleIncomingFunds connection val = do
+  let valText = T.pack . show $ val
+  sendTextData connection valText
+  
+getStatusH :: Action
+getStatusH = do
+  status ok200
