@@ -78,6 +78,7 @@ library
                      , stm-chans ==3.0.0.*
                      , resource-pool ==0.2.3.*
                      , websockets ==0.9.*
+                     , free ==4.12.*
   default-language:    Haskell2010
 
 executable backend-exe

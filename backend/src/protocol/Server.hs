@@ -70,6 +70,7 @@ import Database.Persist.Sql ( count
                             , Filter)
 import Data.Maybe (fromJust)
 import Control.Lens ((^.), (+=))
+import Control.Monad.Free (Free(..), liftF)
 
 connectTestnet :: Config -> IO () 
 connectTestnet config = do
@@ -147,6 +148,46 @@ connectionLoop = do
     Just (Just internalMessage) -> handleInternalMessage internalMessage
   connectionLoop
 
+----------
+data ConnectionInteraction next
+  = GetConfig (Config -> next)
+  | WriteMessage Message next
+
+instance Functor ConnectionInteraction where
+  fmap f (GetConfig g) = GetConfig (f . g)
+  fmap f (WriteMessage m x) = WriteMessage m (f x) 
+
+type Connection' = Free ConnectionInteraction
+
+-- syntactic sugar to enable `do` notation
+getConfig' :: Connection' Config
+getConfig' = liftF (GetConfig id)
+
+writeMessage' :: Message -> Connection' ()
+writeMessage' message = liftF (WriteMessage message ())
+--
+interpretConnProd :: Connection' r -> Connection r
+interpretConnProd conn = case conn of
+  Free (GetConfig f) -> do
+    config <- ask
+    interpretConnProd (f config)
+  Free (WriteMessage m n) -> do
+    writeMessage m
+    interpretConnProd n
+  Pure r -> return r
+
+-- Logic for handling response in free monad
+handleResponse' :: Message -> Connection' ()
+handleResponse' (Message (PingMessageBody message) _) = do
+  config <- getConfig'
+  let pongMessageBody = PongMessageBody . PongMessage $ message^.nonce64
+      pongMessage =
+        Message pongMessageBody (MessageContext (config^.network))
+  writeMessage' pongMessage
+  
+handleResponse' message = error $
+  "We are not yet able to handle message" ++ (show message)
+-----------
 
 handleResponse :: Message -> Connection ()
 
@@ -158,13 +199,9 @@ handleResponse (Message (VersionMessageBody body) _) = do
   writeMessage verackMessage
   synchronizeHeaders lastBlockPeer
 
-handleResponse (Message (PingMessageBody message) _) = do
-  config  <- ask
-  let pongMessageBody = PongMessageBody . PongMessage $ message^.nonce64
-      pongMessage =
-        Message pongMessageBody (MessageContext (config^.network))
-  writeMessage pongMessage
-
+handleResponse message@(Message (PingMessageBody _) _) =
+  interpretConnProd $ handleResponse' message
+  
 handleResponse (Message (HeadersMessageBody (HeadersMessage headers)) _) = do
   mostRecentHeader <- getMostRecentHeader
   let isValid = verifyHeaders (mostRecentHeader:headers)
