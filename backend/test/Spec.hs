@@ -31,10 +31,8 @@ main = defaultMain tests
 tests =
   [
     testGroup "Key hashing tests" [
-      testCase "Hash public key correctly"
-        $ pubKeyHashTest (PublicKeyRep Uncompressed testPublicKey),
-      testCase "base58check address"
-        $ addressTest (PublicKeyRep Uncompressed testPublicKey),
+      testCase "Hash public key correctly" pubKeyHashTest,
+      testCase "base58check address" addressTest,
       testCase "WIF Private key"
         $ testWIFPrivateKey testDataWIFPrivateKey
       ],
@@ -86,26 +84,30 @@ testPublicKey =
       "0450863AD64A87AE8A2FE83C1AF1A8403CB53F53E486D8511DAD8A04887E5B23522CD470243453A299FA9E77237716103ABC11A1DF38855ED6F2EE187E9C582BA6"
 
 
-pubKeyHashTest :: PublicKeyRep -> Assertion
-pubKeyHashTest pubKeyRep = assertEqual
+pubKeyHashTest :: Assertion
+pubKeyHashTest = assertEqual
   "public key hashing should give the expected output"
   (PubKeyHash . stringToHexByteString $ "010966776006953D5567439E5E39F86A0D273BEE")
   (pubKeyHash pubKeyRep)
+  where
+    pubKeyRep = PublicKeyRep Uncompressed testPublicKey
   
 
 -- See https://en.bitcoin.it/wiki/Technical_background_of_version_1_Bitcoin_addresses
-addressTest :: PublicKeyRep -> Assertion
-addressTest pubKeyRep = assertEqual
+addressTest :: Assertion
+addressTest = assertEqual
   "We should derive the correct address from a given public key"
   (Address $ toText $ b58String "16UwLL9Risc3QfPqBUvKofHmBQ7wMtjvM")
   (getAddress pubKeyRep MainNet)
+  where
+    pubKeyRep = (PublicKeyRep Uncompressed testPublicKey)
 
 testWIFPrivateKey :: (PrivateKey, WIFPrivateKey) -> Assertion
 testWIFPrivateKey (input, expected) = assertEqual
   "Private key should be correctly converted to WIF"
   expected
   (getWIFPrivateKey input)
- 
+  
 testDataWIFPrivateKey =
   ( deserializePrivateKey . fst . decode $ "0C28FCA386C7A227600B2FE50B7CAE11EC86D3BF1FBE471BE89827E19D72AA1D" -- INPUT DATA
   , WIF "5HueCGU8rMjxEXxiPuD5BDku4MkFqeZyd4dZ1jvhTVqvbTLvyTJ" -- EXPECTED OUTPUT
