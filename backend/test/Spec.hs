@@ -67,7 +67,8 @@ tests =
       testCase "Check genesis block testnet hash" genesisBlockTestnetHash
       ],
     testGroup "Persistence Tests" [
-      persistAndRetrieveBlockHeader
+      persistAndRetrieveBlockHeader,
+      persistAndRetrieveTransaction
       ]
   ]
 

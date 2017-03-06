@@ -24,6 +24,9 @@ import Data.Bits ((.&.))
 import Crypto.Hash (hashWith)
 import Data.ByteArray (convert)
 
+import Test.QuickCheck.Arbitrary (Arbitrary(..))
+import Test.QuickCheck.Gen (choose, vectorOf, suchThat)
+
 data Transaction = Transaction
   { _inputs :: [TxInput]
   , _outputs :: [TxOutput]
@@ -323,3 +326,47 @@ getBlockLockTime = LockTime <$> getWord32le
 putSighashAll :: Put
 putSighashAll =
   putWord8 1
+
+instance Arbitrary Transaction where
+  arbitrary = do
+    inputs' <- arbitrary
+    outputs' <- arbitrary
+    txVersion' <- arbitrary
+    locktime' <- LockTime <$> arbitrary
+    return Transaction
+      { _inputs = inputs'
+      , _outputs = outputs'
+      , _txVersion = txVersion'
+      , _locktime = locktime'}
+
+instance Arbitrary TxOutput where
+  arbitrary = do
+    value <- arbitrary
+    script <- arbitrary
+    return TxOutput
+      { _value = value
+      , _outputScript = script }
+
+instance Arbitrary TxInput where
+  arbitrary = do
+    utxo' <- arbitrary
+    script <- arbitrary
+    sequence' <- Sequence <$> arbitrary
+    return TxInput
+      { _utxo = utxo'
+      , _signatureScript = script
+      , _sequence = sequence'}
+
+instance Arbitrary TxVersion where
+  arbitrary = TxVersion <$> choose (0, 0xffffffff)
+
+instance Arbitrary UTXO where
+  arbitrary = do
+    hash <- TxHash . BS.pack <$> vectorOf 32 arbitrary
+    index <- TxIndex <$> choose (0, 0xffffffff)
+    return UTXO
+      { _outTxHash = hash
+      , _outIndex = index }
+
+instance Arbitrary Value where
+  arbitrary = Satoshis <$> arbitrary `suchThat` (> 0)

@@ -13,6 +13,9 @@ import Data.Binary.Put (Put, putWord8, putByteString)
 import Data.Binary.Get (Get, getWord8, getByteString, isolate, bytesRead)
 import Data.List (reverse)
 
+import Test.QuickCheck.Arbitrary (Arbitrary(..))
+import Test.QuickCheck.Gen (listOf, oneof, choose, vectorOf)
+
 data Script = Script [ ScriptComponent ]
   deriving (Eq, Show)
 
@@ -63,3 +66,14 @@ getScriptComponent = do
   if 0 < code && code < 76
     then Txt <$> getByteString code
     else return $ OP $ toEnum code
+
+instance Arbitrary Script where
+  arbitrary = Script <$> listOf arbitrary
+
+instance Arbitrary ScriptComponent where
+  arbitrary = oneof [genTxt, genOp]
+    where
+      genTxt = do
+        txtLength <- choose (1, 75)
+        Txt . BS.pack <$> vectorOf txtLength arbitrary
+      genOp = OP <$> arbitrary

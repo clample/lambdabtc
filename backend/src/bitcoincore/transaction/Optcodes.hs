@@ -3,6 +3,9 @@ module BitcoinCore.Transaction.Optcodes (OPCODE(..), opcodeTable) where
 import Data.Tuple (swap)
 import Data.List (lookup)
 
+import Test.QuickCheck.Arbitrary (Arbitrary(..))
+import Test.QuickCheck.Gen (elements)
+
 data OPCODE
   = OP_FALSE
   | OP_PUSHDATA1
@@ -216,3 +219,8 @@ opcodeTable =
   , (OP_PUBKEYHASH, 253)
   , (OP_PUBKEY, 254)
   , (OP_INVALIDOPCODE, 255)]
+
+instance Arbitrary OPCODE where
+  arbitrary = do
+    let opcodes = map fst opcodeTable
+    elements opcodes

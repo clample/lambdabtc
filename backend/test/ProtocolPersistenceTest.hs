@@ -4,6 +4,7 @@ module ProtocolPersistenceTest where
 import TestUtil
 import General.Persistence (migrateTables)
 import BitcoinCore.BlockHeaders
+import BitcoinCore.Transaction.Transactions
 import Protocol.Persistence
 
 import Database.Persist.Sqlite (createSqlitePool, runMigrationSilent)
@@ -36,3 +37,17 @@ prop_persistAndRetrieveBlockHeader header = ioProperty $ do
     Nothing -> return False
     Just (_, header') ->
       return (hashBlock header' == hash)
+
+persistAndRetrieveTransaction = testProperty
+  "It should be possible to persist and retrieve a transaction"
+  prop_persistAndRetrieveTransaction
+
+prop_persistAndRetrieveTransaction :: Transaction -> Property
+prop_persistAndRetrieveTransaction tx = ioProperty $ do
+  pool <- createTestDbPool
+  let hash = hashTransaction tx
+  persistTransaction pool tx
+  mTx' <- getTransactionFromHash pool hash
+  case mTx' of
+    Nothing -> return False
+    Just _ -> return True

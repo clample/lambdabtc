@@ -22,66 +22,6 @@ instance Arbitrary Signature where
     y <- arbitrary `suchThat` (> 0)
     return $ Signature x y
 
-instance Arbitrary UTXO where
-  arbitrary = do
-    hash <- TxHash . BS.pack <$> vectorOf 32 arbitrary
-    index <- TxIndex <$> choose (0, 0xffffffff)
-    return UTXO
-      { _outTxHash = hash
-      , _outIndex = index }
-
-instance Arbitrary Value where
-  arbitrary = Satoshis <$> arbitrary `suchThat` (> 0)
-
-instance Arbitrary TxOutput where
-  arbitrary = do
-    value <- arbitrary
-    script <- arbitrary
-    return TxOutput
-      { _value = value
-      , _outputScript = script }
-
-instance Arbitrary TxInput where
-  arbitrary = do
-    utxo' <- arbitrary
-    script <- arbitrary
-    sequence' <- Sequence <$> arbitrary
-    return TxInput
-      { _utxo = utxo'
-      , _signatureScript = script
-      , _sequence = sequence'}
-
-instance Arbitrary TxVersion where
-  arbitrary = TxVersion <$> choose (0, 0xffffffff)
-
-instance Arbitrary Transaction where
-  arbitrary = do
-    inputs' <- arbitrary
-    outputs' <- arbitrary
-    txVersion' <- arbitrary
-    locktime' <- LockTime <$> arbitrary
-    return Transaction
-      { _inputs = inputs'
-      , _outputs = outputs'
-      , _txVersion = txVersion'
-      , _locktime = locktime'}
-
-instance Arbitrary OPCODE where
-  arbitrary = do
-    let opcodes = map fst opcodeTable
-    elements opcodes
-
-instance Arbitrary ScriptComponent where
-  arbitrary = oneof [genTxt, genOp]
-    where
-      genTxt = do
-        txtLength <- choose (1, 75)
-        Txt . BS.pack <$> vectorOf txtLength arbitrary
-      genOp = OP <$> arbitrary
-
-instance Arbitrary Script where
-  arbitrary = Script <$> listOf arbitrary
-
 transactionInvertible = testProperty
   "It should be possible to encode and decode transactions"
   prop_transactionInvertible
