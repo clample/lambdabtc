@@ -38,9 +38,9 @@ tests =
       ],
     testGroup "Script tests" [
       testCase "optcode only script test"
-        optCodeScriptTest --,
-      --testCase "payToPubkeyHash test"
-      --  payToPubkeyHashTest
+        optCodeScriptTest,
+      testCase "payToPubkeyHash test"
+        payToPubkeyHashTest
       ],
     testGroup "QuickCheck Key Tests" [
       privateKeyInvertible,
