@@ -51,3 +51,4 @@ prop_persistAndRetrieveTransaction tx = ioProperty $ do
   case mTx' of
     Nothing -> return False
     Just _ -> return True
+

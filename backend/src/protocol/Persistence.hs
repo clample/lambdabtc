@@ -31,15 +31,17 @@ import Control.Lens ((^.))
 import Control.Monad (when)
 import Data.List.Split (chunksOf)
 
-getLastBlock :: Config -> IO Int
-getLastBlock config =
-  ((-1) +) <$> runSqlPool lastBlockQuery (config^.pool)
+-- Return the index for the most recent persisted block
+-- if only the genesis block is persisted, the index should be 0 and so on
+getLastBlock :: ConnectionPool -> IO Int
+getLastBlock pool =
+  ((-1) +) <$> runSqlPool lastBlockQuery pool
   where lastBlockQuery = count allBlocksFilter
         allBlocksFilter = [] :: [Filter PersistentBlockHeader]
 
 persistGenesisBlock :: Config -> IO ()
 persistGenesisBlock config = do
-  lastBlock' <- getLastBlock config
+  lastBlock' <- getLastBlock (config^.pool)
   when (lastBlock' == -1) $
     runSqlPool (insert_ . encodeBlockHeader . genesisBlock $ (config^.network)) (config^.pool)
 

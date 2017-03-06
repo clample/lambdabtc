@@ -79,7 +79,7 @@ getConnectionContext config = do
   listenChan' <- atomically $ newTBMChan 16
   time' <- getPOSIXTime
   randGen' <- getStdGen
-  lastBlock' <- fromIntegral <$> getLastBlock config
+  lastBlock' <- fromIntegral <$> getLastBlock (config^.pool)
   return ConnectionContext
         { _connectionContextVersion = 60002
         , _connectionContextLastBlock = lastBlock'
@@ -262,7 +262,7 @@ interpretConnProd conn = case conn of
     interpretConnProd (f mBlock)
   Free (BlockHeaderCount f) -> do
     config <- ask
-    blockHeaderCount <- liftIO . getLastBlock $ config
+    blockHeaderCount <- liftIO . getLastBlock $ config^.pool
     interpretConnProd (f blockHeaderCount)
   Free (PersistBlockHeaders headers n) -> do
     config <- ask
