@@ -1,11 +1,4 @@
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE TypeSynonymInstances #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
--- TODO: Which of these language extensions is actually necessary anymore?
-
 module Protocol.Server where
 
 import Protocol.Messages (parseMessage, Message(..), MessageBody(..), MessageContext(..))
@@ -17,7 +10,6 @@ import Protocol.Persistence ( getLastBlock
                             , persistHeaders
                             , persistHeader
                             , getBlockWithIndex
-                            , getHeaderFromEntity
                             , getAllAddresses
                             , persistUTXOs
                             , persistTransaction
@@ -66,12 +58,7 @@ import Data.Conduit.TMChan ( sourceTBMChan
 import Control.Concurrent.STM (atomically)
 import Control.Concurrent (forkIO)
 import Data.Binary (Binary(..))
-import Data.Binary.Put (runPut)
-import Data.ByteString.Base16 (decode, encode)
-import Data.ByteString.Lazy (toStrict)
-import Database.Persist.Sql ( count
-                            , Filter)
-import Data.Maybe (fromJust)
+import Data.ByteString.Base16 (decode)
 import Control.Lens ((^.), (+=))
 import Control.Monad.Free (Free(..), liftF)
 
@@ -143,12 +130,12 @@ connectionLoop = do
   case mmResponse of
     Nothing -> fail "listenChan is closed and empty"
     Just Nothing -> return () -- chan is empty
-    Just (Just response) -> handleResponse response
+    Just (Just response) -> interpretConnProd $ handleResponse' response
   mmInternalMessage <- liftIO . atomically . tryReadTBMChan $ (config^.appChan)
   case mmInternalMessage of
     Nothing -> fail "appChan is closed and empty"
     Just Nothing -> return () -- chan is empty
-    Just (Just internalMessage) -> handleInternalMessage internalMessage
+    Just (Just internalMessage) -> interpretConnProd $ handleInternalMessage' internalMessage
   connectionLoop
 
 ----------
@@ -262,10 +249,12 @@ interpretConnProd conn = case conn of
     mMessage <- liftIO . atomically . readTBMChan $ (context^.listenChan)
     interpretConnProd (f mMessage)
   Free (WriteMessage m n) -> do
-    writeMessage m
+    context <- State.get
+    liftIO $ writeMessage (context^.writerChan) m 
     interpretConnProd n
   Free (WriteUIUpdaterMessage m n) -> do
-    writeUiUpdaterMessage m
+    config <- ask
+    liftIO $ writeUiUpdaterMessage (config^.uiUpdaterChan) m
     interpretConnProd n
   Free (GetBlockHeader i f) -> do
     config <- ask
@@ -481,7 +470,6 @@ isNewSync' = (== []) <$> getAllAddresses'
   -- When there are no addresses
   -- we can assume that no transactions have been sent to us
 
-
 sendVersion' :: Connection' ()
 sendVersion' = do
   context <- getContext'
@@ -511,54 +499,25 @@ setFilter' = do
       (MessageContext (config^.network))
   writeMessage' filterloadMessage
 
------------
-
-handleResponse :: Message -> Connection ()
-
-handleResponse message@(Message (VersionMessageBody _) _) =
-  interpretConnProd $ handleResponse' message
-
-handleResponse message@(Message (PingMessageBody _) _) =
-  interpretConnProd $ handleResponse' message
-  
-handleResponse message@(Message (HeadersMessageBody _) _) =
-  interpretConnProd $ handleResponse' message
-
-handleResponse message@(Message (MerkleblockMessageBody _) _) =
-  interpretConnProd $ handleResponse' message
-
-handleResponse message@(Message (GetHeadersMessageBody _) _) =
-  interpretConnProd $ handleResponse' message
-  
-handleResponse message@(Message (InvMessageBody _) _) =
-  interpretConnProd $ handleResponse' message
-
-handleResponse message@(Message (TxMessageBody _) _) =
-  interpretConnProd $ handleResponse' message
-  
-
-handleResponse _ = return ()
-
-handleInternalMessage :: InternalMessage -> Connection ()
-handleInternalMessage (SendTX transaction') = do
-  liftIO . putStrLn $ "Sending transaction " ++
-    (show . encode . toStrict . runPut . put) transaction'
-  config <- ask
+handleInternalMessage' :: InternalMessage -> Connection' ()
+handleInternalMessage' (SendTX transaction') = do
+  config <- getConfig'
   let body = TxMessageBody . TxMessage $ transaction'
       messageContext = MessageContext (config^.network)
       txMessage = Message body messageContext
-  writeMessage txMessage
-handleInternalMessage (AddAddress address) = do
-  config <- ask
+  writeMessage' txMessage
+
+handleInternalMessage' (AddAddress address) = do
+  config <- getConfig'
   let getPubKeyHashBS (PubKeyHash bs) = bs
       body = FilteraddMessageBody
-             . FilteraddMessage
-             . getPubKeyHashBS
-             . addressToPubKeyHash
-             $ address
-      messageContext = MessageContext (config ^. network)
+           . FilteraddMessage
+           . getPubKeyHashBS
+           . addressToPubKeyHash
+           $ address
+      messageContext = MessageContext (config^.network)
       filterAddMessage = Message body messageContext
-  writeMessage filterAddMessage
+  writeMessage' filterAddMessage
 
 blockLocatorIndices :: Int -> [Int]
 blockLocatorIndices lastBlock' = reverse . addGenesisIndiceIfNeeded $ blockLocatorIndicesStep 10 1 [lastBlock']
@@ -573,12 +532,10 @@ blockLocatorIndicesStep c step (i:is)
 blockLocatorIndicesStep _ _ [] =
   error "blockLocatorIndicesStep must be called with a nonempty accummulator array "
 
-writeMessage :: Message -> Connection ()
-writeMessage message = do
-  context <- State.get
-  liftIO . atomically $ writeTBMChan (context^.writerChan) message
+writeMessage :: TBMChan Message -> Message -> IO ()
+writeMessage chan message = 
+  liftIO . atomically $ writeTBMChan chan message
 
-writeUiUpdaterMessage :: UIUpdaterMessage -> Connection ()
-writeUiUpdaterMessage message = do
-  config <- ask
-  liftIO . atomically $ writeTBMChan (config^.uiUpdaterChan) message
+writeUiUpdaterMessage :: TBMChan UIUpdaterMessage -> UIUpdaterMessage -> IO ()
+writeUiUpdaterMessage chan message =
+  liftIO . atomically $ writeTBMChan chan message
