@@ -54,7 +54,7 @@ PersistentTransaction
 
 migrateSchema :: ConnectionPool -> IO ()
 migrateSchema pool =
-  liftIO $ flip runSqlPersistMPool pool $ runMigrationUnsafe migrateTables
+  runSqlPersistMPool (runMigrationUnsafe migrateTables) pool
 
 
 runDB :: (MonadTrans t, MonadIO (t ConfigM)) =>
