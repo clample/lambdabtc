@@ -25,7 +25,8 @@ import Database.Persist.Sql ( insertMany_
                             , insert_
                             , selectList
                             , (==.)
-                            , (>=.))
+                            , (>=.)
+                            , ConnectionPool)
 import qualified Database.Persist.Sql as DB
 import Database.Persist.Types (SelectOpt(..))
 import Control.Lens ((^.))
@@ -44,68 +45,71 @@ persistGenesisBlock config = do
   when (lastBlock' == -1) $
     runSqlPool (insert_ . encodeBlockHeader . genesisBlock $ (config^.network)) (config^.pool)
 
-persistHeader :: BlockHeader -> Connection ()
-persistHeader header = do
-  runDB $ insert_ $ encodeBlockHeader header
+persistHeader :: ConnectionPool -> BlockHeader -> IO ()
+persistHeader pool header = do
+  runSqlPool (insert_ $ encodeBlockHeader header) pool
 
-persistHeaders :: [BlockHeader] -> Connection ()
-persistHeaders headers = do
+persistHeaders :: ConnectionPool -> [BlockHeader] -> IO ()
+persistHeaders pool headers = do
   let persistentHeaders = map encodeBlockHeader headers
       chunkedPersistentHeaders = chunksOf 100 persistentHeaders
       -- Headers are inserted in chunks
       -- sqlite rejects if we insert all at once
-  runDB $ mapM_ insertMany_ chunkedPersistentHeaders
+  runSqlPool (mapM_ insertMany_ chunkedPersistentHeaders) pool
 
--- returns the leftmost header that we are currently persisting
-firstHeaderMatch :: [BlockHash] -> Connection (DB.Entity PersistentBlockHeader)
-firstHeaderMatch [] = fail "No matching hash was found"
-firstHeaderMatch (hash:hashes) = do
-  mHeader <- haveHeader hash
-  case mHeader of
-    Just header -> return header
-    Nothing -> firstHeaderMatch hashes
-
-haveHeader :: BlockHash -> Connection (Maybe (DB.Entity PersistentBlockHeader))
-haveHeader (BlockHash hash) = do
-  matches <- runDB $ selectList [PersistentBlockHeaderHash ==. hash] []
+getBlockHeaderFromHash :: ConnectionPool -> BlockHash -> IO (Maybe (Integer, BlockHeader))
+getBlockHeaderFromHash pool (BlockHash hash) = do
+  matches <- runSqlPool (selectList [PersistentBlockHeaderHash ==. hash] []) pool
   case matches of
     []       -> return Nothing
-    [header] -> return $ Just header
-    _        -> fail "Multiple blocks found with same hash"
+    [header] -> do
+      let DB.Entity persistentKey persistentHeader = header
+          key = fromIntegral . DB.fromSqlKey $ persistentKey
+          blockHeader = decodeBlockHeader persistentHeader
+      return . Just $ (key , blockHeader) 
+    _        -> fail "Multiple blocks found with same hash."
 
-isTransactionHandled :: Transaction -> Connection Bool
-isTransactionHandled transaction = do
-  let TxHash hash = hashTransaction transaction
-  matches <- runDB $ selectList [PersistentTransactionHash ==. hash] []
+getTransactionFromHash :: ConnectionPool -> TxHash -> IO (Maybe Integer)
+getTransactionFromHash pool (TxHash hash) = do
+  matches <- runSqlPool (selectList [PersistentTransactionHash ==. hash] []) pool
   case matches of
-    []   -> return False
-    [_] -> return True
-    _    -> fail "Multiple transactions found with same hash"
+    [] -> return Nothing
+    [tx] -> do
+      let DB.Entity persistentKey _ = tx
+          key = fromIntegral . DB.fromSqlKey $ persistentKey
+      return . Just $ key
+    _ -> fail "Multiple transactions found with same hash."
 
-persistTransaction :: Transaction -> Connection ()
-persistTransaction transaction =
-  runDB $ insert_ persistentTransaction
+persistTransaction :: ConnectionPool -> Transaction -> IO ()
+persistTransaction pool transaction =
+  runSqlPool (insert_ persistentTransaction) pool
   where persistentTransaction = PersistentTransaction hash
         TxHash hash = hashTransaction transaction
 
-getBlockWithIndex :: Int -> Connection (Maybe PersistentBlockHeader)
-getBlockWithIndex i =
-  runDB $ DB.get (toSqlKey . fromIntegral $  i + 1)
+-- TODO: This won't compose with `getBlockHeaderFromHash`!
+--       We are using 0 based indexing and `getBlockHeaderFromHash` is
+--       presumably just using the db indexing (which is presumably 1 based)
+getBlockWithIndex :: ConnectionPool -> Int -> IO (Maybe PersistentBlockHeader)
+getBlockWithIndex pool i =
+  runSqlPool (DB.get (toSqlKey . fromIntegral $  i + 1)) pool
   -- NOTE: we query by i + 1 since the genesis block (block 0) is in the db at index 1
-
-nHeadersSince :: Int -> DB.Entity PersistentBlockHeader -> Connection [DB.Entity PersistentBlockHeader]
-nHeadersSince n (DB.Entity headerId _) =
-  runDB $ selectList [ PersistentBlockHeaderId >=. headerId ] [LimitTo n]
+  
+-- TODO: Get better type signature to tell n and key apart
+nHeadersSinceKey :: ConnectionPool -> Int -> Integer -> IO [BlockHeader]
+nHeadersSinceKey pool n key = do
+  let key' = toSqlKey . fromIntegral $ key
+  persistentHeaders <- runSqlPool (selectList [ PersistentBlockHeaderId >=. key'] [LimitTo n]) pool
+  return $ map getHeaderFromEntity persistentHeaders
 
 getHeaderFromEntity :: DB.Entity PersistentBlockHeader -> BlockHeader
 getHeaderFromEntity (DB.Entity _ persistentHeader) = decodeBlockHeader persistentHeader
 
-getAllAddresses :: Connection [Address]
-getAllAddresses = do
+getAllAddresses :: ConnectionPool -> IO [Address]
+getAllAddresses pool = do
   let allAddressFilter = [] :: [Filter KeySet]
-  keySetEntities <- runDB $ selectList allAddressFilter []
+  keySetEntities <- runSqlPool (selectList allAddressFilter []) pool
   let getAddress (DB.Entity _ keySet) = Address . keySetAddress $ keySet
   return $ map getAddress keySetEntities
 
-persistUTXOs :: [PersistentUTXO] -> Connection ()
-persistUTXOs utxos = runDB $ insertMany_ utxos
+persistUTXOs :: ConnectionPool -> [PersistentUTXO] -> IO ()
+persistUTXOs pool utxos = runSqlPool (insertMany_ utxos) pool
