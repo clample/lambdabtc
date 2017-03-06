@@ -13,6 +13,7 @@ import Database.Persist.Sqlite (runMigrationUnsafe)
 import Database.Persist.TH (mkPersist, mkMigrate, persistLowerCase,
                             share, sqlSettings)
 import Database.Persist.Sql ( SqlPersistT
+                            , ConnectionPool
                             , runSqlPool
                             , runSqlPersistMPool)
 import Control.Monad.IO.Class (liftIO, MonadIO)
@@ -51,9 +52,9 @@ PersistentTransaction
 |]
 
 
-migrateSchema :: Config -> IO ()
-migrateSchema config =
-  liftIO $ flip runSqlPersistMPool (config^.pool) $ runMigrationUnsafe migrateTables
+migrateSchema :: ConnectionPool -> IO ()
+migrateSchema pool =
+  liftIO $ flip runSqlPersistMPool pool $ runMigrationUnsafe migrateTables
 
 
 runDB :: (MonadTrans t, MonadIO (t ConfigM)) =>
