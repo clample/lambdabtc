@@ -9,13 +9,14 @@ module General.Persistence where
 import General.Config (ConfigM, Config(..), pool)
 
 import Data.Text (Text)
-import Database.Persist.Sqlite (runMigrationUnsafe)
+import Database.Persist.Sqlite (runMigration)
 import Database.Persist.TH (mkPersist, mkMigrate, persistLowerCase,
                             share, sqlSettings)
 import Database.Persist.Sql ( SqlPersistT
                             , ConnectionPool
                             , runSqlPool
-                            , runSqlPersistMPool)
+                            , runSqlPersistMPool
+                            )
 import Control.Monad.IO.Class (liftIO, MonadIO)
 import Control.Monad.Trans.Class (MonadTrans, lift)
 import Control.Monad.Reader (ask)
@@ -54,7 +55,7 @@ PersistentTransaction
 
 migrateSchema :: ConnectionPool -> IO ()
 migrateSchema pool =
-  runSqlPersistMPool (runMigrationUnsafe migrateTables) pool
+  runSqlPersistMPool (runMigration migrateTables) pool
 
 
 runDB :: (MonadTrans t, MonadIO (t ConfigM)) =>

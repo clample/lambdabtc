@@ -1,8 +1,7 @@
 module Protocol.Persistence where
 
 import General.Config (Config(..), pool)
-import General.Persistence ( runDB
-                           , PersistentBlockHeader(..)
+import General.Persistence ( PersistentBlockHeader(..)
                            , KeySet(..)
                            , EntityField(..)
                            , PersistentUTXO
@@ -13,7 +12,6 @@ import BitcoinCore.BlockHeaders (genesisBlock, BlockHeader(..), BlockHash(..))
 import BitcoinCore.Transaction.Transactions ( Transaction(..)
                                             , TxHash(..)
                                             , hashTransaction)
-import Protocol.ConnectionM (Connection)
 import Protocol.Util (encodeBlockHeader, decodeBlockHeader)
 
 import Database.Persist.Sql ( insertMany_

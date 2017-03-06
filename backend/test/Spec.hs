@@ -20,6 +20,7 @@ import qualified Data.Text as T
 import Data.ByteString.Base16 (decode, encode)
 import KeyTest
 import TransactionTest
+import ProtocolPersistenceTest
 import MessageTest
 import BlockHeaderTest
 import Data.Binary.Put (runPut)
@@ -64,6 +65,9 @@ tests =
       validHeadersVerify,
       testCase "Check genesis block hash" genesisBlockHash,
       testCase "Check genesis block testnet hash" genesisBlockTestnetHash
+      ],
+    testGroup "Persistence Tests" [
+      persistAndRetrieveBlockHeader
       ]
   ]
 
