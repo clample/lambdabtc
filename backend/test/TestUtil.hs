@@ -13,12 +13,14 @@ module TestUtil
   , assertEqual
   , testCase
   , arbitraryBoundedEnum
-  , vector) where
+  , vector
+  , buildTest) where
 
 import Test.Framework.Providers.QuickCheck2 (testProperty)
 import Test.QuickCheck.Arbitrary (Arbitrary(..), arbitraryBoundedEnum, vector)
 import Test.QuickCheck.Gen (choose, suchThat, vectorOf, elements, oneof, listOf, Gen)
 import Test.Framework.Providers.HUnit (testCase)
+import Test.Framework.Providers.API (buildTest)
 import Test.HUnit (assertEqual, Assertion)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as Char8

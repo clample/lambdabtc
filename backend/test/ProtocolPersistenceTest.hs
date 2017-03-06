@@ -38,12 +38,14 @@ prop_persistAndRetrieveBlockHeader header = ioProperty $ do
     Just (_, header') ->
       return (hashBlock header' == hash)
 
-persistAndRetrieveTransaction = testProperty
-  "It should be possible to persist and retrieve a transaction"
-  prop_persistAndRetrieveTransaction
+persistAndRetrieveTransaction = buildTest $ do
+  pool <- createTestDbPool
+  return $ testProperty
+    "It should be possible to persist and retrieve a transaction"
+    (prop_persistAndRetrieveTransaction pool)
 
-prop_persistAndRetrieveTransaction :: Transaction -> Property
-prop_persistAndRetrieveTransaction tx = ioProperty $ do
+prop_persistAndRetrieveTransaction :: ConnectionPool -> Transaction -> Property
+prop_persistAndRetrieveTransaction pool tx = ioProperty $ do
   pool <- createTestDbPool
   let hash = hashTransaction tx
   persistTransaction pool tx
@@ -52,3 +54,35 @@ prop_persistAndRetrieveTransaction tx = ioProperty $ do
     Nothing -> return False
     Just _ -> return True
 
+persistAndGetLastBlock = testProperty
+  "It should be possible to persist blocks and get the correct index from `getLastBlock`"
+  prop_persistAndGetLastBlock
+
+prop_persistAndGetLastBlock :: [BlockHeader] -> Property
+prop_persistAndGetLastBlock headers = ioProperty $ do
+  pool <- createTestDbPool
+  persistHeaders pool headers
+  lastBlock <- getLastBlock pool
+  return $ lastBlock == (length headers) - 1
+    -- The (-1) is because lastBlock should be 0 based
+    -- for example, the genesis block should have index 0
+
+getBlockWithIndexAndHash = buildTest $ do
+  pool <- createTestDbPool
+  return $ testProperty
+    "We should obtain the same block whether querying by index or hash"
+    (prop_getBlockWithIndexAndHash pool)
+
+prop_getBlockWithIndexAndHash :: ConnectionPool -> BlockHeader -> Property
+prop_getBlockWithIndexAndHash pool header = ioProperty $ do
+  let hash = hashBlock header
+  persistHeader pool header
+  mHeaderFromHash <- getBlockHeaderFromHash pool hash
+  case mHeaderFromHash of
+    Nothing -> return False
+    Just (key, headerFromHash) -> do
+      mHeaderFromIndex <- getBlockWithIndex pool key
+      case mHeaderFromIndex of
+        Nothing -> return False
+        Just headerFromIndex -> return
+          (headerFromIndex == headerFromHash)

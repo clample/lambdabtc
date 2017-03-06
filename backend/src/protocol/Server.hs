@@ -148,7 +148,7 @@ data ConnectionInteraction next
   | ReadMessage (Maybe Message -> next)
   | WriteMessage Message next
   | WriteUIUpdaterMessage UIUpdaterMessage next
-  | GetBlockHeader Int (Maybe BlockHeader -> next) -- The Int should be KeyId
+  | GetBlockHeader KeyId (Maybe BlockHeader -> next)
   | BlockHeaderCount (Int -> next)
   | PersistBlockHeaders [BlockHeader] next
   | PersistBlockHeader BlockHeader next
@@ -200,7 +200,7 @@ writeMessage' message = liftF (WriteMessage message ())
 writeUiUpdaterMessage' :: UIUpdaterMessage -> Connection' ()
 writeUiUpdaterMessage' message = liftF (WriteUIUpdaterMessage message ())
 
-getBlockHeader' :: Int -> Connection' (Maybe BlockHeader)
+getBlockHeader' :: KeyId -> Connection' (Maybe BlockHeader)
 getBlockHeader' index = liftF (GetBlockHeader index id)
 
 blockHeaderCount' :: Connection' Int
@@ -258,7 +258,7 @@ interpretConnProd conn = case conn of
     interpretConnProd n
   Free (GetBlockHeader i f) -> do
     config <- ask
-    mBlock <- liftIO $ (fmap . fmap) decodeBlockHeader (getBlockWithIndex (config^.pool) i)
+    mBlock <- liftIO $ (getBlockWithIndex (config^.pool) i)
     interpretConnProd (f mBlock)
   Free (BlockHeaderCount f) -> do
     config <- ask
@@ -398,7 +398,9 @@ firstHeaderMatch' (hash:hashes) = do
 getMostRecentHeader' :: Connection' BlockHeader
 getMostRecentHeader' = do
   blockHeaderCount <- blockHeaderCount'
-  mLastBlockHeader <- getBlockHeader' blockHeaderCount
+  mLastBlockHeader <- getBlockHeader' . fromIntegral $ blockHeaderCount + 1
+    -- We add 1 to the count, since the database has 1 based indexing but
+    -- blockHeaderCount has 0 based indexing
   case mLastBlockHeader of
     Nothing -> fail "Unable to get most recent block header. This should never happen"
     Just lastBlockHeader -> return lastBlockHeader
@@ -460,7 +462,9 @@ queryBlockLocatorHashes' lastBlock' =
   mapM queryBlockHash (blockLocatorIndices lastBlock')
   where
     queryBlockHash i = do
-      mBlockHeader <- getBlockHeader' i
+      mBlockHeader <- getBlockHeader' . fromIntegral $ i + 1
+        -- We add 1 to the count, since the database has 1 based indexing but
+        -- blockHeaderCount has 0 based indexing
       case mBlockHeader of
         Nothing -> fail $ "Unable to get block header with index " ++ show i
         Just header -> return . hashBlock $ header

@@ -68,7 +68,9 @@ tests =
       ],
     testGroup "Persistence Tests" [
       persistAndRetrieveBlockHeader,
-      persistAndRetrieveTransaction
+      persistAndRetrieveTransaction,
+      persistAndGetLastBlock,
+      getBlockWithIndexAndHash
       ]
   ]
 

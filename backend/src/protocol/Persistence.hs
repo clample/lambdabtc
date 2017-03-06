@@ -86,13 +86,9 @@ persistTransaction pool transaction =
   where persistentTransaction = PersistentTransaction hash
         TxHash hash = hashTransaction transaction
 
--- TODO: This won't compose with `getBlockHeaderFromHash`!
---       We are using 0 based indexing and `getBlockHeaderFromHash` is
---       presumably just using the db indexing (which is presumably 1 based)
-getBlockWithIndex :: ConnectionPool -> Int -> IO (Maybe PersistentBlockHeader)
-getBlockWithIndex pool i =
-  runSqlPool (DB.get (toSqlKey . fromIntegral $  i + 1)) pool
-  -- NOTE: we query by i + 1 since the genesis block (block 0) is in the db at index 1
+getBlockWithIndex :: ConnectionPool -> Integer -> IO (Maybe BlockHeader)
+getBlockWithIndex pool i = (fmap . fmap) decodeBlockHeader $
+  runSqlPool (DB.get (toSqlKey . fromIntegral $ i)) pool
   
 -- TODO: Get better type signature to tell n and key apart
 nHeadersSinceKey :: ConnectionPool -> Int -> Integer -> IO [BlockHeader]
