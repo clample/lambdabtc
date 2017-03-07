@@ -24,21 +24,21 @@ import Control.Lens (makeLenses, (^.), Lens')
 import Control.Concurrent.STM.TBMChan (TBMChan, newTBMChan)
 import GHC.Conc (atomically)
 
-data Environment =
-  Development |
-  Production |
-  Test
+data Environment
+  = Development
+  | Production
+  | Test
   deriving (Eq, Read, Show)
 
-data Config =
-  Config { _environment :: Environment
-         , _port :: Int 
-         , _websocketPort :: Int
-         , _configPool :: ConnectionPool
-         , _configNetwork :: Network
-         , _configAppChan :: TBMChan InternalMessage
-         , _configUIUpdaterChan :: TBMChan UIUpdaterMessage
-         }
+data Config = Config
+  { _environment :: Environment
+  , _port :: Int 
+  , _websocketPort :: Int
+  , _configPool :: ConnectionPool
+  , _configNetwork :: Network
+  , _configAppChan :: TBMChan InternalMessage
+  , _configUIUpdaterChan :: TBMChan UIUpdaterMessage
+  }
 
 makeLenses ''Config
 

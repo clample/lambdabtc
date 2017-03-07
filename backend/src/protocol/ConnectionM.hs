@@ -1,7 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 module Protocol.ConnectionM where
 
-import Protocol.Network (Peer(..))
 import Protocol.Messages (Message(..))
 import General.Types ( HasVersion(..)
                      , HasRelay(..)
@@ -11,7 +10,7 @@ import General.Types ( HasVersion(..)
                      , Network(..)
                      , HasPool(..)
                      , HasNetwork(..))
-import General.Config (ConfigM(..), Config(..), HasAppChan(..), HasUIUpdaterChan(..))
+import General.Config (HasAppChan(..), HasUIUpdaterChan(..))
 import General.Util (Addr(..))
 import General.InternalMessaging (UIUpdaterMessage(..), InternalMessage(..))
 
@@ -19,8 +18,6 @@ import Data.Conduit.TMChan (TBMChan)
 import Data.Time.Clock.POSIX (POSIXTime)
 import System.Random (StdGen)
 import Control.Lens (makeLenses)
-import Control.Monad.State.Lazy (StateT(..))
-import Control.Monad.Reader (runReaderT)
 import Network.Socket (Socket)
 import Database.Persist.Sql (ConnectionPool)
 
@@ -28,13 +25,10 @@ data ConnectionContext = ConnectionContext
   { _connectionContextVersion :: Int
   , _connectionContextLastBlock :: Integer
   , _myAddr :: Addr
-  --, _peer :: Peer
   , _connectionContextPeerAddr :: Addr
   , _connectionContextRelay :: Bool
     -- https://github.com/bitcoin/bips/blob/master/bip-0037.mediawiki#extensions-to-existing-messages
     -- Relay should be set to False when functioning as an SPV node
-  --, _writerChan :: TBMChan Message
-  --, _listenChan :: TBMChan Message
   , _connectionContextTime :: POSIXTime
   , _randGen :: StdGen
   , _connectionContextNetwork :: Network

@@ -4,7 +4,7 @@ module Protocol.Server where
 import Protocol.Messages (parseMessage, Message(..), MessageBody(..), MessageContext(..))
 import Protocol.MessageBodies 
 import Protocol.Network (connectToPeer, sock, addr)
-import Protocol.Util (decodeBlockHeader, getUTXOS)
+import Protocol.Util (getUTXOS)
 import Protocol.Persistence ( getLastBlock
                             , persistGenesisBlock
                             , persistHeaders
@@ -36,7 +36,7 @@ import General.Config ( Config(..)
                       , HasAppChan(..)
                       , HasUIUpdaterChan(..)
                       )
-import General.Persistence (runDB, PersistentBlockHeader(..), FundRequest(..), PersistentUTXO(..))
+import General.Persistence (PersistentUTXO(..))
 import General.Types ( HasNetwork(..)
                      , HasVersion(..)
                      , HasRelay(..)
@@ -51,9 +51,7 @@ import General.Util (Addr(..))
 import Network.Socket (Socket)
 import Data.Time.Clock.POSIX (getPOSIXTime)
 import Control.Monad.State.Lazy (liftIO)
-import Control.Monad.Reader (ask)
 import Control.Monad (when, filterM)
-import qualified Control.Monad.State.Lazy as State
 import System.Random (randomR, getStdGen)
 import Conduit (runConduit, (.|), mapC, mapMC, Conduit)
 import Data.Conduit.Network (sourceSocket, sinkSocket)
@@ -69,7 +67,7 @@ import Control.Concurrent.STM (atomically)
 import Control.Concurrent (forkIO)
 import Data.Binary (Binary(..))
 import Data.ByteString.Base16 (decode)
-import Control.Lens ((^.), (+=), (.~), (%~))
+import Control.Lens ((^.), (%~))
 import Control.Monad.Free (Free(..), liftF)
 
 connectTestnet :: Config -> IO () 
