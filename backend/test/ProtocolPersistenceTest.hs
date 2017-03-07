@@ -23,13 +23,14 @@ createTestDbPool = do
   runSqlPool (runMigrationSilent migrateTables) pool
   return pool
 
-persistAndRetrieveBlockHeader = testProperty
-  "It should be possible to persist and retrieve a block header"
-  prop_persistAndRetrieveBlockHeader
-
-prop_persistAndRetrieveBlockHeader :: BlockHeader -> Property
-prop_persistAndRetrieveBlockHeader header = ioProperty $ do
+persistAndRetrieveBlockHeader = buildTest $ do
   pool <- createTestDbPool
+  return $ testProperty
+    "It should be possible to persist and retrieve a block header"
+    (prop_persistAndRetrieveBlockHeader pool)
+
+prop_persistAndRetrieveBlockHeader :: ConnectionPool -> BlockHeader -> Property
+prop_persistAndRetrieveBlockHeader pool header = ioProperty $ do
   let hash = hashBlock header
   persistHeader pool header
   mHeader' <- getBlockHeaderFromHash pool hash
@@ -46,7 +47,6 @@ persistAndRetrieveTransaction = buildTest $ do
 
 prop_persistAndRetrieveTransaction :: ConnectionPool -> Transaction -> Property
 prop_persistAndRetrieveTransaction pool tx = ioProperty $ do
-  pool <- createTestDbPool
   let hash = hashTransaction tx
   persistTransaction pool tx
   mTx' <- getTransactionFromHash pool hash
@@ -54,18 +54,18 @@ prop_persistAndRetrieveTransaction pool tx = ioProperty $ do
     Nothing -> return False
     Just _ -> return True
 
-persistAndGetLastBlock = testProperty
-  "It should be possible to persist blocks and get the correct index from `getLastBlock`"
-  prop_persistAndGetLastBlock
-
-prop_persistAndGetLastBlock :: [BlockHeader] -> Property
-prop_persistAndGetLastBlock headers = ioProperty $ do
+persistAndGetLastBlock = buildTest $ do
   pool <- createTestDbPool
+  return $ testProperty
+    "It should be possible to persist blocks and get the correct index from `getLastBlock`"
+    (prop_persistAndGetLastBlock pool)
+
+prop_persistAndGetLastBlock :: ConnectionPool -> [BlockHeader] -> Property
+prop_persistAndGetLastBlock pool headers = ioProperty $ do
+  lastBlockInitial <- getLastBlock pool
   persistHeaders pool headers
-  lastBlock <- getLastBlock pool
-  return $ lastBlock == (length headers) - 1
-    -- The (-1) is because lastBlock should be 0 based
-    -- for example, the genesis block should have index 0
+  lastBlockFinal <- getLastBlock pool
+  return $ lastBlockFinal - lastBlockInitial == length headers
 
 getBlockWithIndexAndHash = buildTest $ do
   pool <- createTestDbPool
