@@ -21,9 +21,7 @@ import Protocol.ConnectionM ( ConnectionContext(..)
                             , peer
                             , writerChan
                             , listenChan
-                            , randGen
-                            , Connection
-                            , runConnection)
+                            , randGen)
 import BitcoinCore.BlockHeaders ( BlockHash(..)
                                 , BlockHeader(..)
                                 , verifyHeaders
@@ -59,7 +57,7 @@ import Control.Concurrent.STM (atomically)
 import Control.Concurrent (forkIO)
 import Data.Binary (Binary(..))
 import Data.ByteString.Base16 (decode)
-import Control.Lens ((^.), (+=))
+import Control.Lens ((^.), (+=), (.~), (%~))
 import Control.Monad.Free (Free(..), liftF)
 
 connectTestnet :: Config -> IO () 
@@ -69,7 +67,7 @@ connectTestnet config = do
   let peerSocket = context^.peer.sock
   forkIO $ listener (context^.listenChan) peerSocket
   forkIO $ writer (context^.writerChan) peerSocket
-  runConnection connection context config
+  connection config context
   return ()
 
 getConnectionContext :: Config -> IO ConnectionContext
@@ -116,27 +114,26 @@ logMessages context =
           putStrLn $ context ++ " " ++ show message
           return message
 
-connection :: Connection ()
-connection = do
-  interpretConnProd sendVersion'
-  interpretConnProd setFilter'
-  connectionLoop
+connection :: Config -> ConnectionContext -> IO ()
+connection config context = do
+  interpretConnProd config context sendVersion'
+  interpretConnProd config context setFilter'
+  connectionLoop config context
 
-connectionLoop :: Connection ()
-connectionLoop = do
-  context <- State.get
-  config <- ask
+connectionLoop :: Config -> ConnectionContext -> IO ()
+connectionLoop config context = do
   mmResponse <-  liftIO . atomically . tryReadTBMChan $ (context^.listenChan)
   case mmResponse of
     Nothing -> fail "listenChan is closed and empty"
     Just Nothing -> return () -- chan is empty
-    Just (Just response) -> interpretConnProd $ handleResponse' response
+    Just (Just response) -> interpretConnProd config context (handleResponse' response)
   mmInternalMessage <- liftIO . atomically . tryReadTBMChan $ (config^.appChan)
   case mmInternalMessage of
     Nothing -> fail "appChan is closed and empty"
     Just Nothing -> return () -- chan is empty
-    Just (Just internalMessage) -> interpretConnProd $ handleInternalMessage' internalMessage
-  connectionLoop
+    Just (Just internalMessage) ->
+      interpretConnProd config context (handleInternalMessage' internalMessage)
+  connectionLoop config context
 
 ----------
 type KeyId = Integer
@@ -230,72 +227,54 @@ getAllAddresses' = liftF (GetAllAddresses id)
 persistUTXOs' :: [PersistentUTXO] -> Connection' ()
 persistUTXOs' persistentUTXOs = liftF (PersistUTXOs persistentUTXOs ())
 
---
--- TODO: It should be possible to get rid of our Connection monad stack / State and Reader
---       See "freer monads" paper
-interpretConnProd :: Connection' r -> Connection r
-interpretConnProd conn = case conn of
+interpretConnProd :: Config -> ConnectionContext -> Connection' r -> IO r
+interpretConnProd config context conn = case conn of
   Free (GetConfig f) -> do
-    config <- ask
-    interpretConnProd (f config)
+    interpretConnProd config context (f config)
   Free (GetContext f) -> do
-    context <- State.get
-    interpretConnProd (f context)
+    interpretConnProd config context (f context)
   Free (IncrementLastBlock i n) -> do
-    lastBlock += i
-    interpretConnProd n
+    let newContext = lastBlock %~ (+ i) $ context
+    interpretConnProd config newContext n
   Free (ReadMessage f) -> do
-    context <- State.get
     mMessage <- liftIO . atomically . readTBMChan $ (context^.listenChan)
-    interpretConnProd (f mMessage)
+    interpretConnProd config context (f mMessage)
   Free (WriteMessage m n) -> do
-    context <- State.get
-    liftIO $ writeMessage (context^.writerChan) m 
-    interpretConnProd n
+    writeMessage (context^.writerChan) m 
+    interpretConnProd config context n
   Free (WriteUIUpdaterMessage m n) -> do
-    config <- ask
-    liftIO $ writeUiUpdaterMessage (config^.uiUpdaterChan) m
-    interpretConnProd n
+    writeUiUpdaterMessage (config^.uiUpdaterChan) m
+    interpretConnProd config context n
   Free (GetBlockHeader i f) -> do
-    config <- ask
-    mBlock <- liftIO $ (getBlockWithIndex (config^.pool) i)
-    interpretConnProd (f mBlock)
+    mBlock <- getBlockWithIndex (config^.pool) i
+    interpretConnProd config context (f mBlock)
   Free (BlockHeaderCount f) -> do
-    config <- ask
-    blockHeaderCount <- liftIO . getLastBlock $ config^.pool
-    interpretConnProd (f blockHeaderCount)
+    blockHeaderCount <- getLastBlock $ config^.pool
+    interpretConnProd config context (f blockHeaderCount)
   Free (PersistBlockHeaders headers n) -> do
-    config <- ask
-    liftIO $ persistHeaders (config^.pool) headers
-    interpretConnProd n
+    persistHeaders (config^.pool) headers
+    interpretConnProd config context n
   Free (PersistBlockHeader header n) -> do
-    config <- ask
-    liftIO $ persistHeader (config^.pool) header
-    interpretConnProd n
+    persistHeader (config^.pool) header
+    interpretConnProd config context n
   Free (GetBlockHeaderFromHash hash f) -> do
-    config <- ask
-    mBlock <- liftIO $ getBlockHeaderFromHash (config^.pool) hash
-    interpretConnProd (f mBlock)
+    mBlock <- getBlockHeaderFromHash (config^.pool) hash
+    interpretConnProd config context (f mBlock)
   Free (NHeadersSinceKey n keyId f) -> do
-    config <- ask
-    headers <- liftIO $ nHeadersSinceKey (config^.pool) n keyId
-    interpretConnProd (f headers)
+    headers <- nHeadersSinceKey (config^.pool) n keyId
+    interpretConnProd config context (f headers)
   Free (PersistTransaction tx n) -> do
-    config <- ask
-    liftIO $ persistTransaction (config^.pool) tx
-    interpretConnProd n
+    persistTransaction (config^.pool) tx
+    interpretConnProd config context n
   Free (GetTransactionFromHash hash f) -> do
-    config <- ask
-    mTx <- liftIO $ getTransactionFromHash (config^.pool) hash
-    interpretConnProd (f mTx)
+    mTx <- getTransactionFromHash (config^.pool) hash
+    interpretConnProd config context (f mTx)
   Free (GetAllAddresses f) -> do
-    config <- ask
-    addresses <- liftIO $ getAllAddresses (config^.pool)
-    interpretConnProd (f addresses)
+    addresses <- getAllAddresses (config^.pool)
+    interpretConnProd config context (f addresses)
   Free (PersistUTXOs utxos n) -> do
-    config <- ask
-    liftIO $ persistUTXOs (config^.pool) utxos
-    interpretConnProd n
+    persistUTXOs (config^.pool) utxos
+    interpretConnProd config context n
   Pure r -> return r
 
 -- Logic for handling response in free monad
@@ -479,6 +458,7 @@ sendVersion' = do
   context <- getContext'
   config <- getConfig'
   let nonce' = Nonce64 . fst $ randomR (0, 0xffffffffffffffff) (context^.randGen)
+               -- TODO: We need to update the randGen after calling randomR
       versionMessage = Message
         (VersionMessageBody (VersionMessage
           (context^.version)

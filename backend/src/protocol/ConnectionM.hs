@@ -43,9 +43,3 @@ instance HasTime ConnectionContext where
 
 instance HasLastBlock ConnectionContext where
   lastBlock = connectionContextLastBlock
-
-type Connection a = StateT ConnectionContext ConfigM a
-
-runConnection :: Connection a -> ConnectionContext -> Config -> IO (a, ConnectionContext)
-runConnection connectionM state =
-  runReaderT (runConfigM (runStateT connectionM state))
