@@ -153,6 +153,7 @@ connectionLoop ioHandlers context = do
 
 ----------
 type KeyId = Integer
+  -- KeyId is 1 based
 
 data ConnectionInteraction next
   = GetContext (ConnectionContext -> next)
@@ -375,7 +376,7 @@ handleResponse' message = error $
   "We are not yet able to handle message" ++ (show message)
 
 -- returns the leftmose header that we are currently persisting
-firstHeaderMatch' :: [BlockHash] -> Connection' Integer
+firstHeaderMatch' :: [BlockHash] -> Connection' KeyId
 firstHeaderMatch' [] = fail "No matching hash was found"
 firstHeaderMatch' (hash:hashes) = do
   mHeader <- getBlockHeaderFromHash' hash

@@ -23,6 +23,7 @@ import TransactionTest
 import ProtocolPersistenceTest
 import MessageTest
 import BlockHeaderTest
+import ProtocolServerTest
 import Data.Binary.Put (runPut)
 
 main :: IO ()
@@ -69,6 +70,9 @@ tests =
       persistAndRetrieveTransaction,
       persistAndGetLastBlock,
       getBlockWithIndexAndHash
+      ],
+    testGroup "Protocol Server Tests" [
+      pingAndPong
       ]
   ]
 
