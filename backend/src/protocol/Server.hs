@@ -289,19 +289,12 @@ interpretConnProd ioHandlers context conn = case conn of
 
 -- Logic for handling response in free monad
 handleResponse' :: Message -> Connection' ()
-handleResponse' (Message (PingMessageBody message) _) = do
-  context <- getContext'
-  let pongMessageBody = PongMessageBody . PongMessage $ message^.nonce64
-      pongMessage =
-        Message pongMessageBody (MessageContext (context^.network))
-  writeMessage' pongMessage
+handleResponse' (Message (PingMessageBody message) _) = 
+  writeMessageWithBody' . PongMessageBody $ PongMessage (message^.nonce64)
 
 handleResponse' (Message (VersionMessageBody body) _) = do
-  context <- getContext'
-  let verackMessage =
-        Message (VerackMessageBody VerackMessage) (MessageContext (context^.network))
-      lastBlockPeer = body^.lastBlock
-  writeMessage' verackMessage
+  writeMessageWithBody' . VerackMessageBody $ VerackMessage
+  let lastBlockPeer = body^.lastBlock
   synchronizeHeaders' lastBlockPeer
 
 handleResponse' (Message (HeadersMessageBody (HeadersMessage headers)) _) = do
@@ -326,23 +319,13 @@ handleResponse' (Message (MerkleblockMessageBody (message)) _) = do
       -- todo: does `fail` actually make sense here?
 
 handleResponse' (Message (GetHeadersMessageBody message) _) = do
-  context <- getContext'
   match <- firstHeaderMatch' (message^.blockLocatorHashes)
   matchingHeaders <- 2000 `nHeadersSinceKey'` match
-  let headersMessage =
-        Message
-         (HeadersMessageBody (HeadersMessage {_blockHeaders = matchingHeaders }))
-         (MessageContext (context^.network))
-  writeMessage' headersMessage
-
+  writeMessageWithBody' . HeadersMessageBody $ HeadersMessage {_blockHeaders = matchingHeaders }
+ 
 handleResponse' (Message (InvMessageBody message) _) = do
-  context <- getContext'
   desiredInvs <- map toFilteredBlock <$> filterM (desiredData) (message^.invVectors)
-  let getDataMessage =
-        Message
-        (GetDataMessageBody (GetDataMessage desiredInvs))
-        (MessageContext (context^.network))
-  writeMessage' getDataMessage
+  writeMessageWithBody' . GetDataMessageBody $ GetDataMessage desiredInvs
   where
     -- TODO: query db, etc to see if we actually need the data
     desiredData _ = return True
@@ -374,6 +357,12 @@ handleResponse' (Message (TxMessageBody message) _) = do
 
 handleResponse' message = error $
   "We are not yet able to handle message" ++ (show message)
+
+writeMessageWithBody' :: MessageBody -> Connection' ()
+writeMessageWithBody' body = do
+  context <- getContext'
+  let message = Message body (MessageContext (context^.network))
+  writeMessage' message
 
 -- returns the leftmose header that we are currently persisting
 firstHeaderMatch' :: [BlockHash] -> Connection' KeyId
