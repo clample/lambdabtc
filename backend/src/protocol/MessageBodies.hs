@@ -34,6 +34,9 @@ import Control.Monad (replicateM)
 import Foreign.Marshal.Utils (toBool)
 import Data.Word (Word64)
 
+import Test.QuickCheck.Arbitrary (Arbitrary(..))
+import Test.QuickCheck.Gen (choose, Gen)
+
 class HasBlockLocatorHashes t where
   blockLocatorHashes :: Lens' t [BlockHash]
 
@@ -480,3 +483,8 @@ data UnknownMessage = UnknownMessage
 
 data CmpctblockMessage = CmpctblockMessage
   deriving (Show, Eq)
+
+-----------------------------
+
+instance Arbitrary Nonce64 where
+  arbitrary = Nonce64 <$> arbitrary

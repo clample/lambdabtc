@@ -23,6 +23,9 @@ import Data.ByteString (ByteString)
 import Data.ByteString.Lazy (toStrict)
 import Data.Binary.Put (runPut)
 
+import Test.QuickCheck.Arbitrary (Arbitrary(..))
+import Test.QuickCheck.Gen (elements)
+
 decodeBlockHeader :: PersistentBlockHeader -> BlockHeader
 decodeBlockHeader
   (PersistentBlockHeader
@@ -112,3 +115,6 @@ getPersistentUTXO tx outIndex script keySetId' = PersistentUTXO
   where
     TxHash hash = hashTransaction tx
     scriptBS = toStrict . runPut $ putScript script
+
+instance Arbitrary CCode where
+  arbitrary = elements . map fst $ ccodeTable

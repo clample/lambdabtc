@@ -3,10 +3,10 @@
 
 module Protocol.Messages where
 
-import General.Util (checkSum, readFromTable)
+import General.Util (checkSum, readFromTable, unroll, Endian(..))
 import General.Types (HasNetwork(..), getNetwork', getNetwork, Network(..))
 import Protocol.MessageBodies
-
+import BitcoinCore.BloomFilter (Filter(..), FilterContext(..), Tweak(..))
 
 import qualified Data.ByteString as BS
 import Data.Binary.Put (Put, putWord32le, putByteString, runPut)
@@ -19,6 +19,9 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as Char8
 import Data.Maybe (fromJust, fromMaybe)
 import Data.Char (toUpper)
+
+import Test.QuickCheck.Arbitrary (Arbitrary(..), vector, arbitraryBoundedEnum)
+import Test.QuickCheck.Gen (oneof, Gen, choose, vectorOf)
 
 data MessageBody
   = VersionMessageBody VersionMessage
@@ -321,3 +324,95 @@ parseMessageBody expectedLength NotFoundCommand =
 parseMessageBody expectedLength UnknownCommand =
   parseRemaining expectedLength >> return
     (UnknownMessageBody UnknownMessage)
+
+instance Arbitrary Message where
+  arbitrary = Message <$> arbitrary <*> arbitrary
+
+instance Arbitrary MessageBody where
+  arbitrary = oneof
+    [ arbitraryVersionMessage
+    , arbitraryGetHeadersMessage
+    , arbitraryGetHeadersMessage
+    , arbitraryMerkleblockMessage
+    , arbitraryFilterloadMessage
+    , arbitraryFilteraddMessage
+    , arbitraryInvMessage
+    , arbitraryGetDataMessage
+    , arbitraryRejectMessage
+    , arbitraryPingMessage
+    , return (VerackMessageBody VerackMessage)]
+
+instance Arbitrary MessageContext where
+  arbitrary = MessageContext <$> arbitrary
+
+arbitraryVersionMessage = do
+  version    <- choose (0, maxVersion)
+  nonce'     <- arbitrary
+  lastBlockN <- choose (0, maxBlock)
+  senderAddr <- arbitrary
+  peerAddr   <- arbitrary
+  relay      <- arbitrary
+  time       <- choose (0, maxTime) :: Gen Integer
+  return $ VersionMessageBody
+    (VersionMessage version nonce' lastBlockN senderAddr peerAddr relay (realToFrac time))
+  where
+    maxVersion = 0xffffffff         -- 4 bytes
+    maxNonce   = 0xffffffffffffffff -- 8 bytes
+    maxBlock   = 0xffffffff         -- 4 bytes
+    maxTime = 0xffffffffffffffff -- 8 bytes
+
+arbitraryGetHeadersMessage = do
+  version <- choose (0, maxVersion)
+  n      <- choose (0, 2000)
+  blockLocatorHashes <- vectorOf n arbitrary
+  hashStop <- arbitrary
+  return $ GetHeadersMessageBody
+    (GetHeadersMessage version blockLocatorHashes hashStop)
+  where maxVersion = 0xffffffff -- 4 bytes
+
+arbitraryMerkleblockMessage = do
+  blockHeader' <- arbitrary
+  nMerkleHashes <- choose (0, 100)
+  merkleHashes' <- vectorOf  nMerkleHashes arbitrary
+  flags' <- arbitrary
+  return $ MerkleblockMessageBody
+    (MerkleblockMessage blockHeader' merkleHashes' flags')
+
+arbitraryHeadersMessage = do
+  n            <- choose (0, 2000) -- A headers message contains at most 2000 block headers
+  blockHeaders <- vectorOf n arbitrary
+  return $ HeadersMessageBody
+    (HeadersMessage blockHeaders)
+
+arbitraryFilterloadMessage = do
+  fValue <- choose (0, 0xffffffffffffffff) -- upper limit is so the value is reasonably sized
+  let minEncodingLength = BS.length . unroll LE $ fValue
+  fLengthBytes <- choose (minEncodingLength, 2 * minEncodingLength)
+  let filter = Filter { _filterLengthBytes = fLengthBytes, _filterValue = fValue}
+  nHashFuncs <- choose (0, maxNHashFuncs)
+  nTweak <- Tweak <$> choose (0, maxNTweak)
+  nFlags <- arbitraryBoundedEnum
+  let filterContext' = FilterContext { _tweak = nTweak, _nHashFunctions = nHashFuncs}
+  return $ FilterloadMessageBody
+    (FilterloadMessage  filter filterContext' nFlags)
+  where
+    maxNHashFuncs = 0xffffffff -- 4 bytes
+    maxNTweak     = 0xffffffff -- 4 bytes
+
+arbitraryPingMessage = do
+  PingMessageBody . PingMessage <$> arbitrary
+
+arbitraryFilteraddMessage = do
+  filterdataLength <- choose (1, 520)
+  filterdata <- Char8.pack <$> vector filterdataLength
+  return $ FilteraddMessageBody $ FilteraddMessage filterdata
+
+arbitraryInvMessage = 
+  InvMessageBody . InvMessage <$> arbitrary
+
+arbitraryGetDataMessage =
+  GetDataMessageBody . GetDataMessage <$> arbitrary
+
+arbitraryRejectMessage = do
+  RejectMessageBody <$>
+    (RejectMessage <$> arbitrary <*> arbitrary <*> arbitrary)

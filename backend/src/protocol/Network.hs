@@ -27,6 +27,9 @@ import Data.Binary.Get (Get, getWord64be, getWord16be, getByteString, getWord8)
 import Data.Binary.Put (Put, putByteString, putWord8, putWord16be,  putWord64le)
 import Data.ByteString.Base16 (decode)
 
+import Test.QuickCheck.Arbitrary (Arbitrary(..))
+import Test.QuickCheck.Gen (choose)
+
 data Peer = Peer
   { _peerSock :: Socket
   , _peerAddr :: Addr
@@ -107,3 +110,15 @@ seed MainNet = "seed.bitcoin.sipa.be"
 networkPort :: Network -> String
 networkPort TestNet3 = "18333"
 networkPort MainNet = "8333"
+
+instance Arbitrary Addr where
+  arbitrary = do
+    a <- chooseIpComponent
+    b <- chooseIpComponent
+    c <- chooseIpComponent
+    d <- chooseIpComponent
+    port <- choosePort
+    return $ Addr (a, b, c, d) port
+    where
+      chooseIpComponent = choose (0, 255)
+      choosePort = choose (0, 65535)

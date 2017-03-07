@@ -2,10 +2,13 @@ module BitcoinCore.Inventory where
 
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as Char8
 import Data.ByteString.Base16 (encode)
 import Data.Binary (Binary(..))
 import Data.Binary.Put (Put, putWord32le, putByteString)
 import Data.Binary.Get (Get, getWord32le, getByteString)
+
+import Test.QuickCheck.Arbitrary (Arbitrary(..), arbitraryBoundedEnum, vector)
 
 data InventoryVector =
   InventoryVector ObjectType ObjectHash
@@ -48,3 +51,9 @@ getInventoryVector = do
   objType <- (toEnum . fromIntegral) <$> getWord32le
   objHash <- ObjectHash <$> getByteString 32
   return $ InventoryVector objType objHash
+
+instance Arbitrary InventoryVector where
+  arbitrary = do
+    objType <- arbitraryBoundedEnum
+    objHash <- ObjectHash . Char8.pack <$> vector 32
+    return $ InventoryVector objType objHash
