@@ -22,6 +22,7 @@ import Control.Monad.Free (Free(..))
 import Data.List (findIndex)
 import Control.Monad.Identity (Identity(..), runIdentity)
 import System.Random (mkStdGen)
+import Test.QuickCheck.Gen (generate)
 
 newtype PingMessage = PingMessage Message
   deriving (Show, Eq)
@@ -113,9 +114,11 @@ interpretConnTest mockHandles context conn =  case conn of
     interpretConnTest newMockHandles context n
   Pure r -> return (mockHandles, r)
 
-pingAndPong = testProperty
+pingAndPong = testCase
   "We should respond to a single ping message with a single pong message"
-  prop_pingAndPong
+  $ do
+      pingMessage <- generate arbitrary
+      (assertBool "PingPong test" $ prop_pingAndPong pingMessage)
 
 prop_pingAndPong :: PingMessage -> Bool
 prop_pingAndPong (PingMessage message) =
