@@ -3,10 +3,10 @@
 {-# LANGUAGE TemplateHaskell #-}
 module Protocol.MessageBodies where
 
-import Protocol.Network (Addr, putServices, putAddr, getAddr)
+import Protocol.Network (putServices, putAddr, getAddr)
 import Protocol.Util (CCode(..))
-import General.Types (HasRelay(..), HasTime(..), HasLastBlock(..), HasVersion(..))
-import General.Util (VarInt(..))
+import General.Types (HasRelay(..), HasTime(..), HasLastBlock(..), HasVersion(..), HasPeerAddr(..))
+import General.Util (VarInt(..), Addr)
 import BitcoinCore.Inventory (InventoryVector(..))
 import BitcoinCore.BlockHeaders ( BlockHash(..)
                                 , BlockHeader(..))
@@ -58,7 +58,7 @@ data VersionMessage = VersionMessage
     , _versionMessageNonce64   :: Nonce64
     , _versionMessageLastBlock :: Integer
     , _senderAddr :: Addr
-    , _peerAddr   :: Addr
+    , _versionMessagePeerAddr   :: Addr
     , _versionMessageRelay      :: Bool
     , _versionMessageTime  :: POSIXTime
     } deriving (Show, Eq)
@@ -78,6 +78,9 @@ instance HasVersion VersionMessage where
 
 instance HasNonce64 VersionMessage where
   nonce64 = versionMessageNonce64
+
+instance HasPeerAddr VersionMessage where
+  peerAddr = versionMessagePeerAddr
 
 instance Binary VersionMessage where
   put = putVersionMessage

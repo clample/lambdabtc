@@ -3,7 +3,7 @@ module Protocol.Server where
 
 import Protocol.Messages (parseMessage, Message(..), MessageBody(..), MessageContext(..))
 import Protocol.MessageBodies 
-import Protocol.Network (connectToPeer, sock, addr, Addr(..))
+import Protocol.Network (connectToPeer, sock, addr)
 import Protocol.Util (decodeBlockHeader, getUTXOS)
 import Protocol.Persistence ( getLastBlock
                             , persistGenesisBlock
@@ -17,8 +17,9 @@ import Protocol.Persistence ( getLastBlock
                             , nHeadersSinceKey
                             , getTransactionFromHash)
 import Protocol.ConnectionM ( ConnectionContext(..)
+                            , IOHandlers(..)
+                            , peerSocket
                             , myAddr
-                            , peer
                             , writerChan
                             , listenChan
                             , randGen)
@@ -33,8 +34,9 @@ import BitcoinCore.Inventory (InventoryVector(..), ObjectType(..))
 import BitcoinCore.Transaction.Transactions (Value(..), Transaction(..), TxHash(..), hashTransaction)
 import General.Config (Config(..), appChan, uiUpdaterChan, pool)
 import General.Persistence (runDB, PersistentBlockHeader(..), FundRequest(..), PersistentUTXO(..))
-import General.Types (HasNetwork(..), HasVersion(..), HasRelay(..), HasTime(..), HasLastBlock(..))
+import General.Types (HasNetwork(..), HasVersion(..), HasRelay(..), HasTime(..), HasLastBlock(..), HasPeerAddr(..))
 import General.InternalMessaging (InternalMessage(..), UIUpdaterMessage(..))
+import General.Util (Addr(..))
 
 import Network.Socket (Socket)
 import Data.Time.Clock.POSIX (getPOSIXTime)
@@ -63,14 +65,13 @@ import Control.Monad.Free (Free(..), liftF)
 connectTestnet :: Config -> IO () 
 connectTestnet config = do
   persistGenesisBlock config
-  context <- getConnectionContext config
-  let peerSocket = context^.peer.sock
-  forkIO $ listener (context^.listenChan) peerSocket
-  forkIO $ writer (context^.writerChan) peerSocket
-  connection config context
+  (context, ioHandlers) <- getConnectionContext config
+  forkIO $ listener (ioHandlers^.listenChan) (ioHandlers^.peerSocket)
+  forkIO $ writer (ioHandlers^.writerChan) (ioHandlers^.peerSocket)
+  connection ioHandlers config context
   return ()
 
-getConnectionContext :: Config -> IO ConnectionContext
+getConnectionContext :: Config -> IO (ConnectionContext, IOHandlers)
 getConnectionContext config = do
   peer' <- connectToPeer 1 config
   writerChan' <- atomically $ newTBMChan 16
@@ -78,18 +79,21 @@ getConnectionContext config = do
   time' <- getPOSIXTime
   randGen' <- getStdGen
   lastBlock' <- fromIntegral <$> getLastBlock (config^.pool)
-  return ConnectionContext
+  let connectionContext = ConnectionContext
         { _connectionContextVersion = 60002
         , _connectionContextLastBlock = lastBlock'
         , _myAddr = Addr (0, 0, 0, 0) 18333 
-        , _peer = peer'
+        , _connectionContextPeerAddr = peer'^.addr
         , _connectionContextRelay = False 
-        , _writerChan = writerChan'
-        , _listenChan = listenChan'
         , _connectionContextTime = time'
         , _randGen = randGen'
         }
-
+      ioHandlers = IOHandlers
+        { _peerSocket = peer'^.sock
+        , _writerChan = writerChan'
+        , _listenChan = listenChan'}
+  return (connectionContext, ioHandlers)
+  
 listener :: TBMChan Message -> Socket -> IO ()
 listener chan socket = runConduit
   $  sourceSocket socket
@@ -114,26 +118,26 @@ logMessages context =
           putStrLn $ context ++ " " ++ show message
           return message
 
-connection :: Config -> ConnectionContext -> IO ()
-connection config context = do
-  interpretConnProd config context sendVersion'
-  interpretConnProd config context setFilter'
-  connectionLoop config context
+connection :: IOHandlers -> Config -> ConnectionContext -> IO ()
+connection ioHandlers config context = do
+  interpretConnProd ioHandlers config context sendVersion'
+  interpretConnProd ioHandlers config context setFilter'
+  connectionLoop ioHandlers config context
 
-connectionLoop :: Config -> ConnectionContext -> IO ()
-connectionLoop config context = do
-  mmResponse <-  liftIO . atomically . tryReadTBMChan $ (context^.listenChan)
+connectionLoop :: IOHandlers -> Config -> ConnectionContext -> IO ()
+connectionLoop ioHandlers config context = do
+  mmResponse <-  liftIO . atomically . tryReadTBMChan $ (ioHandlers^.listenChan)
   case mmResponse of
     Nothing -> fail "listenChan is closed and empty"
     Just Nothing -> return () -- chan is empty
-    Just (Just response) -> interpretConnProd config context (handleResponse' response)
+    Just (Just response) -> interpretConnProd ioHandlers config context (handleResponse' response)
   mmInternalMessage <- liftIO . atomically . tryReadTBMChan $ (config^.appChan)
   case mmInternalMessage of
     Nothing -> fail "appChan is closed and empty"
     Just Nothing -> return () -- chan is empty
     Just (Just internalMessage) ->
-      interpretConnProd config context (handleInternalMessage' internalMessage)
-  connectionLoop config context
+      interpretConnProd ioHandlers config context (handleInternalMessage' internalMessage)
+  connectionLoop ioHandlers config context
 
 ----------
 type KeyId = Integer
@@ -227,54 +231,54 @@ getAllAddresses' = liftF (GetAllAddresses id)
 persistUTXOs' :: [PersistentUTXO] -> Connection' ()
 persistUTXOs' persistentUTXOs = liftF (PersistUTXOs persistentUTXOs ())
 
-interpretConnProd :: Config -> ConnectionContext -> Connection' r -> IO r
-interpretConnProd config context conn = case conn of
+interpretConnProd :: IOHandlers -> Config -> ConnectionContext -> Connection' r -> IO r
+interpretConnProd ioHandlers config context conn = case conn of
   Free (GetConfig f) -> do
-    interpretConnProd config context (f config)
+    interpretConnProd ioHandlers config context (f config)
   Free (GetContext f) -> do
-    interpretConnProd config context (f context)
+    interpretConnProd ioHandlers config context (f context)
   Free (IncrementLastBlock i n) -> do
     let newContext = lastBlock %~ (+ i) $ context
-    interpretConnProd config newContext n
+    interpretConnProd ioHandlers config newContext n
   Free (ReadMessage f) -> do
-    mMessage <- liftIO . atomically . readTBMChan $ (context^.listenChan)
-    interpretConnProd config context (f mMessage)
+    mMessage <- liftIO . atomically . readTBMChan $ (ioHandlers^.listenChan)
+    interpretConnProd ioHandlers config context (f mMessage)
   Free (WriteMessage m n) -> do
-    writeMessage (context^.writerChan) m 
-    interpretConnProd config context n
+    writeMessage (ioHandlers^.writerChan) m 
+    interpretConnProd ioHandlers config context n
   Free (WriteUIUpdaterMessage m n) -> do
     writeUiUpdaterMessage (config^.uiUpdaterChan) m
-    interpretConnProd config context n
+    interpretConnProd ioHandlers config context n
   Free (GetBlockHeader i f) -> do
     mBlock <- getBlockWithIndex (config^.pool) i
-    interpretConnProd config context (f mBlock)
+    interpretConnProd ioHandlers config context (f mBlock)
   Free (BlockHeaderCount f) -> do
     blockHeaderCount <- getLastBlock $ config^.pool
-    interpretConnProd config context (f blockHeaderCount)
+    interpretConnProd ioHandlers config context (f blockHeaderCount)
   Free (PersistBlockHeaders headers n) -> do
     persistHeaders (config^.pool) headers
-    interpretConnProd config context n
+    interpretConnProd ioHandlers config context n
   Free (PersistBlockHeader header n) -> do
     persistHeader (config^.pool) header
-    interpretConnProd config context n
+    interpretConnProd ioHandlers config context n
   Free (GetBlockHeaderFromHash hash f) -> do
     mBlock <- getBlockHeaderFromHash (config^.pool) hash
-    interpretConnProd config context (f mBlock)
+    interpretConnProd ioHandlers config context (f mBlock)
   Free (NHeadersSinceKey n keyId f) -> do
     headers <- nHeadersSinceKey (config^.pool) n keyId
-    interpretConnProd config context (f headers)
+    interpretConnProd ioHandlers config context (f headers)
   Free (PersistTransaction tx n) -> do
     persistTransaction (config^.pool) tx
-    interpretConnProd config context n
+    interpretConnProd ioHandlers config context n
   Free (GetTransactionFromHash hash f) -> do
     mTx <- getTransactionFromHash (config^.pool) hash
-    interpretConnProd config context (f mTx)
+    interpretConnProd ioHandlers config context (f mTx)
   Free (GetAllAddresses f) -> do
     addresses <- getAllAddresses (config^.pool)
-    interpretConnProd config context (f addresses)
+    interpretConnProd ioHandlers config context (f addresses)
   Free (PersistUTXOs utxos n) -> do
     persistUTXOs (config^.pool) utxos
-    interpretConnProd config context n
+    interpretConnProd ioHandlers config context n
   Pure r -> return r
 
 -- Logic for handling response in free monad
@@ -464,7 +468,7 @@ sendVersion' = do
           (context^.version)
           nonce'
           (context^.lastBlock)
-          (context^.peer.addr)
+          (context^.peerAddr)
           (context^.myAddr)
           (context^.relay)
           (context^.time)))

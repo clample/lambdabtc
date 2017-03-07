@@ -4,7 +4,6 @@ import TestUtil
 import General.Types
 import General.Util
 import Protocol.Messages (Message(..), MessageBody(..), MessageContext(..))
-import Protocol.Network (Addr(..))
 import Protocol.MessageBodies
 import Protocol.Util
 import qualified Data.ByteString.Char8 as Char8

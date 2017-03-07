@@ -19,7 +19,10 @@ module General.Util
   , unroll
   , unrollWithPad
   , readFromTable
-  , Endian(..)) where
+  , Endian(..)
+  , Addr(..)
+  , IP(..)
+  , Port(..)) where
 
 import Prelude hiding (take)
 
@@ -44,6 +47,8 @@ import Data.List (unfoldr)
 import Data.Char (toUpper)
 import Data.Tuple (swap)
 
+import Test.QuickCheck.Arbitrary (Arbitrary(..))
+import Test.QuickCheck.Gen (choose)
 
 data Payload = Payload ByteString
   deriving (Show, Eq)
@@ -187,3 +192,22 @@ readFromTable table = lookupInTable . uppercase
   where
     uppercase     = Char8.pack . map toUpper . Char8.unpack
     lookupInTable = flip lookup (map swap table)
+
+data Addr = Addr IP Port
+  deriving (Show, Eq)
+
+type IP = (Int, Int, Int, Int)
+
+type Port = Int
+
+instance Arbitrary Addr where
+  arbitrary = do
+    a <- chooseIpComponent
+    b <- chooseIpComponent
+    c <- chooseIpComponent
+    d <- chooseIpComponent
+    port <- choosePort
+    return $ Addr (a, b, c, d) port
+    where
+      chooseIpComponent = choose (0, 255)
+      choosePort = choose (0, 65535)

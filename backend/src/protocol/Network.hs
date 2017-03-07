@@ -7,6 +7,7 @@ module Protocol.Network where
 
 import General.Config (Config(..), configNetwork)
 import General.Types (Network(..))
+import General.Util (Addr(..))
 
 import Network.Socket ( socket
                       , SocketType(..)
@@ -27,21 +28,10 @@ import Data.Binary.Get (Get, getWord64be, getWord16be, getByteString, getWord8)
 import Data.Binary.Put (Put, putByteString, putWord8, putWord16be,  putWord64le)
 import Data.ByteString.Base16 (decode)
 
-import Test.QuickCheck.Arbitrary (Arbitrary(..))
-import Test.QuickCheck.Gen (choose)
-
 data Peer = Peer
   { _peerSock :: Socket
   , _peerAddr :: Addr
   } deriving (Show, Eq)
-
-data Addr = Addr IP Port
-  deriving (Show, Eq)
-
-type IP = (Int, Int, Int, Int)
-
-type Port = Int
-
 
 makeFields ''Peer
 
@@ -111,14 +101,3 @@ networkPort :: Network -> String
 networkPort TestNet3 = "18333"
 networkPort MainNet = "8333"
 
-instance Arbitrary Addr where
-  arbitrary = do
-    a <- chooseIpComponent
-    b <- chooseIpComponent
-    c <- chooseIpComponent
-    d <- chooseIpComponent
-    port <- choosePort
-    return $ Addr (a, b, c, d) port
-    where
-      chooseIpComponent = choose (0, 255)
-      choosePort = choose (0, 65535)

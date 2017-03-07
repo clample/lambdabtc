@@ -1,7 +1,7 @@
 {-# Language OverloadedStrings #-}
 module General.Types where
 
-import General.Util (readFromTable)
+import General.Util (readFromTable, Addr(..))
 
 import Control.Lens (Lens')
 import Data.ByteString (ByteString)
@@ -58,3 +58,6 @@ class HasLastBlock t where
 
 class HasVersion t where
   version :: Lens' t Int
+
+class HasPeerAddr t where
+  peerAddr :: Lens' t Addr
