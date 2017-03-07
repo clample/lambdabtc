@@ -289,16 +289,16 @@ interpretConnProd ioHandlers context conn = case conn of
 -- Logic for handling response in free monad
 handleResponse' :: Message -> Connection' ()
 handleResponse' (Message (PingMessageBody message) _) = do
-  network' <- getNetwork'
+  context <- getContext'
   let pongMessageBody = PongMessageBody . PongMessage $ message^.nonce64
       pongMessage =
-        Message pongMessageBody (MessageContext network')
+        Message pongMessageBody (MessageContext (context^.network))
   writeMessage' pongMessage
 
 handleResponse' (Message (VersionMessageBody body) _) = do
-  network' <- getNetwork'
+  context <- getContext'
   let verackMessage =
-        Message (VerackMessageBody VerackMessage) (MessageContext (network'))
+        Message (VerackMessageBody VerackMessage) (MessageContext (context^.network))
       lastBlockPeer = body^.lastBlock
   writeMessage' verackMessage
   synchronizeHeaders' lastBlockPeer
