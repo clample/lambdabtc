@@ -11,6 +11,8 @@ import Data.Maybe (fromJust)
 import Data.Time.Clock.POSIX (POSIXTime)
 import Test.QuickCheck.Arbitrary (Arbitrary(..))
 import Test.QuickCheck.Gen (elements)
+import Database.Persist.Sql (ConnectionPool)
+import Control.Concurrent.STM.TBMChan (TBMChan)
 
 class HasNetwork t where
   network :: Lens' t Network
@@ -61,3 +63,6 @@ class HasVersion t where
 
 class HasPeerAddr t where
   peerAddr :: Lens' t Addr
+
+class HasPool t where
+  pool :: Lens' t ConnectionPool

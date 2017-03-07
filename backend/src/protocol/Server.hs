@@ -32,9 +32,19 @@ import BitcoinCore.BloomFilter ( NFlags(..)
 import BitcoinCore.Keys (PubKeyHash(..), addressToPubKeyHash, Address(..))
 import BitcoinCore.Inventory (InventoryVector(..), ObjectType(..))
 import BitcoinCore.Transaction.Transactions (Value(..), Transaction(..), TxHash(..), hashTransaction)
-import General.Config (Config(..), appChan, uiUpdaterChan, pool)
+import General.Config ( Config(..)
+                      , HasAppChan(..)
+                      , HasUIUpdaterChan(..)
+                      )
 import General.Persistence (runDB, PersistentBlockHeader(..), FundRequest(..), PersistentUTXO(..))
-import General.Types (HasNetwork(..), HasVersion(..), HasRelay(..), HasTime(..), HasLastBlock(..), HasPeerAddr(..), Network(..))
+import General.Types ( HasNetwork(..)
+                     , HasVersion(..)
+                     , HasRelay(..)
+                     , HasTime(..)
+                     , HasLastBlock(..)
+                     , HasPeerAddr(..)
+                     , Network(..)
+                     , HasPool(..))
 import General.InternalMessaging (InternalMessage(..), UIUpdaterMessage(..))
 import General.Util (Addr(..))
 
@@ -68,7 +78,7 @@ connectTestnet config = do
   (context, ioHandlers) <- getConnectionContext config
   forkIO $ listener (ioHandlers^.listenChan) (ioHandlers^.peerSocket)
   forkIO $ writer (ioHandlers^.writerChan) (ioHandlers^.peerSocket)
-  connection ioHandlers config context
+  connection ioHandlers context
   return ()
 
 getConnectionContext :: Config -> IO (ConnectionContext, IOHandlers)
@@ -87,11 +97,15 @@ getConnectionContext config = do
         , _connectionContextRelay = False 
         , _connectionContextTime = time'
         , _randGen = randGen'
+        , _connectionContextNetwork = config^.network
         }
       ioHandlers = IOHandlers
         { _peerSocket = peer'^.sock
         , _writerChan = writerChan'
-        , _listenChan = listenChan'}
+        , _listenChan = listenChan'
+        , _ioHandlersUIUpdaterChan = config^.uiUpdaterChan
+        , _ioHandlersAppChan = config^.appChan
+        , _ioHandlersPool = config^.pool}
   return (connectionContext, ioHandlers)
   
 listener :: TBMChan Message -> Socket -> IO ()
@@ -118,26 +132,26 @@ logMessages context =
           putStrLn $ context ++ " " ++ show message
           return message
 
-connection :: IOHandlers -> Config -> ConnectionContext -> IO ()
-connection ioHandlers config context = do
-  interpretConnProd ioHandlers config context sendVersion'
-  interpretConnProd ioHandlers config context setFilter'
-  connectionLoop ioHandlers config context
+connection :: IOHandlers -> ConnectionContext -> IO ()
+connection ioHandlers context = do
+  interpretConnProd ioHandlers context sendVersion'
+  interpretConnProd ioHandlers context setFilter'
+  connectionLoop ioHandlers context
 
-connectionLoop :: IOHandlers -> Config -> ConnectionContext -> IO ()
-connectionLoop ioHandlers config context = do
+connectionLoop :: IOHandlers -> ConnectionContext -> IO ()
+connectionLoop ioHandlers context = do
   mmResponse <-  liftIO . atomically . tryReadTBMChan $ (ioHandlers^.listenChan)
   case mmResponse of
     Nothing -> fail "listenChan is closed and empty"
     Just Nothing -> return () -- chan is empty
-    Just (Just response) -> interpretConnProd ioHandlers config context (handleResponse' response)
-  mmInternalMessage <- liftIO . atomically . tryReadTBMChan $ (config^.appChan)
+    Just (Just response) -> interpretConnProd ioHandlers context (handleResponse' response)
+  mmInternalMessage <- liftIO . atomically . tryReadTBMChan $ (ioHandlers^.appChan)
   case mmInternalMessage of
     Nothing -> fail "appChan is closed and empty"
     Just Nothing -> return () -- chan is empty
     Just (Just internalMessage) ->
-      interpretConnProd ioHandlers config context (handleInternalMessage' internalMessage)
-  connectionLoop ioHandlers config context
+      interpretConnProd ioHandlers context (handleInternalMessage' internalMessage)
+  connectionLoop ioHandlers context
 
 ----------
 type KeyId = Integer
@@ -231,54 +245,54 @@ getAllAddresses' = liftF (GetAllAddresses id)
 persistUTXOs' :: [PersistentUTXO] -> Connection' ()
 persistUTXOs' persistentUTXOs = liftF (PersistUTXOs persistentUTXOs ())
 
-interpretConnProd :: IOHandlers -> Config -> ConnectionContext -> Connection' r -> IO r
-interpretConnProd ioHandlers config context conn = case conn of
+interpretConnProd :: IOHandlers -> ConnectionContext -> Connection' r -> IO r
+interpretConnProd ioHandlers context conn = case conn of
   Free (GetNetwork f) -> do
-    interpretConnProd ioHandlers config context (f (config^.network))
+    interpretConnProd ioHandlers context (f (context^.network))
   Free (GetContext f) -> do
-    interpretConnProd ioHandlers config context (f context)
+    interpretConnProd ioHandlers context (f context)
   Free (IncrementLastBlock i n) -> do
     let newContext = lastBlock %~ (+ i) $ context
-    interpretConnProd ioHandlers config newContext n
+    interpretConnProd ioHandlers newContext n
   Free (ReadMessage f) -> do
     mMessage <- liftIO . atomically . readTBMChan $ (ioHandlers^.listenChan)
-    interpretConnProd ioHandlers config context (f mMessage)
+    interpretConnProd ioHandlers context (f mMessage)
   Free (WriteMessage m n) -> do
     writeMessage (ioHandlers^.writerChan) m 
-    interpretConnProd ioHandlers config context n
+    interpretConnProd ioHandlers context n
   Free (WriteUIUpdaterMessage m n) -> do
-    writeUiUpdaterMessage (config^.uiUpdaterChan) m
-    interpretConnProd ioHandlers config context n
+    writeUiUpdaterMessage (ioHandlers^.uiUpdaterChan) m
+    interpretConnProd ioHandlers context n
   Free (GetBlockHeader i f) -> do
-    mBlock <- getBlockWithIndex (config^.pool) i
-    interpretConnProd ioHandlers config context (f mBlock)
+    mBlock <- getBlockWithIndex (ioHandlers^.pool) i
+    interpretConnProd ioHandlers context (f mBlock)
   Free (BlockHeaderCount f) -> do
-    blockHeaderCount <- getLastBlock $ config^.pool
-    interpretConnProd ioHandlers config context (f blockHeaderCount)
+    blockHeaderCount <- getLastBlock $ ioHandlers^.pool
+    interpretConnProd ioHandlers context (f blockHeaderCount)
   Free (PersistBlockHeaders headers n) -> do
-    persistHeaders (config^.pool) headers
-    interpretConnProd ioHandlers config context n
+    persistHeaders (ioHandlers^.pool) headers
+    interpretConnProd ioHandlers context n
   Free (PersistBlockHeader header n) -> do
-    persistHeader (config^.pool) header
-    interpretConnProd ioHandlers config context n
+    persistHeader (ioHandlers^.pool) header
+    interpretConnProd ioHandlers context n
   Free (GetBlockHeaderFromHash hash f) -> do
-    mBlock <- getBlockHeaderFromHash (config^.pool) hash
-    interpretConnProd ioHandlers config context (f mBlock)
+    mBlock <- getBlockHeaderFromHash (ioHandlers^.pool) hash
+    interpretConnProd ioHandlers context (f mBlock)
   Free (NHeadersSinceKey n keyId f) -> do
-    headers <- nHeadersSinceKey (config^.pool) n keyId
-    interpretConnProd ioHandlers config context (f headers)
+    headers <- nHeadersSinceKey (ioHandlers^.pool) n keyId
+    interpretConnProd ioHandlers context (f headers)
   Free (PersistTransaction tx n) -> do
-    persistTransaction (config^.pool) tx
-    interpretConnProd ioHandlers config context n
+    persistTransaction (ioHandlers^.pool) tx
+    interpretConnProd ioHandlers context n
   Free (GetTransactionFromHash hash f) -> do
-    mTx <- getTransactionFromHash (config^.pool) hash
-    interpretConnProd ioHandlers config context (f mTx)
+    mTx <- getTransactionFromHash (ioHandlers^.pool) hash
+    interpretConnProd ioHandlers context (f mTx)
   Free (GetAllAddresses f) -> do
-    addresses <- getAllAddresses (config^.pool)
-    interpretConnProd ioHandlers config context (f addresses)
+    addresses <- getAllAddresses (ioHandlers^.pool)
+    interpretConnProd ioHandlers context (f addresses)
   Free (PersistUTXOs utxos n) -> do
-    persistUTXOs (config^.pool) utxos
-    interpretConnProd ioHandlers config context n
+    persistUTXOs (ioHandlers^.pool) utxos
+    interpretConnProd ioHandlers context n
   Pure r -> return r
 
 -- Logic for handling response in free monad

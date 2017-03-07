@@ -1,12 +1,12 @@
 module Protocol.Persistence where
 
-import General.Config (Config(..), pool)
+import General.Config (Config(..))
 import General.Persistence ( PersistentBlockHeader(..)
                            , KeySet(..)
                            , EntityField(..)
                            , PersistentUTXO
                            , PersistentTransaction(..))
-import General.Types (HasNetwork(..))
+import General.Types (HasNetwork(..), HasPool(..))
 import BitcoinCore.Keys (Address(..))
 import BitcoinCore.BlockHeaders (genesisBlock, BlockHeader(..), BlockHash(..))
 import BitcoinCore.Transaction.Transactions ( Transaction(..)

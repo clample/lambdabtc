@@ -4,7 +4,7 @@
 
 module General.Config where
 
-import General.Types (HasNetwork(..), Network(..))
+import General.Types (HasNetwork(..), Network(..), HasPool(..))
 import General.InternalMessaging ( InternalMessage(..)
                                  , UIUpdaterMessage(..))
 
@@ -20,7 +20,7 @@ import Data.Default (def)
 import Database.Persist.Sql (ConnectionPool)
 import Database.Persist.Sqlite (createSqlitePool)
 import Control.Monad.Logger (runStdoutLoggingT)
-import Control.Lens (makeLenses, (^.))
+import Control.Lens (makeLenses, (^.), Lens')
 import Control.Concurrent.STM.TBMChan (TBMChan, newTBMChan)
 import GHC.Conc (atomically)
 
@@ -34,16 +34,33 @@ data Config =
   Config { _environment :: Environment
          , _port :: Int 
          , _websocketPort :: Int
-         , _pool :: ConnectionPool
+         , _configPool :: ConnectionPool
          , _configNetwork :: Network
-         , _appChan :: TBMChan InternalMessage
-         , _uiUpdaterChan :: TBMChan UIUpdaterMessage
+         , _configAppChan :: TBMChan InternalMessage
+         , _configUIUpdaterChan :: TBMChan UIUpdaterMessage
          }
 
 makeLenses ''Config
 
+-- TODO: This would fit well in General.Types, but that would cause circular dependency
+class HasAppChan t where
+  appChan :: Lens' t (TBMChan InternalMessage)
+
+-- TODO: This would fit well in General.Types, but that would cause circular dependency
+class HasUIUpdaterChan t where
+  uiUpdaterChan :: Lens' t (TBMChan UIUpdaterMessage)
+
 instance HasNetwork Config where
   network = configNetwork
+
+instance HasPool Config where
+  pool = configPool
+
+instance HasUIUpdaterChan Config where
+  uiUpdaterChan = configUIUpdaterChan
+
+instance HasAppChan Config where
+  appChan = configAppChan
 
 developmentConfig :: IO Config
 developmentConfig = do
@@ -57,10 +74,10 @@ developmentConfig = do
     { _environment = Development
     , _port = 49535
     , _websocketPort = 49536
-    , _pool = pool'
+    , _configPool = pool'
     , _configNetwork = network'
-    , _appChan = chan
-    , _uiUpdaterChan = uiUpdaterChan'
+    , _configAppChan = chan
+    , _configUIUpdaterChan = uiUpdaterChan'
     }
 
 getConnectionSize :: Environment -> Int

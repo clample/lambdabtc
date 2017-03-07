@@ -7,9 +7,13 @@ import General.Types ( HasVersion(..)
                      , HasRelay(..)
                      , HasTime(..)
                      , HasLastBlock(..)
-                     , HasPeerAddr(..))
-import General.Config (ConfigM(..), Config(..))
+                     , HasPeerAddr(..)
+                     , Network(..)
+                     , HasPool(..)
+                     , HasNetwork(..))
+import General.Config (ConfigM(..), Config(..), HasAppChan(..), HasUIUpdaterChan(..))
 import General.Util (Addr(..))
+import General.InternalMessaging (UIUpdaterMessage(..), InternalMessage(..))
 
 import Data.Conduit.TMChan (TBMChan)
 import Data.Time.Clock.POSIX (POSIXTime)
@@ -18,6 +22,7 @@ import Control.Lens (makeLenses)
 import Control.Monad.State.Lazy (StateT(..))
 import Control.Monad.Reader (runReaderT)
 import Network.Socket (Socket)
+import Database.Persist.Sql (ConnectionPool)
 
 data ConnectionContext = ConnectionContext
   { _connectionContextVersion :: Int
@@ -32,6 +37,7 @@ data ConnectionContext = ConnectionContext
   --, _listenChan :: TBMChan Message
   , _connectionContextTime :: POSIXTime
   , _randGen :: StdGen
+  , _connectionContextNetwork :: Network
   } 
 
 makeLenses ''ConnectionContext
@@ -40,9 +46,21 @@ data IOHandlers = IOHandlers
   { _peerSocket :: Socket
   , _writerChan :: TBMChan Message
   , _listenChan :: TBMChan Message
+  , _ioHandlersUIUpdaterChan :: TBMChan UIUpdaterMessage
+  , _ioHandlersAppChan :: TBMChan InternalMessage
+  , _ioHandlersPool :: ConnectionPool
   }
 
 makeLenses ''IOHandlers
+
+instance HasPool IOHandlers where
+  pool = ioHandlersPool
+
+instance HasUIUpdaterChan IOHandlers where
+  uiUpdaterChan = ioHandlersUIUpdaterChan
+
+instance HasAppChan IOHandlers where
+  appChan = ioHandlersAppChan
 
 instance HasVersion ConnectionContext where
   version = connectionContextVersion
@@ -58,3 +76,6 @@ instance HasLastBlock ConnectionContext where
 
 instance HasPeerAddr ConnectionContext where
   peerAddr = connectionContextPeerAddr
+
+instance HasNetwork ConnectionContext where
+  network = connectionContextNetwork

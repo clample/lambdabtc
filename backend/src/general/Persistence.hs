@@ -6,7 +6,8 @@
 
 module General.Persistence where
 
-import General.Config (ConfigM, Config(..), pool)
+import General.Config (ConfigM, Config(..))
+import General.Types (HasPool(..))
 
 import Data.Text (Text)
 import Database.Persist.Sqlite (runMigration)
