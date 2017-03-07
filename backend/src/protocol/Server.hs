@@ -155,8 +155,7 @@ connectionLoop ioHandlers context = do
 type KeyId = Integer
 
 data ConnectionInteraction next
-  = GetNetwork (Network -> next)
-  | GetContext (ConnectionContext -> next)
+  = GetContext (ConnectionContext -> next)
   | IncrementLastBlock Integer next
   | ReadMessage (Maybe Message -> next)
   | WriteMessage Message next
@@ -173,7 +172,6 @@ data ConnectionInteraction next
   | PersistUTXOs [PersistentUTXO] next
 
 instance Functor ConnectionInteraction where
-  fmap f (GetNetwork                g) = GetNetwork                (f . g)
   fmap f (GetContext                g) = GetContext                (f . g)
   fmap f (IncrementLastBlock      i x) = IncrementLastBlock      i (f x)
   fmap f (ReadMessage               g) = ReadMessage               (f . g)
@@ -193,9 +191,6 @@ instance Functor ConnectionInteraction where
 type Connection' = Free ConnectionInteraction
 
 -- syntactic sugar to enable `do` notation
-getNetwork' :: Connection' Network
-getNetwork' = liftF (GetNetwork id)
-
 getContext' :: Connection' ConnectionContext
 getContext' = liftF (GetContext id)
 
@@ -245,8 +240,6 @@ persistUTXOs' persistentUTXOs = liftF (PersistUTXOs persistentUTXOs ())
 
 interpretConnProd :: IOHandlers -> ConnectionContext -> Connection' r -> IO r
 interpretConnProd ioHandlers context conn = case conn of
-  Free (GetNetwork f) -> do
-    interpretConnProd ioHandlers context (f (context^.network))
   Free (GetContext f) -> do
     interpretConnProd ioHandlers context (f context)
   Free (IncrementLastBlock i n) -> do
@@ -332,22 +325,22 @@ handleResponse' (Message (MerkleblockMessageBody (message)) _) = do
       -- todo: does `fail` actually make sense here?
 
 handleResponse' (Message (GetHeadersMessageBody message) _) = do
-  network' <- getNetwork'
+  context <- getContext'
   match <- firstHeaderMatch' (message^.blockLocatorHashes)
   matchingHeaders <- 2000 `nHeadersSinceKey'` match
   let headersMessage =
         Message
          (HeadersMessageBody (HeadersMessage {_blockHeaders = matchingHeaders }))
-         (MessageContext (network'))
+         (MessageContext (context^.network))
   writeMessage' headersMessage
 
 handleResponse' (Message (InvMessageBody message) _) = do
-  network' <- getNetwork'
+  context <- getContext'
   desiredInvs <- map toFilteredBlock <$> filterM (desiredData) (message^.invVectors)
   let getDataMessage =
         Message
         (GetDataMessageBody (GetDataMessage desiredInvs))
-        (MessageContext (network'))
+        (MessageContext (context^.network))
   writeMessage' getDataMessage
   where
     -- TODO: query db, etc to see if we actually need the data
@@ -438,14 +431,13 @@ getHeadersOrBlocksMessage' :: (a -> MessageBody)
                            -> Connection' ()
 getHeadersOrBlocksMessage' bodyConstructor messageConstructor = do
   context <- getContext'
-  network' <- getNetwork'
   let getHeadersMessage' lastBlock' = do
         blockLocatorHashes' <- queryBlockLocatorHashes' lastBlock'
         return $ Message
           (bodyConstructor (messageConstructor (context^.version) blockLocatorHashes'
            (BlockHash . fst . decode $
             "0000000000000000000000000000000000000000000000000000000000000000")))
-          (MessageContext (network'))
+          (MessageContext (context^.network))
   message <- getHeadersMessage'(fromIntegral (context^.lastBlock))
   writeMessage' message
 
@@ -472,7 +464,6 @@ isNewSync' = (== []) <$> getAllAddresses'
 sendVersion' :: Connection' ()
 sendVersion' = do
   context <- getContext'
-  network' <- getNetwork'
   let nonce' = Nonce64 . fst $ randomR (0, 0xffffffffffffffff) (context^.randGen)
                -- TODO: We need to update the randGen after calling randomR
       versionMessage = Message
@@ -484,38 +475,38 @@ sendVersion' = do
           (context^.myAddr)
           (context^.relay)
           (context^.time)))
-        (MessageContext (network'))
+        (MessageContext (context^.network))
   writeMessage' versionMessage
 
 setFilter' :: Connection' ()
 setFilter' = do
-  network' <- getNetwork'
+  context <- getContext'
   let getPubKeyHashBS (PubKeyHash bs) = bs
   pubKeyHashes <- map (getPubKeyHashBS . addressToPubKeyHash) <$> getAllAddresses'
   let
     (filter', filterContext') = defaultFilterWithElements pubKeyHashes
     filterloadMessage = Message
       (FilterloadMessageBody (FilterloadMessage filter' filterContext' BLOOM_UPDATE_NONE))
-      (MessageContext (network'))
+      (MessageContext (context^.network))
   writeMessage' filterloadMessage
 
 handleInternalMessage' :: InternalMessage -> Connection' ()
 handleInternalMessage' (SendTX transaction') = do
-  network' <- getNetwork'
+  context <- getContext'
   let body = TxMessageBody . TxMessage $ transaction'
-      messageContext = MessageContext (network')
+      messageContext = MessageContext (context^.network)
       txMessage = Message body messageContext
   writeMessage' txMessage
 
 handleInternalMessage' (AddAddress address) = do
-  network' <- getNetwork'
+  context <- getContext'
   let getPubKeyHashBS (PubKeyHash bs) = bs
       body = FilteraddMessageBody
            . FilteraddMessage
            . getPubKeyHashBS
            . addressToPubKeyHash
            $ address
-      messageContext = MessageContext (network')
+      messageContext = MessageContext (context^.network)
       filterAddMessage = Message body messageContext
   writeMessage' filterAddMessage
 
