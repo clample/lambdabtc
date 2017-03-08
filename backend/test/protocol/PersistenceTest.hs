@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module ProtocolPersistenceTest where
+module Protocol.PersistenceTest where
 
 import TestUtil
 import General.Persistence (migrateTables)

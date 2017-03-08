@@ -7,6 +7,12 @@ import BitcoinCore.Transaction.Script
 import BitcoinCore.Transaction.Optcodes
 import BitcoinCore.Keys
 import BitcoinCore.Transaction.Transactions
+import BitcoinCore.KeysTest
+import BitcoinCore.Transaction.TransactionsTest
+import Protocol.PersistenceTest
+import Protocol.MessagesTest
+import BitcoinCore.BlockHeadersTest
+import Protocol.ServerTest
 
 import Test.Framework (defaultMain, testGroup)
 import Test.Framework.Providers.HUnit (testCase)
@@ -18,12 +24,6 @@ import qualified Data.ByteString.Lazy as BL
 import Data.Base58String.Bitcoin (Base58String, toText, fromBytes, toBytes, b58String, fromText)
 import qualified Data.Text as T
 import Data.ByteString.Base16 (decode, encode)
-import KeyTest
-import TransactionTest
-import ProtocolPersistenceTest
-import MessageTest
-import BlockHeaderTest
-import ProtocolServerTest
 import Data.Binary.Put (runPut)
 
 main :: IO ()

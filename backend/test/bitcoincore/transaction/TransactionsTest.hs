@@ -1,8 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
-module TransactionTest where
+module BitcoinCore.Transaction.TransactionsTest where
 
 import BitcoinCore.Transaction.Transactions
-import KeyTest()
+import BitcoinCore.KeysTest ()
 import TestUtil
 import BitcoinCore.Transaction.Script ( Script(..), ScriptComponent(..))
 import BitcoinCore.Transaction.Optcodes (OPCODE(..), opcodeTable)

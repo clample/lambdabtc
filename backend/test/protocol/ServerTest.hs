@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
-module ProtocolServerTest where
+module Protocol.ServerTest where
 
 import TestUtil
 import Protocol.Messages ( Message(..)

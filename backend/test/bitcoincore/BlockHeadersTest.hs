@@ -1,5 +1,5 @@
 {-# Language OverloadedStrings #-}
-module BlockHeaderTest where
+module BitcoinCore.BlockHeadersTest where
 
 import TestUtil
 import General.Types

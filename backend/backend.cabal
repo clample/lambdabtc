@@ -113,13 +113,13 @@ test-suite backend-test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             Spec.hs
-  other-modules:       BlockHeaderTest
-                     , KeyTest
-                     , MessageTest
+  other-modules:       BitcoinCore.BlockHeadersTest
+                     , BitcoinCore.KeysTest
+                     , Protocol.MessagesTest
                      , TestUtil
-                     , TransactionTest
-                     , ProtocolPersistenceTest
-                     , ProtocolServerTest
+                     , BitcoinCore.Transaction.TransactionsTest
+                     , Protocol.PersistenceTest
+                     , Protocol.ServerTest
   build-depends:       base
                      , backend
                      , test-framework

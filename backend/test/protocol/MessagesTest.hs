@@ -1,4 +1,4 @@
-module MessageTest where
+module Protocol.MessagesTest where
 
 import TestUtil
 import General.Types

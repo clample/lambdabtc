@@ -1,4 +1,4 @@
-module KeyTest where
+module BitcoinCore.KeysTest where
 
 import TestUtil
 import BitcoinCore.Keys
