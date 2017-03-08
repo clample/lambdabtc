@@ -2,17 +2,17 @@ module Protocol.Util where
 
 import General.Persistence ( PersistentBlockHeader(..)
                            , PersistentUTXO(..))
+import General.Hash (Hash(..), hashObject)
 import BitcoinCore.BlockHeaders  ( BlockHeader(..)
                                  , BlockVersion(..)
                                  , BlockHash(..)
                                  , Difficulty(..)
                                  , Nonce(..)
                                  , Timestamp(..)
-                                 , hashBlock)
+                                 )
 import BitcoinCore.MerkleTrees (MerkleHash(..))
 import BitcoinCore.Transaction.Transactions ( Transaction(..)
                                             , TxHash(..)
-                                            , hashTransaction
                                             , outputScripts)
 import BitcoinCore.Transaction.Script (Script(..), ScriptComponent(..), putScript)
 
@@ -38,7 +38,7 @@ decodeBlockHeader
     nonce) =
   BlockHeader
     (BlockVersion blockVersion)
-    (BlockHash prevBlockHash)
+    (Hash prevBlockHash)
     (MerkleHash merkleRoot)
     (Timestamp . fromIntegral $ timestamp)
     (Difficulty difficulty)
@@ -48,7 +48,7 @@ encodeBlockHeader :: BlockHeader -> PersistentBlockHeader
 encodeBlockHeader
   header@(BlockHeader
     (BlockVersion blockVersion)
-    (BlockHash prevBlockHash)
+    (Hash prevBlockHash)
     (MerkleHash merkleRoot)
     (Timestamp timestamp)
     (Difficulty difficulty)
@@ -56,12 +56,11 @@ encodeBlockHeader
   PersistentBlockHeader
     blockVersion
     prevBlockHash
-    hash
+    (hash . hashObject $ header)
     merkleRoot
     (fromIntegral . floor $ timestamp)
     difficulty
     nonce
-  where BlockHash hash = hashBlock header
 
 data CCode
   = REJECT_MALFORMED
@@ -111,9 +110,9 @@ isRelevantScript pubkeyHash (Script components) =
 
 getPersistentUTXO :: Transaction -> Int -> Script -> Int -> PersistentUTXO
 getPersistentUTXO tx outIndex script keySetId' = PersistentUTXO
-  hash outIndex scriptBS keySetId'
+  hash' outIndex scriptBS keySetId'
   where
-    TxHash hash = hashTransaction tx
+    hash' = hash . hashObject $ tx
     scriptBS = toStrict . runPut $ putScript script
 
 instance Arbitrary CCode where

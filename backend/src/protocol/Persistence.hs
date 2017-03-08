@@ -7,11 +7,11 @@ import General.Persistence ( PersistentBlockHeader(..)
                            , PersistentUTXO
                            , PersistentTransaction(..))
 import General.Types (HasNetwork(..), HasPool(..))
+import General.Hash (Hash(..), hashObject)
 import BitcoinCore.Keys (Address(..))
 import BitcoinCore.BlockHeaders (genesisBlock, BlockHeader(..), BlockHash(..))
 import BitcoinCore.Transaction.Transactions ( Transaction(..)
-                                            , TxHash(..)
-                                            , hashTransaction)
+                                            , TxHash) 
 import Protocol.Util (encodeBlockHeader, decodeBlockHeader)
 
 import Database.Persist.Sql ( insertMany_
@@ -58,8 +58,8 @@ persistHeaders pool headers = do
   runSqlPool (mapM_ insertMany_ chunkedPersistentHeaders) pool
 
 getBlockHeaderFromHash :: ConnectionPool -> BlockHash -> IO (Maybe (Integer, BlockHeader))
-getBlockHeaderFromHash pool (BlockHash hash) = do
-  matches <- runSqlPool (selectList [PersistentBlockHeaderHash ==. hash] []) pool
+getBlockHeaderFromHash pool (Hash hash') = do
+  matches <- runSqlPool (selectList [PersistentBlockHeaderHash ==. hash'] []) pool
   case matches of
     []       -> return Nothing
     [header] -> do
@@ -70,8 +70,8 @@ getBlockHeaderFromHash pool (BlockHash hash) = do
     _        -> fail "Multiple blocks found with same hash."
 
 getTransactionFromHash :: ConnectionPool -> TxHash -> IO (Maybe Integer)
-getTransactionFromHash pool (TxHash hash) = do
-  matches <- runSqlPool (selectList [PersistentTransactionHash ==. hash] []) pool
+getTransactionFromHash pool (Hash hash') = do
+  matches <- runSqlPool (selectList [PersistentTransactionHash ==. hash'] []) pool
   case matches of
     [] -> return Nothing
     [tx] -> do
@@ -83,8 +83,8 @@ getTransactionFromHash pool (TxHash hash) = do
 persistTransaction :: ConnectionPool -> Transaction -> IO ()
 persistTransaction pool transaction =
   runSqlPool (insert_ persistentTransaction) pool
-  where persistentTransaction = PersistentTransaction hash
-        TxHash hash = hashTransaction transaction
+  where persistentTransaction = PersistentTransaction hash'
+        hash' = hash . hashObject $ transaction
 
 getBlockWithIndex :: ConnectionPool -> Integer -> IO (Maybe BlockHeader)
 getBlockWithIndex pool i = (fmap . fmap) decodeBlockHeader $

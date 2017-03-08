@@ -19,6 +19,7 @@ library
                      , General.Util
                      , General.Types
                      , General.InternalMessaging
+                     , General.Hash
                      , LamdaBTC.Server
                      , LamdaBTC.Handlers
                      , BitcoinCore.Transaction.Script

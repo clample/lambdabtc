@@ -5,6 +5,7 @@ module BitcoinCore.BlockHeaders where
 import General.Util (VarInt(..), doubleSHA)
 import General.Types (Network(..))
 import BitcoinCore.MerkleTrees (MerkleHash(..))
+import General.Hash (Hash(..), hashObject)
 
 import Data.ByteString (ByteString)
 import Data.Time.Clock.POSIX (POSIXTime)
@@ -33,13 +34,7 @@ data BlockVersion = BlockVersion Int
   deriving (Eq, Show)
 
 type PrevBlockHash = BlockHash
-
--- BlockHash is binary encoded but we show it as hex encoded
-data BlockHash = BlockHash ByteString
-  deriving (Eq)
-
-instance Show BlockHash where
-  show (BlockHash bs) = "BlockHash " ++ (show . encode $ bs)
+type BlockHash = Hash BlockHeader
 
 data Timestamp = Timestamp POSIXTime
   deriving (Eq, Show)
@@ -57,11 +52,6 @@ instance Show Nonce where
   show (Nonce bs) = "Nonce " ++ (show . encode $ bs)
 
 makeLenses ''BlockHeader
-
-hashBlock :: BlockHeader -> BlockHash
-hashBlock blockHeader = BlockHash $
-  BS.reverse . doubleSHA . BL.toStrict . runPut $ put blockHeader
-  -- HELP: Why do we need reverse here?
 
 putBlockHeader :: BlockHeader -> Put
 putBlockHeader blockHeader = do
@@ -98,17 +88,6 @@ getBlockVersion =
 instance Binary BlockVersion where
   put = putBlockVersion
   get = getBlockVersion
-
-putBlockHash :: BlockHash -> Put
-putBlockHash (BlockHash bs) =
-  putByteString . BS.reverse $ bs
-
-getBlockHash :: Get BlockHash
-getBlockHash = BlockHash . BS.reverse <$> getByteString 32
-
-instance Binary BlockHash where
-  put = putBlockHash
-  get = getBlockHash
 
 putTimestamp :: Timestamp -> Put
 putTimestamp (Timestamp posixTime) =
@@ -151,7 +130,7 @@ instance Binary Nonce where
 verifyHeaders :: [BlockHeader] -> Bool
 verifyHeaders [newest] = True
 verifyHeaders (old:new:rest) =
-  (hashBlock old == (new^.prevBlockHash)) &&
+  (hashObject old == (new^.prevBlockHash)) &&
   verifyHeaders (new:rest)
 
 instance Arbitrary BlockHeader where
@@ -166,9 +145,6 @@ instance Arbitrary BlockHeader where
 instance Arbitrary BlockVersion where
   arbitrary = BlockVersion <$> choose (0, maxVersion)
     where maxVersion = 0xffffffff -- 4 bytes
-
-instance Arbitrary BlockHash where
-  arbitrary = BlockHash . BS.pack <$> vectorOf 32 arbitrary
 
 instance Arbitrary Timestamp where
   arbitrary = Timestamp . realToFrac <$> (choose (0, maxTime) :: Gen Integer)
@@ -185,7 +161,7 @@ instance Arbitrary Nonce where
 genesisBlock :: Network -> BlockHeader
 genesisBlock MainNet = BlockHeader
   (BlockVersion 1)
-  (BlockHash . fst . decode $ "0000000000000000000000000000000000000000000000000000000000000000" )
+  (Hash . fst . decode $ "0000000000000000000000000000000000000000000000000000000000000000" )
   (MerkleHash . fst . decode $ "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b")
   (Timestamp . fromIntegral $ 1231006505)
   (Difficulty . fst . decode $ "FFFF001D")
@@ -193,7 +169,7 @@ genesisBlock MainNet = BlockHeader
 
 genesisBlock TestNet3 = BlockHeader
   (BlockVersion 1)
-  (BlockHash . fst . decode $ "0000000000000000000000000000000000000000000000000000000000000000" )
+  (Hash . fst . decode $ "0000000000000000000000000000000000000000000000000000000000000000" )
   (MerkleHash . fst . decode $ "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b")
   (Timestamp . fromIntegral $ 1296688602)
   (Difficulty . fst . decode $ "FFFF001D")

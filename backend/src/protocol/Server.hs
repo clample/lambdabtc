@@ -26,12 +26,15 @@ import Protocol.ConnectionM ( ConnectionContext(..)
 import BitcoinCore.BlockHeaders ( BlockHash(..)
                                 , BlockHeader(..)
                                 , verifyHeaders
-                                , hashBlock)
+                                )
 import BitcoinCore.BloomFilter ( NFlags(..)
                                , defaultFilterWithElements)
 import BitcoinCore.Keys (PubKeyHash(..), addressToPubKeyHash, Address(..))
 import BitcoinCore.Inventory (InventoryVector(..), ObjectType(..))
-import BitcoinCore.Transaction.Transactions (Value(..), Transaction(..), TxHash(..), hashTransaction)
+import BitcoinCore.Transaction.Transactions ( Value(..)
+                                            , Transaction(..)
+                                            , TxHash
+                                            )
 import General.Config ( Config(..)
                       , HasAppChan(..)
                       , HasUIUpdaterChan(..)
@@ -47,6 +50,7 @@ import General.Types ( HasNetwork(..)
                      , HasPool(..))
 import General.InternalMessaging (InternalMessage(..), UIUpdaterMessage(..))
 import General.Util (Addr(..))
+import General.Hash (Hash(..), hashObject)
 
 import Network.Socket (Socket)
 import Data.Time.Clock.POSIX (getPOSIXTime)
@@ -349,7 +353,7 @@ handleResponse' (Message (TxMessageBody message) _) = do
           persistentUTXOs = getUTXOS indexedPubkeyHashes (message^.transaction)
       persistUTXOs' persistentUTXOs
     isTransactionHandled' = do
-      let txHash = hashTransaction $ message^.transaction
+      let txHash = hashObject $ message^.transaction
       mTx <- getTransactionFromHash' txHash
       return $ case mTx of
         Nothing -> False
@@ -425,7 +429,7 @@ getHeadersOrBlocksMessage' bodyConstructor messageConstructor = do
         blockLocatorHashes' <- queryBlockLocatorHashes' lastBlock'
         return $ Message
           (bodyConstructor (messageConstructor (context^.version) blockLocatorHashes'
-           (BlockHash . fst . decode $
+           (Hash . fst . decode $
             "0000000000000000000000000000000000000000000000000000000000000000")))
           (MessageContext (context^.network))
   message <- getHeadersMessage'(fromIntegral (context^.lastBlock))
@@ -444,7 +448,7 @@ queryBlockLocatorHashes' lastBlock' =
         -- blockHeaderCount has 0 based indexing
       case mBlockHeader of
         Nothing -> fail $ "Unable to get block header with index " ++ show i
-        Just header -> return . hashBlock $ header
+        Just header -> return . hashObject $ header
 
 isNewSync' :: Connection' Bool
 isNewSync' = (== []) <$> getAllAddresses'

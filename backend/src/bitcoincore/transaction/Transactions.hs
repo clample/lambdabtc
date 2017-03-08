@@ -5,6 +5,7 @@ module BitcoinCore.Transaction.Transactions where
 import General.Util
 import BitcoinCore.Transaction.Script
 import BitcoinCore.Keys (serializePublicKeyRep, PublicKeyRep(..), PubKeyFormat(..))
+import General.Hash (Hash(..), hashObject)
 
 import Prelude hiding (concat, reverse, sequence)
 import Data.ByteString (ByteString)
@@ -56,11 +57,7 @@ data Value = Satoshis Int
 newtype TxVersion = TxVersion Int
   deriving (Eq, Show)
 
-newtype TxHash = TxHash ByteString
-  deriving (Eq)
-
-instance Show TxHash where
-  show (TxHash bs) = "TxHash " ++ (show . encode $ bs)
+type TxHash = Hash Transaction
 
 newtype TxIndex = TxIndex Int
   deriving (Eq, Show)
@@ -188,13 +185,13 @@ instance Binary UTXO where
 
 putOutPoint :: UTXO -> Put
 putOutPoint utxo' = do
-  putTxHash (utxo'^.outTxHash)
+  put (utxo'^.outTxHash)
   let TxIndex i = utxo'^.outIndex
   putWord32le . fromIntegral $ i
 
 getOutPoint :: Get UTXO
 getOutPoint = UTXO
-  <$> getTxHash
+  <$> get
   <*> (TxIndex . fromIntegral <$> getWord32le)
 
 instance Binary Value where
@@ -280,21 +277,6 @@ getTxVersion = do
 defaultVersion :: TxVersion 
 defaultVersion = TxVersion 1
 
-hashTransaction :: Transaction -> TxHash
-hashTransaction transaction = TxHash $
-  BS.reverse . doubleSHA . BL.toStrict . runPut $ put transaction
-
-instance Binary TxHash where
-  put = putTxHash
-  get = getTxHash
-
-putTxHash :: TxHash -> Put
-putTxHash (TxHash hash) =
-  putByteString . BS.reverse $ hash
-
-getTxHash :: Get TxHash
-getTxHash = TxHash . BS.reverse <$> getByteString 32
-
 defaultSequence :: Sequence
 defaultSequence = Sequence 0xffffffff
 
@@ -362,7 +344,7 @@ instance Arbitrary TxVersion where
 
 instance Arbitrary UTXO where
   arbitrary = do
-    hash <- TxHash . BS.pack <$> vectorOf 32 arbitrary
+    hash <- arbitrary
     index <- TxIndex <$> choose (0, 0xffffffff)
     return UTXO
       { _outTxHash = hash

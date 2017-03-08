@@ -26,6 +26,7 @@ import General.Config
 import General.Types (HasNetwork(..), Network(..))
 import General.Util (maybeRead)
 import Crypto.PubKey.ECC.ECDSA (PrivateKey(..), PublicKey(..))
+import General.Hash (Hash(..), hashObject)
 
 import Network.HTTP.Types.Status (internalServerError500, ok200, badRequest400)
 import Data.Aeson ( object
@@ -152,8 +153,11 @@ getUTXOAndKeys = do
   let putxo = case mpUTXO of
                 Nothing -> error $ "There are no utxo's in the db"
                 Just pUTXO -> pUTXO
-      utxo = UTXO {_outTxHash = TX.TxHash . persistentUTXOOutTxHash $ putxo
+
+      -- TODO: Create a function `decodeUtxo :: PersistentUTXO -> UTXO`
+      utxo = UTXO {_outTxHash = Hash . persistentUTXOOutTxHash $ putxo
                   , _outIndex = TxIndex . persistentUTXOOutIndex $ putxo}
+             
       scriptBS = persistentUTXOScript putxo
       oldInputScript = runGet (getScript . BS.length $ scriptBS) (BL.fromChunks [scriptBS]) 
   mpKeySet <- runDB $ get (KeySetKey . fromIntegral . persistentUTXOKeySetId $ putxo)

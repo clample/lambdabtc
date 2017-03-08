@@ -4,6 +4,8 @@ module BitcoinCore.BlockHeadersTest where
 import TestUtil
 import General.Types
 import BitcoinCore.BlockHeaders
+import General.Hash (Hash(..), hashObject)
+
 import qualified Data.ByteString as BS
 import Data.Binary.Get (runGet)
 import Data.Binary.Put (runPut)
@@ -23,14 +25,14 @@ prop_blockHeaderInvertible blockHeader =
 genesisBlockHash :: Assertion
 genesisBlockHash = assertEqual
   "Genesis block should have the correct hash"
-  (hashBlock . genesisBlock $ MainNet)
-  (BlockHash . fst . decode $ "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f")
+  (hashObject . genesisBlock $ MainNet)
+  (Hash . fst . decode $ "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f")
 
 genesisBlockTestnetHash :: Assertion
 genesisBlockTestnetHash = assertEqual
   "Genesis block for testnet should have the correct hash"
-  (hashBlock . genesisBlock $ TestNet3)
-  (BlockHash . fst . decode $ "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943")
+  (hashObject . genesisBlock $ TestNet3)
+  (Hash . fst . decode $ "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943")
 
 validHeadersVerify = testProperty
   "ValidHeaders (checksums guaranteed to match) should pass verifyHeaders"
@@ -56,7 +58,7 @@ instance Arbitrary ValidHeaders where
       nextHeader h =
         BlockHeader
         <$> arbitrary
-        <*> pure (hashBlock h)
+        <*> pure (hashObject h)
         <*> arbitrary
         <*> arbitrary
         <*> arbitrary
