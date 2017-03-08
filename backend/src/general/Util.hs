@@ -48,7 +48,7 @@ import Data.Char (toUpper)
 import Data.Tuple (swap)
 
 import Test.QuickCheck.Arbitrary (Arbitrary(..))
-import Test.QuickCheck.Gen (choose)
+import Test.QuickCheck.Gen (choose, elements)
 
 data Payload = Payload ByteString
   deriving (Show, Eq)
@@ -164,6 +164,7 @@ data Endian = BE | LE
 
 -- Taken from src of Data.Binary
 -- http://hackage.haskell.org/package/binary-0.4.1/docs/src/Data-Binary.html#Binary
+-- NOTE: unroll seems to require a positive integer!
 unroll :: Endian -> Integer -> ByteString
 unroll LE = BS.pack . unfoldr step
   where
@@ -210,3 +211,6 @@ instance Arbitrary Addr where
     where
       chooseIpComponent = choose (0, 255)
       choosePort = choose (0, 65535)
+
+instance Arbitrary Endian where
+  arbitrary = elements [BE, LE]

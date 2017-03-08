@@ -15,6 +15,7 @@ import BitcoinCore.BlockHeadersTest
 import Protocol.ServerTest
 import Protocol.UtilTest
 import General.TypesTest
+import General.UtilTest
 
 import Test.Framework (defaultMain, testGroup)
 import Test.Framework.Providers.HUnit (testCase)
@@ -82,6 +83,9 @@ tests =
       ],
     testGroup "General.Types Tests" [
       networkInvertible
+      ],
+    testGroup "General Util Tests" [
+      unrollRoll
       ]
   ]
 
