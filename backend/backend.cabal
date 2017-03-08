@@ -122,6 +122,7 @@ test-suite backend-test
                      , Protocol.PersistenceTest
                      , Protocol.ServerTest
                      , Protocol.UtilTest
+                     , General.TypesTest
   build-depends:       base
                      , backend
                      , test-framework

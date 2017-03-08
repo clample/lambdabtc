@@ -187,6 +187,9 @@ roll LE = foldr unstep 0 . BS.unpack
 
 roll BE = roll LE . BS.reverse
 
+-- TODO: It would be good to make this polymorphic
+--       and only require (Eq b), but we should get rid of
+--       the need for `uppercase`, first
 readFromTable :: [(a, ByteString)] -> ByteString -> Maybe a
 readFromTable table = lookupInTable . uppercase
   where

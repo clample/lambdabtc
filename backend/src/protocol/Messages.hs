@@ -4,7 +4,7 @@
 module Protocol.Messages where
 
 import General.Util (checkSum, readFromTable, unroll, Endian(..))
-import General.Types (HasNetwork(..), getNetwork', getNetwork, Network(..))
+import General.Types (HasNetwork(..), Network(..))
 import Protocol.MessageBodies
 import BitcoinCore.BloomFilter (Filter(..), FilterContext(..), Tweak(..))
 
@@ -111,7 +111,7 @@ instance Binary Message where
 
 parseMessage :: Get Message
 parseMessage = do
-  network' <- getNetwork
+  network' <- get
   command'  <- readCommand . encode <$> getByteString 12
   messageLength' <- fromIntegral <$> getWord32le
   checksum' <- getWord32le
@@ -132,7 +132,7 @@ putMessage (Message messageBody context) = do
 
 putHeader :: Header -> Put
 putHeader (Header network' command' message') = do
-  putByteString $ getNetwork' network'
+  put network'
   putByteString $ getCommand' command'
   putWord32le $ fromIntegral (BS.length message')
   putByteString $ checkSum message'

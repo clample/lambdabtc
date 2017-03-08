@@ -1,18 +1,17 @@
 {-# Language OverloadedStrings #-}
 module General.Types where
 
-import General.Util (readFromTable, Addr(..))
+import General.Util (Addr(..))
 
 import Control.Lens (Lens')
-import Data.ByteString (ByteString)
-import Data.Binary.Get (Get, getByteString)
-import Data.ByteString.Base16 (encode, decode)
-import Data.Maybe (fromJust)
+import Data.Binary (Binary(..), Word32)
+import Data.Binary.Get (Get, getWord32be)
+import Data.Binary.Put (Put, putWord32be)
 import Data.Time.Clock.POSIX (POSIXTime)
 import Test.QuickCheck.Arbitrary (Arbitrary(..))
 import Test.QuickCheck.Gen (elements)
 import Database.Persist.Sql (ConnectionPool)
-import Control.Concurrent.STM.TBMChan (TBMChan)
+import Data.Tuple (swap)
 
 class HasNetwork t where
   network :: Lens' t Network
@@ -23,31 +22,35 @@ data Network = TestNet3 | MainNet
 instance Arbitrary Network where
   arbitrary = elements [TestNet3, MainNet]
 
+instance Binary Network where
+  put = putNetwork
+  get = getNetwork
 
-networkTable :: [(Network, ByteString)]
-networkTable =
-  [ (TestNet3, "0B110907")
-  , (MainNet,  "F9BEB4D9")]
-
-
--- TODO: Is print network ever called? Otherwise, just move it under getNetwork
--- TODO: Can we come up with better names for these network functions
---       It's not clear from the name which function does what
-printNetwork :: Network -> ByteString
-printNetwork = fromJust . flip lookup networkTable
-
-getNetwork' :: Network -> ByteString
-getNetwork' = fst . decode . printNetwork
-
-readNetwork :: ByteString -> Maybe Network
-readNetwork = readFromTable networkTable
+putNetwork :: Network -> Put
+putNetwork network =
+  case lookup network networkTable of
+    Just w32 -> putWord32be w32
+    Nothing -> error $
+      "Unable to find network "
+      ++ show network
+      ++ " in network table."
 
 getNetwork :: Get Network
 getNetwork = do
-  mNetwork <- readNetwork . encode <$> getByteString 4
-  case mNetwork of
-    Just network' -> return network'
-    Nothing -> fail "Unable to parse network"
+  w32 <- getWord32be
+  let table' = map swap networkTable
+  case lookup w32 table' of
+    Just network -> return network
+    Nothing -> error $
+      "Unable to find network corresponding to code "
+      ++ show w32
+      ++ " in network table"
+
+
+networkTable :: [(Network, Word32)]
+networkTable =
+  [ (TestNet3, 0x0B110907)
+  , (MainNet,  0xF9BEB4D9)]
 
 class HasRelay t where
   relay :: Lens' t Bool
