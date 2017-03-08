@@ -8,7 +8,6 @@ module General.Util
   , encodeBase58Check
   , decodeBase58Check
   , stringToHexByteString
-  , textToHexByteString
   , hexify
   , checkSum
   , showBool
@@ -99,10 +98,6 @@ decodeBase58Check b58 = (Prefix pre, Payload payload, CheckSum checksum)
 stringToHexByteString :: String -> ByteString
 stringToHexByteString = fst . decode . Char8.pack 
 
--- TODO: Get rid of this abomination!
-textToHexByteString :: T.Text -> ByteString
-textToHexByteString = stringToHexByteString . T.unpack
-
 -- Make sure that we include leading zeroes when converting an int to its string representatin in hexidecimal
 -- TODO: Get rid of this abomination!
 hexify :: Integer -> Int -> T.Text
@@ -113,8 +108,6 @@ hexify n desiredLength =
   where
     base = showHex n ""
     leadingZeroes = replicate (desiredLength - length base) '0'
-
-
 
 putWithLength :: Put -> Put
 putWithLength putM = do

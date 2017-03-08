@@ -9,7 +9,6 @@ module BitcoinCore.Keys
   , pubKeyHash
   , getWIFPrivateKey
   , getPrivateKeyFromWIF
-  , textToHexByteString
   , getPubKey
   , btcCurve
   , serializePrivateKey
