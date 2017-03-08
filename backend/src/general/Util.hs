@@ -18,7 +18,7 @@ module General.Util
   , roll
   , unroll
   , unrollWithPad
-  , readFromTable
+  , reverseLookup
   , Endian(..)
   , Addr(..)
   , IP(..)
@@ -187,14 +187,10 @@ roll LE = foldr unstep 0 . BS.unpack
 
 roll BE = roll LE . BS.reverse
 
--- TODO: It would be good to make this polymorphic
---       and only require (Eq b), but we should get rid of
---       the need for `uppercase`, first
-readFromTable :: [(a, ByteString)] -> ByteString -> Maybe a
-readFromTable table = lookupInTable . uppercase
+reverseLookup :: Eq b => b -> [(a, b)]  -> Maybe a
+reverseLookup b table = lookup b table'
   where
-    uppercase     = Char8.pack . map toUpper . Char8.unpack
-    lookupInTable = flip lookup (map swap table)
+    table' = map swap table
 
 data Addr = Addr IP Port
   deriving (Show, Eq)

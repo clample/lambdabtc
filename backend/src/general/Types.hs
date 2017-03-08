@@ -1,7 +1,7 @@
 {-# Language OverloadedStrings #-}
 module General.Types where
 
-import General.Util (Addr(..))
+import General.Util (Addr(..), reverseLookup)
 
 import Control.Lens (Lens')
 import Data.Binary (Binary(..), Word32)
@@ -38,8 +38,7 @@ putNetwork network =
 getNetwork :: Get Network
 getNetwork = do
   w32 <- getWord32be
-  let table' = map swap networkTable
-  case lookup w32 table' of
+  case reverseLookup w32 networkTable of
     Just network -> return network
     Nothing -> error $
       "Unable to find network corresponding to code "

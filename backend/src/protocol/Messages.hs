@@ -3,7 +3,7 @@
 
 module Protocol.Messages where
 
-import General.Util (checkSum, readFromTable, unroll, Endian(..))
+import General.Util (checkSum, reverseLookup, unroll, Endian(..))
 import General.Types (HasNetwork(..), Network(..))
 import Protocol.MessageBodies
 import BitcoinCore.BloomFilter (Filter(..), FilterContext(..), Tweak(..))
@@ -202,9 +202,8 @@ putCommand command =
 deserializeCommand :: Get Command
 deserializeCommand = do
   bs <- getByteString 12
-  let table' = map swap commandTable
   return $
-    fromMaybe UnknownCommand (lookup bs table')
+    fromMaybe UnknownCommand (reverseLookup bs commandTable)
   -- TODO: UnknownCommand is not an actual bitcoin command
   --       We should return `Maybe Command` instead
 
