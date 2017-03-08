@@ -120,6 +120,7 @@ test-suite backend-test
                      , BitcoinCore.Transaction.TransactionsTest
                      , Protocol.PersistenceTest
                      , Protocol.ServerTest
+                     , Protocol.UtilTest
   build-depends:       base
                      , backend
                      , test-framework

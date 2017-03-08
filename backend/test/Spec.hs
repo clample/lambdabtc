@@ -13,6 +13,7 @@ import Protocol.PersistenceTest
 import Protocol.MessagesTest
 import BitcoinCore.BlockHeadersTest
 import Protocol.ServerTest
+import Protocol.UtilTest
 
 import Test.Framework (defaultMain, testGroup)
 import Test.Framework.Providers.HUnit (testCase)
@@ -73,6 +74,9 @@ tests =
       ],
     testGroup "Protocol Server Tests" [
       pingAndPong
+      ],
+    testGroup "Protocol Util Tests" [
+      persistentBlockHeaderInvertible
       ]
   ]
 
