@@ -19,6 +19,7 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as Char8
 import Data.Maybe (fromJust, fromMaybe)
 import Data.Char (toUpper)
+import Data.Tuple (swap)
 
 import Test.QuickCheck.Arbitrary (Arbitrary(..), vector, arbitraryBoundedEnum)
 import Test.QuickCheck.Gen (oneof, Gen, choose, vectorOf)
@@ -112,7 +113,7 @@ instance Binary Message where
 parseMessage :: Get Message
 parseMessage = do
   network' <- get
-  command'  <- readCommand . encode <$> getByteString 12
+  command'  <- get
   messageLength' <- fromIntegral <$> getWord32le
   checksum' <- getWord32le
   -- TODO: Checksum for the message should maybe be verified
@@ -133,7 +134,7 @@ putMessage (Message messageBody context) = do
 putHeader :: Header -> Put
 putHeader (Header network' command' message') = do
   put network'
-  putByteString $ getCommand' command'
+  put command'
   putWord32le $ fromIntegral (BS.length message')
   putByteString $ checkSum message'
 
@@ -154,6 +155,9 @@ putMessageBody (PingMessageBody message) = put message
 putMessageBody (PongMessageBody message) = put message
 putMessageBody _ = putByteString ""
 
+-- TODO: We're typically using `getX`
+--       as the name for deserializing X
+--       it may make sense to rename this function
 getCommand :: MessageBody -> Command
 getCommand (VersionMessageBody _) = VersionCommand
 getCommand (VerackMessageBody _) = VerackCommand
@@ -185,19 +189,32 @@ getCommand (GetblocktxnMessageBody _) = GetblocktxnCommand
 getCommand (BlocktxnMessageBody _) = BlocktxnCommand
 getCommand (UnknownMessageBody _) = UnknownCommand
 
+instance Binary Command where
+  put = putCommand
+  get = deserializeCommand
+
+putCommand :: Command -> Put
+putCommand command =
+  case lookup command commandTable of
+    Just bs -> putByteString bs
+    Nothing -> error $ "Unable to serialize command " ++ show command
+
+deserializeCommand :: Get Command
+deserializeCommand = do
+  bs <- getByteString 12
+  let table' = map swap commandTable
+  return $
+    fromMaybe UnknownCommand (lookup bs table')
+  -- TODO: UnknownCommand is not an actual bitcoin command
+  --       We should return `Maybe Command` instead
+
+getCommandBS :: String -> ByteString
+getCommandBS = padWithZeroes . Char8.pack
+  where padWithZeroes bs = bs `BS.append` padding bs
+        padding bs = BS.replicate (12 - BS.length bs) 0 
+
 commandTable :: [(Command, ByteString)]
 commandTable = over (mapped . _2) getCommandBS commandTable'
-
-commandTableBinary :: [(Command, ByteString)]
-commandTableBinary = over (mapped . _2) Char8.pack commandTable'
-
-getCommand' :: Command -> ByteString
-getCommand' = padWithZeroes . searchCommand
-  where 
-  searchCommand = fromJust . flip lookup commandTableBinary
-  padWithZeroes bs = bs `BS.append` padding bs
-  padding bs = BS.replicate (12 - BS.length bs) 0
-  -- need to pad with zeroes
 
 commandTable' :: [(Command, String)]
 commandTable' = 
@@ -229,17 +246,6 @@ commandTable' =
   , (CmpctblockCommand, "cmpctblock")
   , (GetblocktxnCommand, "getblocktxt")
   , (BlocktxnCommand, "blocktxn")]
-
-getCommandBS :: String -> ByteString
-getCommandBS = Char8.pack . padWithZeroes . map toUpper . Char8.unpack .  encode . Char8.pack
-  where padWithZeroes str = str ++ padding str
-        padding str = replicate (24 - length str) '0'        
-
-printCommand :: Command -> ByteString
-printCommand = fromJust . flip lookup commandTable
-
-readCommand :: ByteString -> Command
-readCommand bs = fromMaybe UnknownCommand (readFromTable commandTable bs)
 
 getPayload :: Get ByteString
 getPayload = do

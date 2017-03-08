@@ -1,9 +1,13 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Protocol.MessagesTest where
 
 import TestUtil
 import General.Types
 import General.Util
-import Protocol.Messages (Message(..), MessageBody(..), MessageContext(..))
+import Protocol.Messages ( Message(..)
+                         , MessageBody(..)
+                         , MessageContext(..)
+                         , Command(..))
 import Protocol.MessageBodies
 import Protocol.Util
 import qualified Data.ByteString.Char8 as Char8
@@ -28,3 +32,13 @@ prop_messageInvertible message =
   where
     parsedMessage = runGet get (runPut . put $ message)
     
+serializingCommand = testCase
+  "We should be correctly serializing commands"
+  serializingVersionCommand
+
+serializingVersionCommand :: Assertion
+serializingVersionCommand =
+  assertBool "VersionCommand test" $ expected == actual
+  where
+    expected = fst . decode $ "76657273696f6e0000000000"
+    actual = BL.toStrict . runPut . put $ VersionCommand

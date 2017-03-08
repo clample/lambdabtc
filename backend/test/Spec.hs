@@ -59,7 +59,8 @@ tests =
       signingVerifiable
       ],
     testGroup "QuickCheck Message Tests" [
-      messageInvertible
+      messageInvertible,
+      serializingCommand
       ],
     testGroup "QuickCheck BlockHeader Tests" [
       blockHeaderInvertible,
