@@ -5,7 +5,8 @@ import TestUtil
 import Protocol.Messages ( Message(..)
                          , MessageBody(..)
                          , MessageContext(..)
-                         , arbitraryPingMessage)
+                         , arbitraryPingMessage
+                         , arbitraryVersionMessage)
 import Protocol.Server
 import Protocol.ConnectionM ( ConnectionContext(..))
 import General.InternalMessaging ( UIUpdaterMessage(..)
@@ -19,17 +20,24 @@ import General.Util (Addr(..), IP(..), Port(..))
 
 import Control.Lens (makeLenses, (^.), (%~), (.~))
 import Control.Monad.Free (Free(..))
-import Data.List (findIndex)
+import Data.List (findIndex, any)
 import Control.Monad.Identity (Identity(..), runIdentity)
 import System.Random (mkStdGen)
 import Test.QuickCheck.Gen (generate)
 
-newtype PingMessage = PingMessage Message
+newtype ArbPingMessage = ArbPingMessage Message
   deriving (Show, Eq)
 
-instance Arbitrary PingMessage where
-  arbitrary = PingMessage <$>
+instance Arbitrary ArbPingMessage where
+  arbitrary = ArbPingMessage <$>
     (Message <$> arbitraryPingMessage <*> arbitrary)
+
+newtype ArbVersionMessage = ArbVersionMessage Message
+  deriving (Show, Eq)
+
+instance Arbitrary ArbVersionMessage where
+  arbitrary = ArbVersionMessage <$>
+    (Message <$> arbitraryVersionMessage <*> arbitrary)
 
 data MockHandles = MockHandles
   { _incomingMessageList :: [Message]
@@ -120,15 +128,30 @@ pingAndPong = testCase
       pingMessage <- generate arbitrary
       (assertBool "PingPong test" $ prop_pingAndPong pingMessage)
 
-prop_pingAndPong :: PingMessage -> Bool
-prop_pingAndPong (PingMessage message) =
+prop_pingAndPong :: ArbPingMessage -> Bool
+prop_pingAndPong (ArbPingMessage message) =
   case result^.outgoingMessageList of
     [Message (PongMessageBody messageBody) _] -> True
     _ -> False
   where
     (result, ()) = runIdentity $
       interpretConnTest blankMockHandles genericConnectionContext (handleResponse' message)
-    
+
+versionAndVerack = testCase
+  "We should respond to a version message with a verack message"
+  $ do
+      versionMessage <- generate arbitrary
+      (assertBool "VersionVerack test" $ prop_versionAndVerack versionMessage)
+
+prop_versionAndVerack :: ArbVersionMessage -> Bool
+prop_versionAndVerack (ArbVersionMessage message) =
+  any isVerack (result^.outgoingMessageList)
+  where
+    (result, ()) = runIdentity $
+      interpretConnTest blankMockHandles genericConnectionContext (handleResponse' message)
+    isVerack message = case message of
+      (Message (VersionMessageBody _) _) -> True
+      _                                  -> False
 
 blankMockHandles :: MockHandles
 blankMockHandles = MockHandles
