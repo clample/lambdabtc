@@ -9,7 +9,6 @@ module General.Util
   , checkSum
   , showBool
   , VarInt(..)
-  , doubleSHA
   , putWithLength
   , roll
   , unroll
@@ -22,6 +21,8 @@ module General.Util
 
 import Prelude hiding (take)
 
+import General.Hash (doubleSHA)
+
 import Data.Maybe (listToMaybe)
 import Data.ByteString (ByteString, take)
 import qualified Data.ByteString.Lazy as BL
@@ -31,10 +32,7 @@ import qualified Data.ByteString.Char8 as Char8
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Data.Base58String.Bitcoin (fromBytes, toBytes, toText, fromText)
-import Crypto.Hash.Algorithms (SHA256(..))
-import Crypto.Hash (hashWith)
 import Numeric (showHex, readHex)
-import Data.ByteArray (convert)
 import Data.Binary (Binary(..), Word8)
 import Data.Binary.Get(Get, getWord8, getWord16le, getWord32le, getWord64le)
 import Data.Binary.Put (Put, putWord8, putWord16le, putWord32le, putWord64le, runPut, putByteString)
@@ -61,10 +59,6 @@ maybeRead = fmap fst . listToMaybe . reads
 
 checkSum :: ByteString -> ByteString
 checkSum = take 4 . doubleSHA
-
--- 
-doubleSHA :: ByteString -> ByteString
-doubleSHA = convert . hashWith SHA256 . hashWith SHA256
   
 -- https://github.com/bitcoinbook/bitcoinbook/blob/first_edition/ch04.asciidoc#base58-and-base58check-encoding
 encodeBase58Check :: Prefix -> Payload -> T.Text

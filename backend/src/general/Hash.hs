@@ -1,9 +1,8 @@
 module General.Hash
   ( Hash(..)
   , hashObject
+  , doubleSHA
   ) where
-
-import General.Util (doubleSHA)
 
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
@@ -12,6 +11,9 @@ import Data.ByteString.Base16 (encode)
 import Data.Binary (Binary(..))
 import Data.Binary.Put (Put, putByteString, runPut)
 import Data.Binary.Get (Get, getByteString)
+import Crypto.Hash.Algorithms (SHA256(..))
+import Crypto.Hash (hashWith)
+import Data.ByteArray (convert)
 
 import Test.QuickCheck.Arbitrary (Arbitrary(..))
 import Test.QuickCheck.Gen (vectorOf)
@@ -41,3 +43,6 @@ hashObject b = Hash $
 
 instance Arbitrary (Hash a) where
   arbitrary = Hash . BS.pack <$> vectorOf 32 arbitrary
+
+doubleSHA :: ByteString -> ByteString
+doubleSHA = convert . hashWith SHA256 . hashWith SHA256

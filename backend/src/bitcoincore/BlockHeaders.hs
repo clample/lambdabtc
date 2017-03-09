@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module BitcoinCore.BlockHeaders where
 
-import General.Util (VarInt(..), doubleSHA)
+import General.Util (VarInt(..))
 import General.Types (Network(..))
 import BitcoinCore.MerkleTrees (MerkleHash(..))
 import General.Hash (Hash(..), hashObject)
