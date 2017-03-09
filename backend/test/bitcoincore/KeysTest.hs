@@ -30,9 +30,7 @@ instance Arbitrary PublicKeyRep where
     return $ PublicKeyRep format pubKey
 
 instance Arbitrary Prefix where
-  arbitrary = do
-    char <- arbitrary
-    return (prefix $ Char8.pack [char])
+  arbitrary = Prefix <$> arbitrary
     
 instance Arbitrary Payload where
   arbitrary = do

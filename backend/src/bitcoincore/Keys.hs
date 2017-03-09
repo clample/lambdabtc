@@ -5,7 +5,6 @@ module BitcoinCore.Keys
   , WIFPrivateKey(..)
   , genKeys
   , getAddress
-  , stringToHexByteString
   , pubKeyHash
   , getWIFPrivateKey
   , getPrivateKeyFromWIF
@@ -87,8 +86,8 @@ getAddress pubKeyRep network =
   Address $ encodeBase58Check (addressPrefix network) payload
   where payload = Payload $ hash
         PubKeyHash hash = pubKeyHash pubKeyRep
-        addressPrefix MainNet = prefix $ stringToHexByteString "00"
-        addressPrefix TestNet3 = prefix $ stringToHexByteString "6F"
+        addressPrefix MainNet = Prefix 0x00
+        addressPrefix TestNet3 = Prefix 0x6F
 
 addressToPubKeyHash :: Address -> PubKeyHash
 addressToPubKeyHash (Address address) =
@@ -109,7 +108,7 @@ getPrivateKeyFromWIF (WIF wifText) =
     (prefix, Payload payload, checksum) = decodeBase58Check wifText
 
 privateKeyPrefix :: Prefix
-privateKeyPrefix = prefix $ stringToHexByteString "80"
+privateKeyPrefix = Prefix 0x80
 
 serializePrivateKey :: PrivateKey -> ByteString
 serializePrivateKey =

@@ -2,12 +2,10 @@
 
 module General.Util
   ( Payload(..)
-  , prefix
   , Prefix(..)
   , maybeRead
   , encodeBase58Check
   , decodeBase58Check
-  , stringToHexByteString
   , hexify
   , checkSum
   , showBool
@@ -38,7 +36,7 @@ import Crypto.Hash.Algorithms (SHA256(..))
 import Crypto.Hash (hashWith)
 import Numeric (showHex, readHex)
 import Data.ByteArray (convert)
-import Data.Binary (Binary(..))
+import Data.Binary (Binary(..), Word8)
 import Data.Binary.Get(Get, getWord8, getWord16le, getWord32le, getWord64le)
 import Data.Binary.Put (Put, putWord8, putWord16le, putWord32le, putWord64le, runPut, putByteString)
 import Data.Bits (setBit, shiftR, shiftL, (.|.))
@@ -52,15 +50,9 @@ import Test.QuickCheck.Gen (choose, elements)
 data Payload = Payload ByteString
   deriving (Show, Eq)
 
-data Prefix = Prefix ByteString
+newtype Prefix = Prefix Word8
   deriving (Show, Eq)
 
-prefix :: ByteString -> Prefix
-prefix bs =
-  if BS.length bs == 1
-  then Prefix bs
-  else error "Prefix should be 1 byte"
-  
 data CheckSum = CheckSum ByteString
   deriving (Show, Eq)
 
@@ -80,23 +72,16 @@ encodeBase58Check :: Prefix -> Payload -> T.Text
 encodeBase58Check (Prefix prefix) (Payload payload) =
   toText . fromBytes . BS.concat $ [withPrefix, checkSum withPrefix]
   where
-   withPrefix = prefix `BS.append` payload
+   withPrefix = prefix `BS.cons` payload
 
 -- all components are binary encoded rather than hex
 decodeBase58Check :: T.Text -> (Prefix, Payload, CheckSum)
 decodeBase58Check b58 = (Prefix pre, Payload payload, CheckSum checksum)
   where
     content = (toBytes . fromText) b58
-    pre = (BS.singleton . BS.head) content
+    pre = BS.head content
     withoutPrefix = BS.drop 1 content
     (payload, checksum) = BS.splitAt (BS.length content - 5) withoutPrefix
-
-
--- TODO: Get rid of this abomination!
--- this function name is misleading?
--- This is going from hex string to binary bytestring
-stringToHexByteString :: String -> ByteString
-stringToHexByteString = fst . decode . Char8.pack 
 
 -- Make sure that we include leading zeroes when converting an int to its string representatin in hexidecimal
 -- TODO: Get rid of this abomination!

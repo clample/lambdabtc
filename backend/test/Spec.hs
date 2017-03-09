@@ -104,7 +104,7 @@ testPublicKey =
 pubKeyHashTest :: Assertion
 pubKeyHashTest = assertEqual
   "public key hashing should give the expected output"
-  (PubKeyHash . stringToHexByteString $ "010966776006953D5567439E5E39F86A0D273BEE")
+  (PubKeyHash . fst . decode $ "010966776006953D5567439E5E39F86A0D273BEE")
   (pubKeyHash pubKeyRep)
   where
     pubKeyRep = PublicKeyRep Uncompressed testPublicKey
