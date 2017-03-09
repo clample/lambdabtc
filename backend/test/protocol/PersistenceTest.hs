@@ -7,6 +7,7 @@ import BitcoinCore.BlockHeaders
 import BitcoinCore.Transaction.Transactions
 import Protocol.Persistence
 import General.Hash (Hash(..), hashObject)
+import Protocol.Util (BlockIndex(..))
 
 import Database.Persist.Sqlite (createSqlitePool, runMigrationSilent)
 import Database.Persist.Sql ( ConnectionPool
@@ -63,9 +64,9 @@ persistAndGetLastBlock = buildTest $ do
 
 prop_persistAndGetLastBlock :: ConnectionPool -> [BlockHeader] -> Property
 prop_persistAndGetLastBlock pool headers = ioProperty $ do
-  lastBlockInitial <- getLastBlock pool
+  (BlockIndex lastBlockInitial) <- getLastBlock pool
   persistHeaders pool headers
-  lastBlockFinal <- getLastBlock pool
+  (BlockIndex lastBlockFinal) <- getLastBlock pool
   return $ lastBlockFinal - lastBlockInitial == length headers
 
 getBlockWithIndexAndHash = buildTest $ do

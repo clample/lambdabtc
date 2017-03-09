@@ -57,9 +57,6 @@ class HasRelay t where
 class HasTime t where
   time :: Lens' t POSIXTime
 
-class HasLastBlock t where
-  lastBlock :: Lens' t Integer
-
 class HasVersion t where
   version :: Lens' t Int
 

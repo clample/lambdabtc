@@ -5,7 +5,6 @@ import Protocol.Messages (Message(..))
 import General.Types ( HasVersion(..)
                      , HasRelay(..)
                      , HasTime(..)
-                     , HasLastBlock(..)
                      , HasPeerAddr(..)
                      , Network(..)
                      , HasPool(..)
@@ -13,6 +12,7 @@ import General.Types ( HasVersion(..)
 import General.Config (HasAppChan(..), HasUIUpdaterChan(..))
 import General.Util (Addr(..))
 import General.InternalMessaging (UIUpdaterMessage(..), InternalMessage(..))
+import Protocol.Util (HasLastBlock(..), BlockIndex(..))
 
 import Data.Conduit.TMChan (TBMChan)
 import Data.Time.Clock.POSIX (POSIXTime)
@@ -23,7 +23,7 @@ import Database.Persist.Sql (ConnectionPool)
 
 data ConnectionContext = ConnectionContext
   { _connectionContextVersion :: Int
-  , _connectionContextLastBlock :: Integer
+  , _connectionContextLastBlock :: BlockIndex
   , _myAddr :: Addr
   , _connectionContextPeerAddr :: Addr
   , _connectionContextRelay :: Bool

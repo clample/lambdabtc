@@ -4,8 +4,8 @@
 module Protocol.MessageBodies where
 
 import Protocol.Network (putServices, putAddr, getAddr)
-import Protocol.Util (CCode(..))
-import General.Types (HasRelay(..), HasTime(..), HasLastBlock(..), HasVersion(..), HasPeerAddr(..))
+import Protocol.Util (CCode(..), BlockIndex, HasLastBlock(..))
+import General.Types (HasRelay(..), HasTime(..), HasVersion(..), HasPeerAddr(..))
 import General.Util (VarInt(..), Addr)
 import BitcoinCore.Inventory (InventoryVector(..))
 import BitcoinCore.BlockHeaders ( BlockHash(..)
@@ -56,7 +56,7 @@ newtype Nonce64 = Nonce64 Word64
 data VersionMessage = VersionMessage
     { _versionMessageVersion    :: Int
     , _versionMessageNonce64   :: Nonce64
-    , _versionMessageLastBlock :: Integer
+    , _versionMessageLastBlock :: BlockIndex
     , _senderAddr :: Addr
     , _versionMessagePeerAddr   :: Addr
     , _versionMessageRelay      :: Bool
@@ -96,7 +96,7 @@ putVersionMessage versionMessage = do
   let Nonce64 nonce' = versionMessage^.nonce64
   putWord64be nonce'
   putWord8 0
-  putWord32le . fromIntegral $ (versionMessage^.lastBlock)
+  put $ (versionMessage^.lastBlock)
   put (versionMessage^.relay)
 
 getVersionMessage :: Get VersionMessage
@@ -108,7 +108,7 @@ getVersionMessage = do
   sender'      <- getAddr
   nonce'       <- Nonce64 <$> getWord64be
   userAgent'   <- getPayload
-  startHeight' <- fromIntegral <$> getWord32le
+  startHeight' <- get
   relay'       <- toBool <$> getWord8 
   return
     (VersionMessage version' nonce' startHeight' sender' peer' relay' timestamp')

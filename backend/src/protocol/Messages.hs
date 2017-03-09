@@ -354,17 +354,16 @@ instance Arbitrary MessageContext where
 arbitraryVersionMessage = do
   version    <- choose (0, maxVersion)
   nonce'     <- arbitrary
-  lastBlockN <- choose (0, maxBlock)
+  lastBlock' <- arbitrary
   senderAddr <- arbitrary
   peerAddr   <- arbitrary
   relay      <- arbitrary
   time       <- choose (0, maxTime) :: Gen Integer
   return $ VersionMessageBody
-    (VersionMessage version nonce' lastBlockN senderAddr peerAddr relay (realToFrac time))
+    (VersionMessage version nonce' lastBlock' senderAddr peerAddr relay (realToFrac time))
   where
     maxVersion = 0xffffffff         -- 4 bytes
     maxNonce   = 0xffffffffffffffff -- 8 bytes
-    maxBlock   = 0xffffffff         -- 4 bytes
     maxTime = 0xffffffffffffffff -- 8 bytes
 
 arbitraryGetHeadersMessage = do

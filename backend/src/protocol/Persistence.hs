@@ -12,7 +12,12 @@ import BitcoinCore.Keys (Address(..))
 import BitcoinCore.BlockHeaders (genesisBlock, BlockHeader(..), BlockHash(..))
 import BitcoinCore.Transaction.Transactions ( Transaction(..)
                                             , TxHash) 
-import Protocol.Util (encodeBlockHeader, decodeBlockHeader)
+import Protocol.Util ( encodeBlockHeader
+                     , decodeBlockHeader
+                     , HasLastBlock(..)
+                     , BlockIndex(..)
+                     , toDbKey
+                     , fromDbKey)
 
 import Database.Persist.Sql ( insertMany_
                             , insert_
@@ -32,17 +37,17 @@ import Control.Monad (when)
 import Data.List.Split (chunksOf)
 
 -- Return the index for the most recent persisted block
--- if only the genesis block is persisted, the index should be 0 and so on
-getLastBlock :: ConnectionPool -> IO Int
-getLastBlock pool =
-  ((-1) +) <$> runSqlPool lastBlockQuery pool
+getLastBlock :: ConnectionPool -> IO BlockIndex
+getLastBlock pool = do
+  blockCount <-  runSqlPool lastBlockQuery pool
+  return . BlockIndex $ blockCount - 1
   where lastBlockQuery = count allBlocksFilter
         allBlocksFilter = [] :: [Filter PersistentBlockHeader]
 
 persistGenesisBlock :: Config -> IO ()
 persistGenesisBlock config = do
   lastBlock' <- getLastBlock (config^.pool)
-  when (lastBlock' == -1) $
+  when (lastBlock' == BlockIndex 0) $
     runSqlPool (insert_ . encodeBlockHeader . genesisBlock $ (config^.network)) (config^.pool)
 
 persistHeader :: ConnectionPool -> BlockHeader -> IO ()
@@ -57,14 +62,14 @@ persistHeaders pool headers = do
       -- sqlite rejects if we insert all at once
   runSqlPool (mapM_ insertMany_ chunkedPersistentHeaders) pool
 
-getBlockHeaderFromHash :: ConnectionPool -> BlockHash -> IO (Maybe (Integer, BlockHeader))
+getBlockHeaderFromHash :: ConnectionPool -> BlockHash -> IO (Maybe (BlockIndex, BlockHeader))
 getBlockHeaderFromHash pool (Hash hash') = do
   matches <- runSqlPool (selectList [PersistentBlockHeaderHash ==. hash'] []) pool
   case matches of
     []       -> return Nothing
     [header] -> do
       let DB.Entity persistentKey persistentHeader = header
-          key = fromIntegral . DB.fromSqlKey $ persistentKey
+          key = fromDbKey $ persistentKey
           blockHeader = decodeBlockHeader persistentHeader
       return . Just $ (key , blockHeader) 
     _        -> fail "Multiple blocks found with same hash."
@@ -86,14 +91,13 @@ persistTransaction pool transaction =
   where persistentTransaction = PersistentTransaction hash'
         hash' = hash . hashObject $ transaction
 
-getBlockWithIndex :: ConnectionPool -> Integer -> IO (Maybe BlockHeader)
+getBlockWithIndex :: ConnectionPool -> BlockIndex -> IO (Maybe BlockHeader)
 getBlockWithIndex pool i = (fmap . fmap) decodeBlockHeader $
-  runSqlPool (DB.get (toSqlKey . fromIntegral $ i)) pool
+  runSqlPool (DB.get . toDbKey $ i) pool
   
--- TODO: Get better type signature to tell n and key apart
-nHeadersSinceKey :: ConnectionPool -> Int -> Integer -> IO [BlockHeader]
+nHeadersSinceKey :: ConnectionPool -> Int -> BlockIndex -> IO [BlockHeader]
 nHeadersSinceKey pool n key = do
-  let key' = toSqlKey . fromIntegral $ key
+  let key' = toDbKey $ key
   persistentHeaders <- runSqlPool (selectList [ PersistentBlockHeaderId >=. key'] [LimitTo n]) pool
   return $ map getHeaderFromEntity persistentHeaders
 

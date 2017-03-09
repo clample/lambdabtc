@@ -21,10 +21,14 @@ import Data.Tuple (swap)
 import Data.List (lookup)
 import Data.ByteString (ByteString)
 import Data.ByteString.Lazy (toStrict)
-import Data.Binary.Put (runPut)
+import Data.Binary (Binary(..))
+import Data.Binary.Put (runPut, Put, putWord32le)
+import Data.Binary.Get (Get, getWord32le)
+import qualified Database.Persist.Sql as DB
+import Control.Lens (Lens')
 
 import Test.QuickCheck.Arbitrary (Arbitrary(..))
-import Test.QuickCheck.Gen (elements)
+import Test.QuickCheck.Gen (elements, choose)
 
 decodeBlockHeader :: PersistentBlockHeader -> BlockHeader
 decodeBlockHeader
@@ -117,3 +121,38 @@ getPersistentUTXO tx outIndex script keySetId' = PersistentUTXO
 
 instance Arbitrary CCode where
   arbitrary = elements . map fst $ ccodeTable
+
+-- 0 based counting
+-- genesis block has index 0
+newtype BlockIndex = BlockIndex Int
+  deriving (Show, Eq)
+
+instance Ord BlockIndex where
+  (BlockIndex a) <= (BlockIndex b) = a <= b
+
+toDbKey :: BlockIndex -> DB.Key PersistentBlockHeader
+toDbKey (BlockIndex i) = DB.toSqlKey . fromIntegral $ i + 1
+  -- we add 1 since the db keys use 1 based counting
+
+fromDbKey :: DB.Key PersistentBlockHeader -> BlockIndex
+fromDbKey key = BlockIndex $ (fromIntegral . DB.fromSqlKey $ key) - 1
+  -- we subtract 1 since the db keys use 1 base counting
+
+class HasLastBlock t where
+  lastBlock :: Lens' t BlockIndex
+
+instance Binary BlockIndex where
+  put = putBlockIndex
+  get = getBlockIndex
+
+getBlockIndex :: Get BlockIndex
+getBlockIndex =
+  BlockIndex . fromIntegral <$> getWord32le
+
+putBlockIndex :: BlockIndex -> Put
+putBlockIndex (BlockIndex i) =
+  putWord32le . fromIntegral $ i
+
+instance Arbitrary BlockIndex where
+  arbitrary = BlockIndex <$> choose (0, maxBlock)
+    where maxBlock = 0xffffffff -- 4 bytes

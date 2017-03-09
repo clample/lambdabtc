@@ -4,7 +4,7 @@ module Protocol.Server where
 import Protocol.Messages (parseMessage, Message(..), MessageBody(..), MessageContext(..))
 import Protocol.MessageBodies 
 import Protocol.Network (connectToPeer, sock, addr)
-import Protocol.Util (getUTXOS)
+import Protocol.Util (getUTXOS, HasLastBlock(..), BlockIndex(..))
 import Protocol.Persistence ( getLastBlock
                             , persistGenesisBlock
                             , persistHeaders
@@ -44,7 +44,6 @@ import General.Types ( HasNetwork(..)
                      , HasVersion(..)
                      , HasRelay(..)
                      , HasTime(..)
-                     , HasLastBlock(..)
                      , HasPeerAddr(..)
                      , Network(..)
                      , HasPool(..))
@@ -90,7 +89,7 @@ getConnectionContext config = do
   listenChan' <- atomically $ newTBMChan 16
   time' <- getPOSIXTime
   randGen' <- getStdGen
-  lastBlock' <- fromIntegral <$> getLastBlock (config^.pool)
+  lastBlock' <- getLastBlock (config^.pool)
   let connectionContext = ConnectionContext
         { _connectionContextVersion = 60002
         , _connectionContextLastBlock = lastBlock'
@@ -156,23 +155,23 @@ connectionLoop ioHandlers context = do
   connectionLoop ioHandlers context
 
 ----------
-type KeyId = Integer
+-- type KeyId = Integer
   -- KeyId is 1 based
 
 data ConnectionInteraction next
   = GetContext (ConnectionContext -> next)
-  | IncrementLastBlock Integer next
+  | IncrementLastBlock Int next
   | ReadMessage (Maybe Message -> next)
   | WriteMessage Message next
   | WriteUIUpdaterMessage UIUpdaterMessage next
-  | GetBlockHeader KeyId (Maybe BlockHeader -> next)
-  | BlockHeaderCount (Int -> next)
+  | GetBlockHeader BlockIndex (Maybe BlockHeader -> next)
+  | BlockHeaderCount (BlockIndex -> next)
   | PersistBlockHeaders [BlockHeader] next
   | PersistBlockHeader BlockHeader next
-  | GetBlockHeaderFromHash BlockHash (Maybe (KeyId, BlockHeader) -> next)
+  | GetBlockHeaderFromHash BlockHash (Maybe (BlockIndex, BlockHeader) -> next)
   | PersistTransaction Transaction next
-  | NHeadersSinceKey Int KeyId ([BlockHeader] -> next)
-  | GetTransactionFromHash TxHash (Maybe KeyId -> next)
+  | NHeadersSinceKey Int BlockIndex ([BlockHeader] -> next)
+  | GetTransactionFromHash TxHash (Maybe Integer -> next)
   | GetAllAddresses ([Address] -> next)
   | PersistUTXOs [PersistentUTXO] next
 
@@ -201,7 +200,7 @@ getContext' = liftF (GetContext id)
 
 -- TODO: Can we move this out of the interpreter and into our free monad
 --       and just expose a generic way to update the state?
-incrementLastBlock' :: Integer -> Connection' ()
+incrementLastBlock' :: Int -> Connection' ()
 incrementLastBlock' i = liftF (IncrementLastBlock i ())
 
 readMessage' :: Connection' (Maybe Message)
@@ -213,10 +212,10 @@ writeMessage' message = liftF (WriteMessage message ())
 writeUiUpdaterMessage' :: UIUpdaterMessage -> Connection' ()
 writeUiUpdaterMessage' message = liftF (WriteUIUpdaterMessage message ())
 
-getBlockHeader' :: KeyId -> Connection' (Maybe BlockHeader)
+getBlockHeader' :: BlockIndex -> Connection' (Maybe BlockHeader)
 getBlockHeader' index = liftF (GetBlockHeader index id)
 
-blockHeaderCount' :: Connection' Int
+blockHeaderCount' :: Connection' BlockIndex
 blockHeaderCount' = liftF (BlockHeaderCount id)
 
 persistHeaders' :: [BlockHeader] -> Connection' ()
@@ -225,13 +224,13 @@ persistHeaders' headers = liftF (PersistBlockHeaders headers ())
 persistHeader' :: BlockHeader -> Connection' ()
 persistHeader' header = liftF (PersistBlockHeader header ())
 
-getBlockHeaderFromHash' :: BlockHash -> Connection' (Maybe (Integer, BlockHeader))
+getBlockHeaderFromHash' :: BlockHash -> Connection' (Maybe (BlockIndex, BlockHeader))
 getBlockHeaderFromHash' hash = liftF (GetBlockHeaderFromHash hash id)
 
 persistTransaction' :: Transaction -> Connection' ()
 persistTransaction' tx = liftF (PersistTransaction tx ())
 
-nHeadersSinceKey' :: Int -> KeyId -> Connection' [BlockHeader]
+nHeadersSinceKey' :: Int -> BlockIndex -> Connection' [BlockHeader]
 nHeadersSinceKey' n keyId = liftF (NHeadersSinceKey n keyId id)
 
 getTransactionFromHash' :: TxHash -> Connection' (Maybe Integer)
@@ -248,7 +247,7 @@ interpretConnProd ioHandlers context conn = case conn of
   Free (GetContext f) -> do
     interpretConnProd ioHandlers context (f context)
   Free (IncrementLastBlock i n) -> do
-    let newContext = lastBlock %~ (+ i) $ context
+    let newContext = lastBlock %~ (\(BlockIndex old) -> BlockIndex (old + i)) $ context
     interpretConnProd ioHandlers newContext n
   Free (ReadMessage f) -> do
     mMessage <- liftIO . atomically . readTBMChan $ (ioHandlers^.listenChan)
@@ -369,7 +368,7 @@ writeMessageWithBody' body = do
   writeMessage' message
 
 -- returns the leftmose header that we are currently persisting
-firstHeaderMatch' :: [BlockHash] -> Connection' KeyId
+firstHeaderMatch' :: [BlockHash] -> Connection' BlockIndex
 firstHeaderMatch' [] = fail "No matching hash was found"
 firstHeaderMatch' (hash:hashes) = do
   mHeader <- getBlockHeaderFromHash' hash
@@ -380,14 +379,12 @@ firstHeaderMatch' (hash:hashes) = do
 getMostRecentHeader' :: Connection' BlockHeader
 getMostRecentHeader' = do
   blockHeaderCount <- blockHeaderCount'
-  mLastBlockHeader <- getBlockHeader' . fromIntegral $ blockHeaderCount + 1
-    -- We add 1 to the count, since the database has 1 based indexing but
-    -- blockHeaderCount has 0 based indexing
+  mLastBlockHeader <- getBlockHeader' blockHeaderCount
   case mLastBlockHeader of
     Nothing -> fail "Unable to get most recent block header. This should never happen"
     Just lastBlockHeader -> return lastBlockHeader
 
-synchronizeHeaders' :: Integer -> Connection' ()
+synchronizeHeaders' :: BlockIndex -> Connection' ()
 synchronizeHeaders' lastBlockPeer = do
   context <- getContext'
   newSync <- isNewSync'
@@ -432,20 +429,18 @@ getHeadersOrBlocksMessage' bodyConstructor messageConstructor = do
            (Hash . fst . decode $
             "0000000000000000000000000000000000000000000000000000000000000000")))
           (MessageContext (context^.network))
-  message <- getHeadersMessage'(fromIntegral (context^.lastBlock))
+  message <- getHeadersMessage' (context^.lastBlock)
   writeMessage' message
 
 -- returns a list of some of the block hashes for headers we've persisted
 -- this is used by the peer to send us headers starting with where
 -- we diverge from their main chain
-queryBlockLocatorHashes' :: Int -> Connection' [BlockHash]
+queryBlockLocatorHashes' :: BlockIndex -> Connection' [BlockHash]
 queryBlockLocatorHashes' lastBlock' =
   mapM queryBlockHash (blockLocatorIndices lastBlock')
   where
     queryBlockHash i = do
-      mBlockHeader <- getBlockHeader' . fromIntegral $ i + 1
-        -- We add 1 to the count, since the database has 1 based indexing but
-        -- blockHeaderCount has 0 based indexing
+      mBlockHeader <- getBlockHeader' i
       case mBlockHeader of
         Nothing -> fail $ "Unable to get block header with index " ++ show i
         Just header -> return . hashObject $ header
@@ -504,16 +499,16 @@ handleInternalMessage' (AddAddress address) = do
       filterAddMessage = Message body messageContext
   writeMessage' filterAddMessage
 
-blockLocatorIndices :: Int -> [Int]
+blockLocatorIndices :: BlockIndex -> [BlockIndex]
 blockLocatorIndices lastBlock' = reverse . addGenesisIndiceIfNeeded $ blockLocatorIndicesStep 10 1 [lastBlock']
-  where addGenesisIndiceIfNeeded (0:xs) = 0:xs
-        addGenesisIndiceIfNeeded xs   = 0:xs
+  where addGenesisIndiceIfNeeded indices@((BlockIndex 0):xs) = indices
+        addGenesisIndiceIfNeeded xs   = (BlockIndex 0):xs
 
-blockLocatorIndicesStep :: Int -> Int -> [Int] -> [Int]
-blockLocatorIndicesStep c step (i:is)
-  | c > 0 && i > 0 = blockLocatorIndicesStep (c - 1) step ((i - 1):i:is)
-  | i - step > 0 = blockLocatorIndicesStep c (step * 2) ((i - step):i:is)
-  | otherwise = i:is
+blockLocatorIndicesStep :: Int -> Int -> [BlockIndex] -> [BlockIndex]
+blockLocatorIndicesStep c step indices@((BlockIndex i):is)
+  | c > 0 && i > 0 = blockLocatorIndicesStep (c - 1) step ((BlockIndex $ i - 1):indices)
+  | i - step > 0 = blockLocatorIndicesStep c (step * 2) ((BlockIndex $ i - step):indices)
+  | otherwise = indices
 blockLocatorIndicesStep _ _ [] =
   error "blockLocatorIndicesStep must be called with a nonempty accummulator array "
 

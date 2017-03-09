@@ -14,10 +14,11 @@ import General.InternalMessaging ( UIUpdaterMessage(..)
 import BitcoinCore.Transaction.Transactions (TxHash)
 import BitcoinCore.BlockHeaders (BlockHeader(..))
 import BitcoinCore.Keys (Address(..))
-import General.Types (HasLastBlock(..), Network(..))
+import General.Types (Network(..))
 import General.Persistence (PersistentUTXO(..))
 import General.Util (Addr(..), IP(..), Port(..))
 import General.Hash (hashObject)
+import Protocol.Util (HasLastBlock(..), BlockIndex(..))
 
 import Control.Lens (makeLenses, (^.), (%~), (.~))
 import Control.Monad.Free (Free(..))
@@ -63,7 +64,7 @@ interpretConnTest mockHandles context conn =  case conn of
   Free (GetContext f) -> do
     interpretConnTest mockHandles context (f context)
   Free (IncrementLastBlock i n) -> do
-    let newContext = lastBlock %~ (+ i) $ context
+    let newContext = lastBlock %~ (\(BlockIndex old) -> BlockIndex (old + i)) $ context
     interpretConnTest mockHandles newContext n
   Free (ReadMessage f) -> do
     case mockHandles^.incomingMessageList of
@@ -79,16 +80,14 @@ interpretConnTest mockHandles context conn =  case conn of
     let newMockHandles = outgoingUIUpdaterMessages %~ (m:) $ mockHandles
     interpretConnTest newMockHandles context n
   Free (GetBlockHeader i f) -> do
-    let headers = mockHandles^.mockDB.blockHeaders
-        i' = (fromIntegral i) - 1
-    if ((length headers) < i')
+    if (blockHeaderCount < i)
       then
         interpretConnTest mockHandles context (f Nothing)
       else do
-        let blockHeader = Just $ headers !! i'
+        let (BlockIndex i') = i
+            blockHeader = Just $ (mockHandles^.mockDB.blockHeaders) !! i'
         interpretConnTest mockHandles context (f blockHeader)
   Free (BlockHeaderCount f) -> do
-    let blockHeaderCount = (length $ mockHandles^.mockDB.blockHeaders) - 1
     interpretConnTest mockHandles context (f blockHeaderCount)
   Free (PersistBlockHeaders headers n) -> do
     let newMockHandles = mockDB.blockHeaders %~ (++ headers) $ mockHandles
@@ -101,12 +100,11 @@ interpretConnTest mockHandles context conn =  case conn of
         mIndex = findIndex (\header -> hashObject header == hash) headers
         mBlockHeader = case mIndex of
           Nothing -> Nothing
-          Just i -> Just (1 + fromIntegral i, headers !! i)
+          Just i -> Just (BlockIndex i, headers !! i)
     interpretConnTest mockHandles context (f mBlockHeader)
-  Free (NHeadersSinceKey n keyId f) -> do
-    let keyId' = (fromIntegral keyId) - 1
-        headers = mockHandles^.mockDB.blockHeaders
-        nHeaders = (drop keyId' . take n) $ headers
+  Free (NHeadersSinceKey n (BlockIndex i) f) -> do
+    let headers = mockHandles^.mockDB.blockHeaders
+        nHeaders = (drop i . take n) $ headers
     interpretConnTest mockHandles context (f nHeaders)
   Free (PersistTransaction tx n) -> do
     let newMockHandles = mockDB.transactions %~ (++ [hashObject tx]) $ mockHandles
@@ -122,6 +120,7 @@ interpretConnTest mockHandles context conn =  case conn of
     let newMockHandles = mockDB.utxos %~ (++ newUtxos) $ mockHandles
     interpretConnTest newMockHandles context n
   Pure r -> return (mockHandles, r)
+  where blockHeaderCount = BlockIndex $ (length $ mockHandles^.mockDB.blockHeaders) - 1
 
 pingAndPong = testCase
   "We should respond to a single ping message with a single pong message"
@@ -171,7 +170,7 @@ blankMockHandles = MockHandles
 genericConnectionContext :: ConnectionContext
 genericConnectionContext = ConnectionContext
   { _connectionContextVersion = 100
-  , _connectionContextLastBlock = 0
+  , _connectionContextLastBlock = BlockIndex 0
   , _myAddr = Addr (0, 0, 0, 0) 80
   , _connectionContextPeerAddr = Addr (0, 0, 0, 1) 80
   , _connectionContextRelay = True
