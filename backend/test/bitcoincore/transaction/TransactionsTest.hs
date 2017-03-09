@@ -12,6 +12,7 @@ import qualified Data.ByteString as BS
 import Crypto.PubKey.ECC.ECDSA (Signature(..), PrivateKey(..), PublicKey(..), verify, signWith)
 import Crypto.Hash.Algorithms (SHA256(..))
 import Data.Binary (Binary(..))
+import qualified Data.Binary as BIN
 import Data.Binary.Get (runGet)
 import Data.Binary.Put (runPut)
 import Data.ByteString (ByteString)
@@ -30,7 +31,7 @@ prop_transactionInvertible :: Transaction -> Bool
 prop_transactionInvertible tx =
   tx == parsedTx
   where
-    parsedTx = runGet get (runPut . put $ tx)
+    parsedTx = BIN.decode . BIN.encode $ tx
 
 signingVerifiable = testProperty
   "We should be able to verify messages that we just signed"

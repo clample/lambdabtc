@@ -13,6 +13,7 @@ import Protocol.Util
 import qualified Data.ByteString.Char8 as Char8
 import Data.Time.Clock (NominalDiffTime(..))
 import Data.Binary (Binary(..))
+import qualified Data.Binary as BIN
 import Data.Binary.Get (runGet)
 import Data.Binary.Put (runPut)
 import qualified Data.ByteString.Lazy as BL
@@ -30,7 +31,7 @@ prop_messageInvertible :: Message -> Bool
 prop_messageInvertible message =
       parsedMessage == message
   where
-    parsedMessage = runGet get (runPut . put $ message)
+    parsedMessage = BIN.decode . BIN.encode $ message
     
 serializingCommand = testCase
   "We should be correctly serializing commands"
@@ -41,4 +42,4 @@ serializingVersionCommand =
   assertBool "VersionCommand test" $ expected == actual
   where
     expected = fst . decode $ "76657273696f6e0000000000"
-    actual = BL.toStrict . runPut . put $ VersionCommand
+    actual = BL.toStrict . BIN.encode $ VersionCommand

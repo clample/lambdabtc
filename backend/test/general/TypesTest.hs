@@ -3,6 +3,7 @@ module General.TypesTest where
 import TestUtil
 import General.Types
 import Data.Binary (Binary(..))
+import qualified Data.Binary as BIN
 import Data.Binary.Get (runGet)
 import Data.Binary.Put (runPut)
 
@@ -16,4 +17,4 @@ prop_networkInvertible :: Network -> Bool
 prop_networkInvertible network =
   parsedNetwork == network
   where
-    parsedNetwork = runGet get (runPut . put $ network)
+    parsedNetwork = BIN.decode . BIN.encode $ network
