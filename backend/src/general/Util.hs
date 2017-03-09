@@ -6,7 +6,6 @@ module General.Util
   , maybeRead
   , encodeBase58Check
   , decodeBase58Check
-  , hexify
   , checkSum
   , showBool
   , VarInt(..)
@@ -82,17 +81,6 @@ decodeBase58Check b58 = (Prefix pre, Payload payload, CheckSum checksum)
     pre = BS.head content
     withoutPrefix = BS.drop 1 content
     (payload, checksum) = BS.splitAt (BS.length content - 5) withoutPrefix
-
--- Make sure that we include leading zeroes when converting an int to its string representatin in hexidecimal
--- TODO: Get rid of this abomination!
-hexify :: Integer -> Int -> T.Text
-hexify n desiredLength =
-  if n >= 0
-  then T.pack $ leadingZeroes ++ base
-  else error $ "hexify: we can not hexify negative integers " ++ show n
-  where
-    base = showHex n ""
-    leadingZeroes = replicate (desiredLength - length base) '0'
 
 putWithLength :: Put -> Put
 putWithLength putM = do
