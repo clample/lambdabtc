@@ -2,15 +2,17 @@ module General.Hash
   ( Hash(..)
   , hashObject
   , doubleSHA
+  , CheckSum(..)
+  , checksum
   ) where
 
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import Data.ByteString (ByteString)
 import Data.ByteString.Base16 (encode)
-import Data.Binary (Binary(..))
-import Data.Binary.Put (Put, putByteString, runPut)
-import Data.Binary.Get (Get, getByteString)
+import Data.Binary (Binary(..), Word32)
+import Data.Binary.Put (Put, putByteString, putWord32be, runPut)
+import Data.Binary.Get (Get, getByteString, getWord32be, runGet, getRemainingLazyByteString)
 import Crypto.Hash.Algorithms (SHA256(..))
 import Crypto.Hash (hashWith)
 import Data.ByteArray (convert)
@@ -46,3 +48,27 @@ instance Arbitrary (Hash a) where
 
 doubleSHA :: ByteString -> ByteString
 doubleSHA = convert . hashWith SHA256 . hashWith SHA256
+
+newtype CheckSum = CheckSum Word32
+  deriving (Show, Eq)
+
+instance Binary CheckSum where
+  put = putCheckSum
+  get = getCheckSum
+
+putCheckSum :: CheckSum -> Put
+putCheckSum (CheckSum cs) = putWord32be cs
+
+getCheckSum :: Get CheckSum
+getCheckSum = CheckSum <$> getWord32be
+
+-- TODO: It would be nice to make this function
+--       checksum :: Hash a -> CheckSum a
+checksum :: ByteString -> CheckSum
+checksum bs = flip runGet hashBS $
+  do
+    cs <- CheckSum <$> getWord32be
+    getRemainingLazyByteString
+    return cs
+  where
+    hashBS = BL.fromChunks [doubleSHA bs]

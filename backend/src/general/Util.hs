@@ -6,7 +6,6 @@ module General.Util
   , maybeRead
   , encodeBase58Check
   , decodeBase58Check
-  , checkSum
   , showBool
   , VarInt(..)
   , putWithLength
@@ -21,7 +20,7 @@ module General.Util
 
 import Prelude hiding (take)
 
-import General.Hash (doubleSHA)
+import General.Hash (doubleSHA, CheckSum(..), checksum)
 
 import Data.Maybe (listToMaybe)
 import Data.ByteString (ByteString, take)
@@ -34,7 +33,7 @@ import qualified Data.Text.Encoding as T
 import Data.Base58String.Bitcoin (fromBytes, toBytes, toText, fromText)
 import Numeric (showHex, readHex)
 import Data.Binary (Binary(..), Word8)
-import Data.Binary.Get(Get, getWord8, getWord16le, getWord32le, getWord64le)
+import Data.Binary.Get(Get, getWord8, getWord16le, getWord32le, getWord64le, runGet, getByteString)
 import Data.Binary.Put (Put, putWord8, putWord16le, putWord32le, putWord64le, runPut, putByteString)
 import Data.Bits (setBit, shiftR, shiftL, (.|.))
 import Data.List (unfoldr)
@@ -47,34 +46,44 @@ import Test.QuickCheck.Gen (choose, elements)
 data Payload = Payload ByteString
   deriving (Show, Eq)
 
+putPayload :: Payload -> Put
+putPayload (Payload bs) = putByteString bs
+
 newtype Prefix = Prefix Word8
   deriving (Show, Eq)
 
-data CheckSum = CheckSum ByteString
-  deriving (Show, Eq)
+instance Binary Prefix where
+  get = getPrefix
+  put = putPrefix
 
+getPrefix :: Get Prefix
+getPrefix = Prefix <$> getWord8
+
+putPrefix :: Prefix -> Put
+putPrefix (Prefix w8) = putWord8 w8
 
 maybeRead :: Read a => String -> Maybe a
 maybeRead = fmap fst . listToMaybe . reads
-
-checkSum :: ByteString -> ByteString
-checkSum = take 4 . doubleSHA
   
 -- https://github.com/bitcoinbook/bitcoinbook/blob/first_edition/ch04.asciidoc#base58-and-base58check-encoding
 encodeBase58Check :: Prefix -> Payload -> T.Text
-encodeBase58Check (Prefix prefix) (Payload payload) =
-  toText . fromBytes . BS.concat $ [withPrefix, checkSum withPrefix]
+encodeBase58Check prefix payload =
+  toText . fromBytes . BL.toStrict .runPut $ do
+    put prefix
+    putPayload payload
+    put $ checksum' prefix payload
   where
-   withPrefix = prefix `BS.cons` payload
+   checksum' (Prefix pr) (Payload pay) = checksum $ pr `BS.cons` pay 
 
 -- all components are binary encoded rather than hex
 decodeBase58Check :: T.Text -> (Prefix, Payload, CheckSum)
-decodeBase58Check b58 = (Prefix pre, Payload payload, CheckSum checksum)
-  where
-    content = (toBytes . fromText) b58
-    pre = BS.head content
-    withoutPrefix = BS.drop 1 content
-    (payload, checksum) = BS.splitAt (BS.length content - 5) withoutPrefix
+decodeBase58Check b58 = flip runGet content $ do
+      prefix <- get
+      payload <- Payload <$> getByteString (fromIntegral $ BL.length content - nNonPayloadBytes)
+      checksum <- get
+      return (prefix, payload, checksum)
+  where content = BL.fromChunks [(toBytes . fromText) b58]
+        nNonPayloadBytes = 1 + 4
 
 putWithLength :: Put -> Put
 putWithLength putM = do

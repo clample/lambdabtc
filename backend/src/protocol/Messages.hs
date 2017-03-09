@@ -3,10 +3,11 @@
 
 module Protocol.Messages where
 
-import General.Util (checkSum, reverseLookup, unroll, Endian(..))
+import General.Util (reverseLookup, unroll, Endian(..))
 import General.Types (HasNetwork(..), Network(..))
 import Protocol.MessageBodies
 import BitcoinCore.BloomFilter (Filter(..), FilterContext(..), Tweak(..))
+import General.Hash (CheckSum(..), checksum)
 
 import qualified Data.ByteString as BS
 import Data.Binary.Put (Put, putWord32le, putByteString, runPut)
@@ -136,7 +137,7 @@ putHeader (Header network' command' message') = do
   put network'
   put command'
   putWord32le $ fromIntegral (BS.length message')
-  putByteString $ checkSum message'
+  put $ checksum message'
 
 
 putMessageBody :: MessageBody -> Put
