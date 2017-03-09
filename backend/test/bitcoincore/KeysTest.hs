@@ -29,15 +29,6 @@ instance Arbitrary PublicKeyRep where
     format <- elements [Compressed, Uncompressed]
     return $ PublicKeyRep format pubKey
 
-instance Arbitrary Prefix where
-  arbitrary = Prefix <$> arbitrary
-    
-instance Arbitrary Payload where
-  arbitrary = do
-    str <- arbitrary
-    return (Payload $ Char8.pack str)
-
-
 privateKeyInvertible = testProperty
   "Private key should be invertible between hex and private key"
   prop_privateKeyInvertible
@@ -93,15 +84,3 @@ prop_addressLength pubKeyRep network =
   where
     (Address b58) = getAddress pubKeyRep network
     addressLength = (BS.length . toBytes . fromText) b58
-
-base58CheckInvertible = testProperty
-  "We should be able to convert to and from base 58 check"
-  prop_base58CheckInvertible
-
-prop_base58CheckInvertible :: Prefix -> Payload -> Bool
-prop_base58CheckInvertible prefix payload  =
-  (prefix == decodedPrefix) && (payload == decodedPayload)
-  where
-    b58 = encodeBase58Check prefix payload
-    (decodedPrefix, decodedPayload, _) = decodeBase58Check b58
-  

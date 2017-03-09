@@ -52,8 +52,7 @@ tests =
       privateKeyInvertibleWIF,
       uncompressedPubKeyLength,
       compressedPubKeyLength,
-      addressLength,
-      base58CheckInvertible
+      addressLength
       ],
     testGroup "QuickCheck Transaction Tests" [
       transactionInvertible,
@@ -85,7 +84,8 @@ tests =
       networkInvertible
       ],
     testGroup "General Util Tests" [
-      unrollRoll
+      unrollRoll,
+      base58CheckInvertible
       ]
   ]
 

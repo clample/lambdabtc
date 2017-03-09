@@ -192,3 +192,11 @@ instance Arbitrary Addr where
 
 instance Arbitrary Endian where
   arbitrary = elements [BE, LE]
+
+instance Arbitrary Prefix where
+  arbitrary = Prefix <$> arbitrary
+    
+instance Arbitrary Payload where
+  arbitrary = do
+    str <- arbitrary
+    return (Payload $ Char8.pack str)
