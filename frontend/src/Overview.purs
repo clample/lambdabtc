@@ -4,11 +4,12 @@ import Prelude
 
 import Halogen as H
 import Halogen.HTML as HH
+import Data.Maybe (Maybe(..))
 
 type OverviewState = { totalFundsMessage :: String }
 
-initialState :: OverviewState
-initialState = { totalFundsMessage: "no message recieved" }
+initialState :: Unit -> OverviewState
+initialState = pure { totalFundsMessage: "no message recieved" }
 
 data OverviewQuery a
   = GetOverviewState (Boolean -> a)
@@ -18,9 +19,12 @@ data OverviewSlot = OverviewSlot
 derive instance eqOverviewSlot :: Eq OverviewSlot
 derive instance ordOverviewSlot :: Ord OverviewSlot
 
-overviewComponent :: forall m. H.Component HH.HTML OverviewQuery Void m
-overviewComponent = H.component { render, eval, initialState }
+overviewComponent :: forall m. H.Component HH.HTML OverviewQuery Unit Void m
+overviewComponent = H.component { render, eval, initialState, receiver }
   where
+
+  receiver :: forall a. Unit -> Maybe a
+  receiver _ = Nothing
 
   render :: OverviewState -> H.ComponentHTML OverviewQuery
   render (state) = HH.div_

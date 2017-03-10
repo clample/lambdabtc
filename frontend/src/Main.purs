@@ -44,8 +44,8 @@ type State =
   , sendFundsState :: Maybe Boolean
   , context :: Context }
 
-initialState :: State
-initialState =
+initialState :: Unit -> State
+initialState _ =
   { overviewState: Nothing
   , requestFundsState: Nothing
   , sendFundsState: Nothing
@@ -74,17 +74,20 @@ nav = HH.nav [HP.classes [HH.ClassName "navbar", HH.ClassName "navbar-default"]]
           , HH.button [ HE.onClick (HE.input_ (ToggleContext RequestFundsContext)), HP.classes [HH.ClassName "navbar-btn", HH.ClassName "btn", HH.ClassName "btn-default"] ] [ HH.text "Request Funds" ]]
         ]
 
-ui :: forall eff. H.Component HH.HTML Query Void (Aff (Effects eff))
-ui = H.parentComponent { render, eval, initialState }
+ui :: forall eff. H.Component HH.HTML Query Unit Void (Aff (Effects eff))
+ui = H.parentComponent { initialState, render, eval, receiver }
   where
+
+  receiver :: forall a. Unit -> Maybe a
+  receiver _ = Nothing
 
   render :: State -> H.ParentHTML Query ChildQuery ChildSlot (Aff (Effects eff))
   render state = HH.div_
     [ nav
     , case state.context of
-          OverviewContext -> HH.slot' CP.cp1 OverviewSlot (defer \_ -> overviewComponent) absurd
-          RequestFundsContext -> HH.slot' CP.cp2 RequestFundsSlot (defer \_ -> requestFundsComponent) absurd
-          SendFundsContext -> HH.slot' CP.cp3 SendFundsSlot (defer \_ -> sendFundsComponent) absurd
+          OverviewContext -> HH.slot' CP.cp1 OverviewSlot overviewComponent unit absurd
+          RequestFundsContext -> HH.slot' CP.cp2 RequestFundsSlot requestFundsComponent unit absurd
+          SendFundsContext -> HH.slot' CP.cp3 SendFundsSlot sendFundsComponent unit absurd
     ]
 
   eval :: Query ~> H.ParentDSL State Query ChildQuery ChildSlot Void (Aff (Effects eff))
@@ -101,7 +104,7 @@ ui = H.parentComponent { render, eval, initialState }
     H.query' CP.cp1 OverviewSlot (H.action $ Overview.IncomingFunds msg)
     pure next
 
-waitForServer :: forall eff. Aff (H.HalogenEffects (Effects ())) Unit
+waitForServer :: forall eff. Aff (HA.HalogenEffects (Effects ())) Unit
 waitForServer =  do
   (response :: AffjaxResponse String) <- get (server <> "/status")
   if (response.status /= StatusCode 200)
@@ -109,11 +112,11 @@ waitForServer =  do
     else pure unit
 
 
-main :: Eff (H.HalogenEffects (Effects ())) Unit
+main :: Eff (HA.HalogenEffects (Effects ())) Unit
 main = do
   runHalogenAff waitForServer
   connection <- WS.newWebSocket (WS.URL "ws://127.0.0.1:49536") []
   runHalogenAff do
     body <- awaitBody
-    io <- runUI ui body
+    io <- runUI ui unit body
     liftEff $ messageListener connection io.query

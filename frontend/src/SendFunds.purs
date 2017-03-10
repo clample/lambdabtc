@@ -12,6 +12,7 @@ import Data.Lens (lens, set, view, Lens, Lens')
 import Network.HTTP.Affjax (Affjax, AffjaxResponse, post)
 import Network.HTTP.Affjax.Response (class Respondable, ResponseType(..))
 import Requests (Effects, server)
+import Data.Maybe(Maybe(..))
 
 sendFundsTx :: forall a b r. Lens { sendFundsTx :: a | r } { sendFundsTx :: b | r} a b
 sendFundsTx = lens _.sendFundsTx (_ { sendFundsTx = _ })
@@ -39,8 +40,8 @@ instance encodeJsonTransactionRaw :: EncodeJson TransactionRaw where
     ~> "transactionAmountRaw" := transactionRaw.transactionAmountRaw
     ~> jsonEmptyObject
 
-initialState :: SendFundsState
-initialState =
+initialState :: Unit -> SendFundsState
+initialState _ =
   { sendFundsTx:
     TransactionRaw
     { recieverAddressRaw: ""
@@ -56,9 +57,12 @@ data SendFundsSlot = SendFundsSlot
 derive instance eqSendFundsSlot :: Eq SendFundsSlot
 derive instance ordSendFundsSlot :: Ord SendFundsSlot
 
-sendFundsComponent :: forall m. H.Component HH.HTML SendFundsQuery Void (Aff (Effects m))
-sendFundsComponent = H.component { render, eval, initialState }
+sendFundsComponent :: forall m. H.Component HH.HTML SendFundsQuery Unit Void (Aff (Effects m))
+sendFundsComponent = H.component { render, eval, initialState, receiver }
   where
+
+  receiver :: forall a. Unit -> Maybe a
+  receiver _ = Nothing
 
   render :: SendFundsState -> H.ComponentHTML SendFundsQuery
   render (state) = HH.div_
@@ -89,7 +93,7 @@ renderSendFundsForm state =
     [ HH.div [ HP.classes [HH.ClassName "form-group"]]
       [ HH.label [HP.for "addressInput"] [HH.text "Address:"]
       , HH.input
-        [ HP.inputType HP.InputText
+        [ HP.type_ HP.InputText
         , HP.value (view (sendFundsTx <<< _TransactionRaw <<< recieverAddressRaw) state)
         , HE.onValueChange (HE.input UpdateAddress)
         , HP.classes [HH.ClassName "form-control"]
@@ -98,7 +102,7 @@ renderSendFundsForm state =
       , HH.div [ HP.classes [HH.ClassName "form-group"]]
         [ HH.label [HP.for "amountInput"] [HH.text "Amount:"]
         , HH.input
-          [ HP.inputType HP.InputText
+          [ HP.type_ HP.InputText
           , HP.value (view (sendFundsTx <<< _TransactionRaw <<< transactionAmountRaw) state)
           , HE.onValueChange (HE.input UpdateAmount)
           , HP.classes [HH.ClassName "form-control"]

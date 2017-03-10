@@ -40,7 +40,7 @@ _FundRequestRaw :: Lens' FundRequestRaw FundRequestRawRec
 _FundRequestRaw = lens (\(FundRequestRaw rec) -> rec) (\_ -> FundRequestRaw)
 
 n :: FundRequestRawRec
-n = view ( fundRequest <<< _FundRequestRaw ) initialState
+n = view ( fundRequest <<< _FundRequestRaw ) (initialState unit)
 
 type RequestFundsState =
   { on :: Boolean
@@ -84,8 +84,8 @@ instance decodeJsonFundRequest :: DecodeJson FundRequest where
       , address: address
       , requestURI: requestURI}
 
-initialState :: RequestFundsState
-initialState =
+initialState :: Unit -> RequestFundsState
+initialState _ =
   { on: false
   , fundRequest:
     FundRequestRaw
@@ -106,9 +106,12 @@ data RequestFundsSlot = RequestFundsSlot
 derive instance eqRequestFundsSlot :: Eq RequestFundsSlot
 derive instance ordRequestFundsSlot :: Ord RequestFundsSlot
 
-requestFundsComponent :: forall eff. H.Component HH.HTML RequestFundsQuery Void (Aff (Effects eff))
-requestFundsComponent = H.component { render, eval, initialState }
+requestFundsComponent :: forall eff. H.Component HH.HTML RequestFundsQuery Unit Void (Aff (Effects eff))
+requestFundsComponent = H.component { render, eval, initialState, receiver }
   where
+
+  receiver :: forall a. Unit -> Maybe a
+  receiver _ = Nothing
 
   render :: RequestFundsState -> H.ComponentHTML RequestFundsQuery
   render state =
@@ -145,7 +148,7 @@ renderFundRequestForm state =
     [ HH.div [ HP.classes [HH.ClassName "form-group"]]
       [ HH.label [HP.for "labelInput"] [HH.text "Label:"]
       , HH.input
-        [ HP.inputType HP.InputText
+        [ HP.type_ HP.InputText
         , HP.value (view (fundRequest <<< _FundRequestRaw <<< labelRaw) state)
         , HE.onValueChange (HE.input UpdateLabel)
         , HP.classes [HH.ClassName "form-control"]
@@ -155,18 +158,18 @@ renderFundRequestForm state =
       , HH.div [ HP.classes [HH.ClassName "form-group"]]
         [ HH.label [HP.for "amountInput"] [HH.text "Amount:"]
         , HH.input
-          [ HP.inputType HP.InputText
+          [ HP.type_ HP.InputText
           , HP.value (view (fundRequest <<< _FundRequestRaw <<< amountRaw) state)
           , HE.onValueChange (HE.input UpdateAmount)
           , HP.classes [HH.ClassName "form-control"]
-          , HP.inputType HP.InputNumber
+          , HP.type_ HP.InputNumber
           , HP.id_ "amountInput" ]
 
           ]
       , HH.div [ HP.classes [HH.ClassName "form-group"]]
         [ HH.label [HP.for "messageInput"] [HH.text "Message:"]
         , HH.input
-          [ HP.inputType HP.InputText
+          [ HP.type_ HP.InputText
           , HP.value (view (fundRequest <<< _FundRequestRaw <<< messageRaw) state)
           , HE.onValueChange (HE.input UpdateMessage)
           , HP.classes [HH.ClassName "form-control"]
