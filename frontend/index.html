@@ -20,7 +20,9 @@
     <!-- required for bootstrap -->
     window.$ = window.jQuery = nodeRequire('./bower_components/jquery-2.2.3.min/index.js')
 
-    nodeRequire('./renderer.js')
+    <!-- start purescript ui -->
+    nodeRequire("./output/Main").main()
+    
   </script>
   <script src="./bower_components/bootstrap/dist/js/bootstrap.min.js"></script>
 </html>
