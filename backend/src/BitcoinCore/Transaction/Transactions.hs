@@ -5,7 +5,7 @@ module BitcoinCore.Transaction.Transactions where
 import General.Util
 import BitcoinCore.Transaction.Script
 import BitcoinCore.Keys (serializePublicKeyRep, PublicKeyRep(..), PubKeyFormat(..))
-import General.Hash (Hash(..))
+import General.Hash (Hash(..), hashObject, doubleSHA)
 
 import Prelude hiding (concat, reverse, sequence)
 import Data.ByteString (ByteString)
@@ -72,6 +72,9 @@ makeLenses ''Transaction
 makeLenses ''TxInput
 makeLenses ''TxOutput
 makeLenses ''UTXO
+
+hashTransaction :: Transaction -> Hash Transaction
+hashTransaction = hashObject doubleSHA
 
 outputScripts :: Transaction -> [Script]
 outputScripts transaction = map (^.outputScript) (transaction^.outputs)

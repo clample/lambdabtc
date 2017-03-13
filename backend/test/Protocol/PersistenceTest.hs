@@ -6,7 +6,6 @@ import General.Persistence (migrateTables)
 import BitcoinCore.BlockHeaders
 import BitcoinCore.Transaction.Transactions
 import Protocol.Persistence
-import General.Hash (Hash(..), hashObject, doubleSHA)
 import Protocol.Util (BlockIndex(..))
 
 import Database.Persist.Sqlite (createSqlitePool, runMigrationSilent)
@@ -33,13 +32,13 @@ persistAndRetrieveBlockHeader = buildTest $ do
 
 prop_persistAndRetrieveBlockHeader :: ConnectionPool -> BlockHeader -> Property
 prop_persistAndRetrieveBlockHeader pool header = ioProperty $ do
-  let hash = hashObject doubleSHA header
+  let hash = hashBlock header
   persistHeader pool header
   mHeader' <- getBlockHeaderFromHash pool hash
   case mHeader' of
     Nothing -> return False
     Just (_, header') ->
-      return (hashObject doubleSHA header' == hash)
+      return (hashBlock header' == hash)
 
 persistAndRetrieveTransaction = buildTest $ do
   pool <- createTestDbPool
@@ -49,7 +48,7 @@ persistAndRetrieveTransaction = buildTest $ do
 
 prop_persistAndRetrieveTransaction :: ConnectionPool -> Transaction -> Property
 prop_persistAndRetrieveTransaction pool tx = ioProperty $ do
-  let hash' = hashObject doubleSHA tx
+  let hash' = hashTransaction tx
   persistTransaction pool tx
   mTx' <- getTransactionFromHash pool hash'
   case mTx' of
@@ -77,7 +76,7 @@ getBlockWithIndexAndHash = buildTest $ do
 
 prop_getBlockWithIndexAndHash :: ConnectionPool -> BlockHeader -> Property
 prop_getBlockWithIndexAndHash pool header = ioProperty $ do
-  let hash = hashObject doubleSHA header
+  let hash = hashBlock header
   persistHeader pool header
   mHeaderFromHash <- getBlockHeaderFromHash pool hash
   case mHeaderFromHash of

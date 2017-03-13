@@ -5,7 +5,6 @@ module BitcoinCore.Keys
   , WIFPrivateKey(..)
   , genKeys
   , getAddress
-  , pubKeyHash
   , getWIFPrivateKey
   , getPrivateKeyFromWIF
   , getPubKey
@@ -17,12 +16,13 @@ module BitcoinCore.Keys
   , PubKeyFormat(..)
   , PubKeyHash(..)
   , addressToPubKeyHash
+  , hashPubKeyRep
   ) where
 
 
 import General.Util
 import General.Types (Network(..))
-import General.Hash (Hash(..), hashObject, pubKeyHash)
+import General.Hash (Hash(..), hashObject, ripemdSha256)
 
 import Prelude hiding (take, concat)
 import Data.ByteString (ByteString)
@@ -31,13 +31,10 @@ import Crypto.PubKey.ECC.Types ( Curve
                                , Point(..)
                                , CurveName(SEC_p256k1))
 import Crypto.PubKey.ECC.Generate (generate, generateQ)
-import Crypto.Hash.Algorithms (SHA256(..), RIPEMD160(..))
 import Crypto.PubKey.ECC.ECDSA ( PublicKey(..)
                                , PrivateKey(..))
-import Crypto.Hash (hashWith)
 import Crypto.OpenSSL.ECC (ecGroupFromCurveOID, EcGroup, ecPointFromOct, ecPointToAffineGFp)
 import qualified Data.Text as T
-import Data.ByteArray (convert)
 import Data.Binary (Binary(..))
 import Data.Binary.Put (runPut, putWord8, putByteString, Put)
 import Data.Binary.Get (runGet, getWord8, getByteString, Get, lookAhead)
@@ -86,7 +83,7 @@ getAddress :: PublicKeyRep  -> Network -> Address
 getAddress pubKeyRep network =
   Address $ encodeBase58Check (addressPrefix network) payload
   where payload = Payload $ hashBS'
-        hashBS' = hash $ hashObject pubKeyHash pubKeyRep
+        hashBS' = hash $ hashPubKeyRep pubKeyRep
         addressPrefix MainNet = Prefix 0x00
         addressPrefix TestNet3 = Prefix 0x6F
 
@@ -132,6 +129,9 @@ deserializePrivateKey =
 instance Binary PublicKeyRep where
   get = deserializePublicKeyRep
   put = serializePublicKeyRep
+
+hashPubKeyRep :: PublicKeyRep -> Hash PublicKeyRep
+hashPubKeyRep = hashObject ripemdSha256
 
 serializePublicKeyRep :: PublicKeyRep -> Put
 

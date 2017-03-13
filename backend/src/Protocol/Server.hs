@@ -26,6 +26,7 @@ import Protocol.ConnectionM ( ConnectionContext(..)
 import BitcoinCore.BlockHeaders ( BlockHash(..)
                                 , BlockHeader(..)
                                 , verifyHeaders
+                                , hashBlock
                                 )
 import BitcoinCore.BloomFilter ( NFlags(..)
                                , defaultFilterWithElements)
@@ -34,6 +35,7 @@ import BitcoinCore.Inventory (InventoryVector(..), ObjectType(..))
 import BitcoinCore.Transaction.Transactions ( Value(..)
                                             , Transaction(..)
                                             , TxHash
+                                            , hashTransaction
                                             )
 import General.Config ( Config(..)
                       , HasAppChan(..)
@@ -48,7 +50,7 @@ import General.Types ( HasNetwork(..)
                      , HasPool(..))
 import General.InternalMessaging (InternalMessage(..), UIUpdaterMessage(..))
 import General.Util (Addr(..))
-import General.Hash (Hash(..), hashObject, doubleSHA)
+import General.Hash (Hash(..), doubleSHA)
 
 import Network.Socket (Socket)
 import Data.Time.Clock.POSIX (getPOSIXTime)
@@ -350,7 +352,7 @@ handleResponse' (Message (TxMessageBody message) _) = do
           persistentUTXOs = getUTXOS indexedPubkeyHashes (message^.transaction)
       persistUTXOs' persistentUTXOs
     isTransactionHandled' = do
-      let txHash = hashObject doubleSHA $ message^.transaction
+      let txHash = hashTransaction $ message^.transaction
       mTx <- getTransactionFromHash' txHash
       return $ case mTx of
         Nothing -> False
@@ -441,7 +443,7 @@ queryBlockLocatorHashes' lastBlock' =
       mBlockHeader <- getBlockHeader' i
       case mBlockHeader of
         Nothing -> fail $ "Unable to get block header with index " ++ show i
-        Just header -> return . hashObject doubleSHA $ header
+        Just header -> return . hashBlock $ header
 
 isNewSync' :: Connection' Bool
 isNewSync' = (== []) <$> getAllAddresses'

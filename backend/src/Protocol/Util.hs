@@ -2,16 +2,18 @@ module Protocol.Util where
 
 import General.Persistence ( PersistentBlockHeader(..)
                            , PersistentUTXO(..))
-import General.Hash (Hash(..), hashObject, doubleSHA)
+import General.Hash (Hash(..), doubleSHA)
 import BitcoinCore.BlockHeaders  ( BlockHeader(..)
                                  , BlockVersion(..)
                                  , Difficulty(..)
                                  , Nonce(..)
                                  , Timestamp(..)
+                                 , hashBlock
                                  )
 import BitcoinCore.MerkleTrees (MerkleHash(..))
 import BitcoinCore.Transaction.Transactions ( Transaction(..)
-                                            , outputScripts)
+                                            , outputScripts
+                                            , hashTransaction)
 import BitcoinCore.Transaction.Script (Script(..), ScriptComponent(..), putScript)
 
 import Data.Maybe (fromJust)
@@ -58,7 +60,7 @@ encodeBlockHeader
   PersistentBlockHeader
     blockVersion
     prevBlockHash
-    (hash . hashObject doubleSHA $ header)
+    (hash . hashBlock $ header)
     merkleRoot
     (fromIntegral . floor $ timestamp)
     difficulty
@@ -114,7 +116,7 @@ getPersistentUTXO :: Transaction -> Int -> Script -> Int -> PersistentUTXO
 getPersistentUTXO tx outIndex script keySetId' = PersistentUTXO
   hash' outIndex scriptBS keySetId'
   where
-    hash' = hash . hashObject doubleSHA $ tx
+    hash' = hash . hashTransaction $ tx
     scriptBS = toStrict . runPut $ putScript script
 
 instance Arbitrary CCode where

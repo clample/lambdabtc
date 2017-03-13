@@ -4,7 +4,7 @@ module BitcoinCore.BlockHeadersTest where
 import TestUtil
 import General.Types
 import BitcoinCore.BlockHeaders
-import General.Hash (Hash(..), hashObject, doubleSHA)
+import General.Hash (Hash(..))
 
 import qualified Data.ByteString as BS
 import qualified Data.Binary as BIN
@@ -23,13 +23,13 @@ prop_blockHeaderInvertible blockHeader =
 genesisBlockHash :: Assertion
 genesisBlockHash = assertEqual
   "Genesis block should have the correct hash"
-  (hashObject doubleSHA . genesisBlock $ MainNet)
+  (hashBlock . genesisBlock $ MainNet)
   (Hash . BS.reverse . fst . B16.decode $ "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f")
 
 genesisBlockTestnetHash :: Assertion
 genesisBlockTestnetHash = assertEqual
   "Genesis block for testnet should have the correct hash"
-  (hashObject doubleSHA . genesisBlock $ TestNet3)
+  (hashBlock . genesisBlock $ TestNet3)
   (Hash . BS.reverse . fst . B16.decode $ "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943")
 
 validHeadersVerify = testProperty
@@ -56,7 +56,7 @@ instance Arbitrary ValidHeaders where
       nextHeader h =
         BlockHeader
         <$> arbitrary
-        <*> pure (hashObject doubleSHA h)
+        <*> pure (hashBlock h)
         <*> arbitrary
         <*> arbitrary
         <*> arbitrary

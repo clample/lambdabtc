@@ -4,7 +4,7 @@ module General.Hash
   , doubleSHA
   , CheckSum(..)
   , checksum
-  , pubKeyHash
+  , ripemdSha256
   ) where
 
 import qualified Data.ByteString as BS
@@ -56,8 +56,8 @@ doubleSHA = HashFunction
   . hashWith SHA256
   . hashWith SHA256
 
-pubKeyHash :: HashFunction
-pubKeyHash = HashFunction
+ripemdSha256 :: HashFunction
+ripemdSha256 = HashFunction
   $ convert
   . hashWith RIPEMD160
   . hashWith SHA256

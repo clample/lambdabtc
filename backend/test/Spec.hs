@@ -15,7 +15,7 @@ import Protocol.ServerTest
 import Protocol.UtilTest
 import General.TypesTest
 import General.UtilTest
-import General.Hash (hashObject, pubKeyHash, Hash(..))
+import General.Hash (Hash(..))
 
 import Test.Framework (defaultMain, testGroup)
 import Test.Framework.Providers.HUnit (testCase)
@@ -100,7 +100,7 @@ pubKeyHashTest :: Assertion
 pubKeyHashTest = assertEqual
   "public key hashing should give the expected output"
   (fst . decode $ "010966776006953D5567439E5E39F86A0D273BEE")
-  (hash $ hashObject pubKeyHash testPublicKeyRep)
+  (hash $ hashPubKeyRep testPublicKeyRep)
   
 
 -- See https://en.bitcoin.it/wiki/Technical_background_of_version_1_Bitcoin_addresses
@@ -133,6 +133,6 @@ payToPubkeyHashTest :: Assertion
 payToPubkeyHashTest = assertEqual
   "payToPubkeyHash should have correct output"
   (fst . decode $ "76a914010966776006953d5567439e5e39f86a0d273bee88ac")
-  (BL.toStrict . runPut . putScript . payToPubkeyHash . hashObject pubKeyHash $ testPublicKeyRep)
+  (BL.toStrict . runPut . putScript . payToPubkeyHash . hashPubKeyRep $ testPublicKeyRep)
 
 

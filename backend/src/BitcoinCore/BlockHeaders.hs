@@ -51,6 +51,9 @@ instance Show Nonce where
 
 makeLenses ''BlockHeader
 
+hashBlock :: BlockHeader -> Hash BlockHeader
+hashBlock = hashObject doubleSHA
+
 putBlockHeader :: BlockHeader -> Put
 putBlockHeader blockHeader = do
   put $ blockHeader^.blockVersion
@@ -128,7 +131,7 @@ instance Binary Nonce where
 verifyHeaders :: [BlockHeader] -> Bool
 verifyHeaders [newest] = True
 verifyHeaders (old:new:rest) =
-  (hashObject doubleSHA old == (new^.prevBlockHash)) &&
+  (hashBlock old == (new^.prevBlockHash)) &&
   verifyHeaders (new:rest)
 
 instance Arbitrary BlockHeader where

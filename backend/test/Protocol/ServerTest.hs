@@ -11,13 +11,12 @@ import Protocol.Server
 import Protocol.ConnectionM ( ConnectionContext(..))
 import General.InternalMessaging ( UIUpdaterMessage(..)
                                  , InternalMessage(..))
-import BitcoinCore.Transaction.Transactions (TxHash)
-import BitcoinCore.BlockHeaders (BlockHeader(..))
+import BitcoinCore.Transaction.Transactions (TxHash, hashTransaction)
+import BitcoinCore.BlockHeaders (BlockHeader(..), hashBlock)
 import BitcoinCore.Keys (Address(..))
 import General.Types (Network(..))
 import General.Persistence (PersistentUTXO(..))
 import General.Util (Addr(..), IP(..), Port(..))
-import General.Hash (hashObject, doubleSHA)
 import Protocol.Util (HasLastBlock(..), BlockIndex(..))
 
 import Control.Lens (makeLenses, (^.), (%~), (.~))
@@ -97,7 +96,7 @@ interpretConnTest mockHandles context conn =  case conn of
     interpretConnTest newMockHandles context n
   Free (GetBlockHeaderFromHash hash f) -> do
     let headers = mockHandles^.mockDB.blockHeaders
-        mIndex = findIndex (\header -> hashObject doubleSHA header == hash) headers
+        mIndex = findIndex (\header -> hashBlock header == hash) headers
         mBlockHeader = case mIndex of
           Nothing -> Nothing
           Just i -> Just (BlockIndex i, headers !! i)
@@ -107,7 +106,7 @@ interpretConnTest mockHandles context conn =  case conn of
         nHeaders = (drop i . take n) $ headers
     interpretConnTest mockHandles context (f nHeaders)
   Free (PersistTransaction tx n) -> do
-    let newMockHandles = mockDB.transactions %~ (++ [hashObject doubleSHA tx]) $ mockHandles
+    let newMockHandles = mockDB.transactions %~ (++ [hashTransaction tx]) $ mockHandles
     interpretConnTest newMockHandles context n
   Free (GetTransactionFromHash hash f) -> do
     let txs = mockHandles^.mockDB.transactions
