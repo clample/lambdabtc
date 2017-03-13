@@ -5,11 +5,10 @@ module BitcoinCore.Transaction.Transactions where
 import General.Util
 import BitcoinCore.Transaction.Script
 import BitcoinCore.Keys (serializePublicKeyRep, PublicKeyRep(..), PubKeyFormat(..))
-import General.Hash (Hash(..), hashObject)
+import General.Hash (Hash(..))
 
 import Prelude hiding (concat, reverse, sequence)
 import Data.ByteString (ByteString)
-import Data.ByteString.Base16 (encode)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 
@@ -26,7 +25,7 @@ import Crypto.Hash (hashWith)
 import Data.ByteArray (convert)
 
 import Test.QuickCheck.Arbitrary (Arbitrary(..))
-import Test.QuickCheck.Gen (choose, vectorOf, suchThat)
+import Test.QuickCheck.Gen (choose, suchThat)
 
 data Transaction = Transaction
   { _inputs :: [TxInput]

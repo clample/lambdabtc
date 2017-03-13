@@ -2,7 +2,7 @@
 module BitcoinCore.Transaction.Script where
 
 import BitcoinCore.Transaction.Optcodes (OPCODE(..))
-import BitcoinCore.Keys (PublicKeyRep, pubKeyHash, PubKeyHash(..))
+import BitcoinCore.Keys (PubKeyHash(..))
 
 import Prelude hiding (concat, reverse, sequence)
 import qualified  Data.ByteString as BS

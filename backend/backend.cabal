@@ -12,6 +12,7 @@ cabal-version:       >=1.10
 
 library
   hs-source-dirs:      src
+  ghc-options:         -Wunused-imports
   exposed-modules:     BitcoinCore.Keys
                      , General.Persistence
                      , General.Config

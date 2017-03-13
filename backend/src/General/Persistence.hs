@@ -6,7 +6,7 @@
 
 module General.Persistence where
 
-import General.Config (ConfigM, Config(..))
+import General.Config (ConfigM)
 import General.Types (HasPool(..))
 
 import Data.Text (Text)

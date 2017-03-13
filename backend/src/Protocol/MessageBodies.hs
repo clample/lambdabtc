@@ -35,7 +35,6 @@ import Foreign.Marshal.Utils (toBool)
 import Data.Word (Word64)
 
 import Test.QuickCheck.Arbitrary (Arbitrary(..))
-import Test.QuickCheck.Gen (choose, Gen)
 
 class HasBlockLocatorHashes t where
   blockLocatorHashes :: Lens' t [BlockHash]

@@ -19,14 +19,14 @@ import BitcoinCore.Transaction.Transactions ( Transaction(..)
                                             , signedTransaction)
 import qualified BitcoinCore.Transaction.Transactions as TX
 import BitcoinCore.Transaction.Script (payToPubkeyHash, getScript, Script(..))
-import General.InternalMessaging (InternalMessage(..), UIUpdaterMessage(..))
+import General.InternalMessaging (InternalMessage(..))
 
 import General.Persistence
 import General.Config
 import General.Types (HasNetwork(..), Network(..))
 import General.Util (maybeRead)
 import Crypto.PubKey.ECC.ECDSA (PrivateKey(..), PublicKey(..))
-import General.Hash (Hash(..), hashObject)
+import General.Hash (Hash(..))
 
 import Network.HTTP.Types.Status (internalServerError500, ok200, badRequest400)
 import Data.Aeson ( object

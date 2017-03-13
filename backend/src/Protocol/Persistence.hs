@@ -14,7 +14,6 @@ import BitcoinCore.Transaction.Transactions ( Transaction(..)
                                             , TxHash) 
 import Protocol.Util ( encodeBlockHeader
                      , decodeBlockHeader
-                     , HasLastBlock(..)
                      , BlockIndex(..)
                      , toDbKey
                      , fromDbKey)
@@ -24,7 +23,6 @@ import Database.Persist.Sql ( insertMany_
                             , count
                             , runSqlPool
                             , Filter
-                            , toSqlKey
                             , insert_
                             , selectList
                             , (==.)

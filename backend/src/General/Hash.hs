@@ -12,7 +12,7 @@ import Data.ByteString (ByteString)
 import Data.ByteString.Base16 (encode)
 import Data.Binary (Binary(..), Word32)
 import qualified Data.Binary as BIN
-import Data.Binary.Put (Put, putByteString, putWord32be, runPut)
+import Data.Binary.Put (Put, putByteString, putWord32be)
 import Data.Binary.Get (Get, getByteString, getWord32be, runGet, getRemainingLazyByteString)
 import Crypto.Hash.Algorithms (SHA256(..))
 import Crypto.Hash (hashWith)

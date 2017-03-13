@@ -38,7 +38,7 @@ import Crypto.OpenSSL.ECC (ecGroupFromCurveOID, EcGroup, ecPointFromOct, ecPoint
 import qualified Data.Text as T
 import Data.ByteArray (convert)
 import Data.Binary.Put (runPut, putWord8, putByteString)
-import Data.Binary.Get (runGet, getWord8, getByteString)
+import Data.Binary.Get (runGet, getByteString)
 import qualified Data.ByteString.Lazy as BL
 
 

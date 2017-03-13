@@ -11,7 +11,6 @@ import Data.Time.Clock.POSIX (POSIXTime)
 import Test.QuickCheck.Arbitrary (Arbitrary(..))
 import Test.QuickCheck.Gen (elements)
 import Database.Persist.Sql (ConnectionPool)
-import Data.Tuple (swap)
 
 class HasNetwork t where
   network :: Lens' t Network

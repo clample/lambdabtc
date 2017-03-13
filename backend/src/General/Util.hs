@@ -20,24 +20,21 @@ module General.Util
 
 import Prelude hiding (take)
 
-import General.Hash (doubleSHA, CheckSum(..), checksum)
+import General.Hash (CheckSum(..), checksum)
 
 import Data.Maybe (listToMaybe)
-import Data.ByteString (ByteString, take)
+import Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as BL
 import Data.ByteString.Base16 (decode, encode)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as Char8
 import qualified Data.Text as T
-import qualified Data.Text.Encoding as T
 import Data.Base58String.Bitcoin (fromBytes, toBytes, toText, fromText)
-import Numeric (showHex, readHex)
 import Data.Binary (Binary(..), Word8)
 import Data.Binary.Get(Get, getWord8, getWord16le, getWord32le, getWord64le, runGet, getByteString)
 import Data.Binary.Put (Put, putWord8, putWord16le, putWord32le, putWord64le, runPut, putByteString)
-import Data.Bits (setBit, shiftR, shiftL, (.|.))
+import Data.Bits (shiftR, shiftL, (.|.))
 import Data.List (unfoldr)
-import Data.Char (toUpper)
 import Data.Tuple (swap)
 
 import Test.QuickCheck.Arbitrary (Arbitrary(..))

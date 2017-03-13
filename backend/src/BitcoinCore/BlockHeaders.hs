@@ -2,14 +2,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 module BitcoinCore.BlockHeaders where
 
-import General.Util (VarInt(..))
 import General.Types (Network(..))
 import BitcoinCore.MerkleTrees (MerkleHash(..))
 import General.Hash (Hash(..), hashObject)
 
 import Data.ByteString (ByteString)
 import Data.Time.Clock.POSIX (POSIXTime)
-import Data.Binary.Put (Put, putWord32le, putByteString, runPut)
+import Data.Binary.Put (Put, putWord32le, putByteString)
 import Data.Binary.Get (Get, getWord32le, getByteString)
 import Data.Binary (Binary(..))
 import Data.ByteString.Base16 (decode, encode)
@@ -18,7 +17,6 @@ import Control.Lens (makeLenses, (^.))
 import Test.QuickCheck.Arbitrary (Arbitrary(..))
 import Test.QuickCheck.Gen (choose, vectorOf, Gen)
 import qualified Data.ByteString as BS
-import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Char8 as Char8
 
 data BlockHeader = BlockHeader

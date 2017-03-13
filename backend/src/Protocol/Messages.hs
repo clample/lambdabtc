@@ -7,7 +7,7 @@ import General.Util (reverseLookup, unroll, Endian(..))
 import General.Types (HasNetwork(..), Network(..))
 import Protocol.MessageBodies
 import BitcoinCore.BloomFilter (Filter(..), FilterContext(..), Tweak(..))
-import General.Hash (CheckSum(..), checksum)
+import General.Hash (checksum)
 
 import qualified Data.ByteString as BS
 import Data.Binary.Put (Put, putWord32le, putByteString, runPut)
@@ -15,12 +15,9 @@ import Data.Binary (Binary(..))
 import qualified Data.ByteString.Lazy as BL
 import Control.Lens ((^.), makeLenses, over, mapped, _2)
 import Data.Binary.Get (Get, getByteString, getWord32le, getWord8, isolate, bytesRead)
-import Data.ByteString.Base16 (encode)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as Char8
-import Data.Maybe (fromJust, fromMaybe)
-import Data.Char (toUpper)
-import Data.Tuple (swap)
+import Data.Maybe (fromMaybe)
 
 import Test.QuickCheck.Arbitrary (Arbitrary(..), vector, arbitraryBoundedEnum)
 import Test.QuickCheck.Gen (oneof, Gen, choose, vectorOf)

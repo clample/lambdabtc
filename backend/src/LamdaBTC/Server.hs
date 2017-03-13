@@ -13,11 +13,7 @@ import Web.Scotty.Trans ( ScottyT
                         , get)
 import Control.Monad.Reader (runReaderT)
 import Control.Lens ((^.))
-import Network.Socket (withSocketsDo, accept)
-import Network.WebSockets ( makeListenSocket
-                          , makePendingConnection
-                          , defaultConnectionOptions
-                          , acceptRequest
+import Network.WebSockets ( acceptRequest
                           , runServer
                           , Connection)
 import Control.Concurrent.STM (atomically)
