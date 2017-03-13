@@ -50,7 +50,7 @@ import General.Types ( HasNetwork(..)
                      , HasPool(..))
 import General.InternalMessaging (InternalMessage(..), UIUpdaterMessage(..))
 import General.Util (Addr(..))
-import General.Hash (Hash(..), doubleSHA)
+import General.Hash (Hash(..))
 
 import Network.Socket (Socket)
 import Data.Time.Clock.POSIX (getPOSIXTime)

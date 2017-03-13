@@ -1,17 +1,19 @@
+{-# LANGUAGE OverloadedStrings #-}
 module BitcoinCore.KeysTest where
 
 import TestUtil
 import BitcoinCore.Keys
-import General.Util
 import General.Types (Network(..))
+import General.Hash (Hash(..))
+
 import Crypto.PubKey.ECC.ECDSA (PrivateKey(..), PublicKey(..))
 import Crypto.PubKey.ECC.Types (ecc_n, common_curve, getCurveByName, CurveName(SEC_p256k1))
-import Crypto.PubKey.ECC.Generate (generateQ)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
-import qualified Data.ByteString.Char8 as Char8
 import Data.Base58String.Bitcoin (fromText, toBytes)
 import qualified Data.Binary as BIN
+import Data.ByteString.Base16 (decode)
+import Data.Base58String.Bitcoin (toText, b58String)
 
 instance Arbitrary PrivateKey where
   arbitrary = do
@@ -81,3 +83,33 @@ prop_addressLength pubKeyRep network =
   where
     (Address b58) = getAddress pubKeyRep network
     addressLength = (BS.length . toBytes . fromText) b58
+
+pubKeyHashTest = testCase "Hash public key correctly" pubKeyHashAssert
+
+pubKeyHashAssert :: Assertion
+pubKeyHashAssert = assertEqual
+  "public key hashing should give the expected output"
+  (fst . decode $ "010966776006953D5567439E5E39F86A0D273BEE")
+  (hash $ hashPubKeyRep testPublicKeyRep)
+
+addressTest = testCase "base58check address" addressAssert
+
+-- See https://en.bitcoin.it/wiki/Technical_background_of_version_1_Bitcoin_addresses
+addressAssert :: Assertion
+addressAssert = assertEqual
+  "We should derive the correct address from a given public key"
+  (Address $ toText $ b58String "16UwLL9Risc3QfPqBUvKofHmBQ7wMtjvM")
+  (getAddress testPublicKeyRep MainNet)
+
+wifPrivateKeyTest = testCase "WIF private key" $ wifPrivateKeyAssert testDataWIFPrivateKey
+
+wifPrivateKeyAssert :: (PrivateKey, WIFPrivateKey) -> Assertion
+wifPrivateKeyAssert (input, expected) = assertEqual
+  "Private key should be correctly converted to WIF"
+  expected
+  (getWIFPrivateKey input)
+  
+testDataWIFPrivateKey =
+  ( deserializePrivateKey . fst . decode $ "0C28FCA386C7A227600B2FE50B7CAE11EC86D3BF1FBE471BE89827E19D72AA1D" -- INPUT DATA
+  , WIF "5HueCGU8rMjxEXxiPuD5BDku4MkFqeZyd4dZ1jvhTVqvbTLvyTJ" -- EXPECTED OUTPUT
+  ) 

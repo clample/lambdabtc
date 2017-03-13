@@ -93,6 +93,7 @@ test-suite backend-test
                      , Protocol.MessagesTest
                      , TestUtil
                      , BitcoinCore.Transaction.TransactionsTest
+                     , BitcoinCore.Transaction.ScriptTest
                      , Protocol.PersistenceTest
                      , Protocol.ServerTest
                      , Protocol.UtilTest

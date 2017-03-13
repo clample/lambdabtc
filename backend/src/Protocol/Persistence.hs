@@ -7,7 +7,7 @@ import General.Persistence ( PersistentBlockHeader(..)
                            , PersistentUTXO
                            , PersistentTransaction(..))
 import General.Types (HasNetwork(..), HasPool(..))
-import General.Hash (Hash(..), doubleSHA)
+import General.Hash (Hash(..))
 import BitcoinCore.Keys (Address(..))
 import BitcoinCore.BlockHeaders (genesisBlock, BlockHeader(..), BlockHash(..))
 import BitcoinCore.Transaction.Transactions ( Transaction(..)

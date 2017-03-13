@@ -8,6 +8,7 @@ import BitcoinCore.Transaction.Optcodes
 import BitcoinCore.Keys
 import BitcoinCore.KeysTest
 import BitcoinCore.Transaction.TransactionsTest
+import BitcoinCore.Transaction.ScriptTest
 import Protocol.PersistenceTest
 import Protocol.MessagesTest
 import BitcoinCore.BlockHeadersTest
@@ -32,25 +33,20 @@ main = defaultMain tests
 
 tests =
   [
-    testGroup "Key hashing tests" [
-      testCase "Hash public key correctly" pubKeyHashTest,
-      testCase "base58check address" addressTest,
-      testCase "WIF Private key"
-        $ testWIFPrivateKey testDataWIFPrivateKey
-      ],
     testGroup "Script tests" [
-      testCase "optcode only script test"
-        optCodeScriptTest,
-      testCase "payToPubkeyHash test"
-        payToPubkeyHashTest
+      optCodeScriptTest,
+      payToPubkeyHashTest
       ],
-    testGroup "QuickCheck Key Tests" [
+    testGroup "Key Tests" [
       privateKeyInvertible,
       publicKeyInvertible,
       privateKeyInvertibleWIF,
       uncompressedPubKeyLength,
       compressedPubKeyLength,
-      addressLength
+      addressLength,
+      pubKeyHashTest,
+      addressTest,
+      wifPrivateKeyTest
       ],
     testGroup "QuickCheck Transaction Tests" [
       transactionInvertible,
@@ -86,53 +82,3 @@ tests =
       base58CheckInvertible
       ]
   ]
-
--- This key rep is from https://en.bitcoin.it/wiki/Technical_background_of_version_1_Bitcoin_addresses
-testPublicKeyRep :: PublicKeyRep
-testPublicKeyRep = BIN.decode lazyBS
-  where
-    lazyBS = BL.fromChunks [bs]
-    bs = fst . decode $ 
-      "0450863AD64A87AE8A2FE83C1AF1A8403CB53F53E486D8511DAD8A04887E5B23522CD470243453A299FA9E77237716103ABC11A1DF38855ED6F2EE187E9C582BA6"
-
-
-pubKeyHashTest :: Assertion
-pubKeyHashTest = assertEqual
-  "public key hashing should give the expected output"
-  (fst . decode $ "010966776006953D5567439E5E39F86A0D273BEE")
-  (hash $ hashPubKeyRep testPublicKeyRep)
-  
-
--- See https://en.bitcoin.it/wiki/Technical_background_of_version_1_Bitcoin_addresses
-addressTest :: Assertion
-addressTest = assertEqual
-  "We should derive the correct address from a given public key"
-  (Address $ toText $ b58String "16UwLL9Risc3QfPqBUvKofHmBQ7wMtjvM")
-  (getAddress testPublicKeyRep MainNet)
-
-testWIFPrivateKey :: (PrivateKey, WIFPrivateKey) -> Assertion
-testWIFPrivateKey (input, expected) = assertEqual
-  "Private key should be correctly converted to WIF"
-  expected
-  (getWIFPrivateKey input)
-  
-testDataWIFPrivateKey =
-  ( deserializePrivateKey . fst . decode $ "0C28FCA386C7A227600B2FE50B7CAE11EC86D3BF1FBE471BE89827E19D72AA1D" -- INPUT DATA
-  , WIF "5HueCGU8rMjxEXxiPuD5BDku4MkFqeZyd4dZ1jvhTVqvbTLvyTJ" -- EXPECTED OUTPUT
-  ) 
-
-
-optCodeScriptTest :: Assertion
-optCodeScriptTest = assertEqual
-  "Simple script should compile correctly"
-  (fst . decode $ "76a988ac")
-  -- expected output from https://en.bitcoin.it/wiki/Script
-  (BL.toStrict . runPut . putScript $ Script [OP OP_DUP, OP OP_HASH160, OP OP_EQUALVERIFY, OP OP_CHECKSIG])
-
-payToPubkeyHashTest :: Assertion
-payToPubkeyHashTest = assertEqual
-  "payToPubkeyHash should have correct output"
-  (fst . decode $ "76a914010966776006953d5567439e5e39f86a0d273bee88ac")
-  (BL.toStrict . runPut . putScript . payToPubkeyHash . hashPubKeyRep $ testPublicKeyRep)
-
-
