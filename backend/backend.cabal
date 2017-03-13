@@ -41,13 +41,11 @@ library
                      , cryptonite == 0.19
                      , cryptonite-openssl == 0.5
                      , base58string == 0.10.0
-                     , word8 == 0.1.2
                      , base16-bytestring >= 0.1.1 && < 0.1.2
                      , text == 1.2.2.1
                      , persistent == 2.6
                      , persistent-sqlite == 2.6
                      , persistent-template == 2.5.1.6
-                     , conduit == 1.2.8
                      , scotty ==0.11.*
                      , warp ==3.*
                      , data-default ==0.7.*
@@ -58,9 +56,6 @@ library
                      , aeson >=0.7 && <0.12
                      , transformers == 0.5.*
                      , monad-logger ==0.3.*
-                     , containers ==0.5.7.*
-                     , asn1-encoding ==0.9.4
-                     , megaparsec ==5.0.1
                      , lens ==4.14
                      , time ==1.6.*
                      , network ==2.6.3.1
@@ -72,11 +67,9 @@ library
                      , stm-conduit ==3.0.*
                      , stm ==2.4.4.*
                      , memory ==0.13
-                     , concurrent-extra == 0.7.*
                      , split ==0.2.3.*
                      , murmur3 == 1.0.*
                      , stm-chans ==3.0.0.*
-                     , resource-pool ==0.2.3.*
                      , websockets ==0.9.*
                      , free ==4.12.*
   default-language:    Haskell2010
@@ -87,25 +80,6 @@ executable backend-exe
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   build-depends:       base
                      , backend
-                     , bytestring >= 0.10 && < 0.11
-                     , cryptonite == 0.19
-                     , base58string == 0.10.0
-                     , word8 == 0.1.2
-                     , base16-bytestring >= 0.1.1 && < 0.1.2
-                     , text == 1.2.2.1
-                     , persistent == 2.6
-                     , persistent-sqlite == 2.6
-                     , persistent-template == 2.5.1.6
-                     , scotty ==0.11.*
-                     , warp ==3.*
-                     , data-default ==0.7.*
-                     , mtl ==2.*
-                     , wai ==3.2.*
-                     , wai-extra ==3.0.*
-                     , http-types ==0.9.*
-                     , aeson >=0.7 && <0.12
-                     , transformers == 0.5.*
-                     , monad-logger ==0.3.*
                      , lens ==4.14
   default-language:    Haskell2010
 
@@ -133,10 +107,8 @@ test-suite backend-test
                      , bytestring >= 0.10 && < 0.11
                      , cryptonite == 0.19
                      , base58string == 0.10.0
-                     , word8 == 0.1.2
                      , base16-bytestring >= 0.1.1 && < 0.1.2
                      , text == 1.2.2.1
-                     , megaparsec ==5.0.1
                      , lens ==4.14
                      , time ==1.6.*
                      , binary ==0.8.3.*
