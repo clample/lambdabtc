@@ -22,6 +22,7 @@ module BitcoinCore.Keys
 
 import General.Util
 import General.Types (Network(..))
+import General.Hash (Hash(..), hashObject, pubKeyHash)
 
 import Prelude hiding (take, concat)
 import Data.ByteString (ByteString)
@@ -37,8 +38,9 @@ import Crypto.Hash (hashWith)
 import Crypto.OpenSSL.ECC (ecGroupFromCurveOID, EcGroup, ecPointFromOct, ecPointToAffineGFp)
 import qualified Data.Text as T
 import Data.ByteArray (convert)
-import Data.Binary.Put (runPut, putWord8, putByteString)
-import Data.Binary.Get (runGet, getByteString)
+import Data.Binary (Binary(..))
+import Data.Binary.Put (runPut, putWord8, putByteString, Put)
+import Data.Binary.Get (runGet, getWord8, getByteString, Get, lookAhead)
 import qualified Data.ByteString.Lazy as BL
 
 
@@ -56,8 +58,7 @@ data WIFPrivateKey  = WIF T.Text
 data Address = Address T.Text
   deriving (Eq, Show)
 
-newtype PubKeyHash = PubKeyHash ByteString
-  deriving (Eq, Show)
+type PubKeyHash = Hash PublicKeyRep
 
 -- Bitcoin uses a specefic eliptic curve, secp256k1,
 -- to generate public private key pairs
@@ -84,14 +85,14 @@ getPubKey privKey =
 getAddress :: PublicKeyRep  -> Network -> Address 
 getAddress pubKeyRep network =
   Address $ encodeBase58Check (addressPrefix network) payload
-  where payload = Payload $ hash
-        PubKeyHash hash = pubKeyHash pubKeyRep
+  where payload = Payload $ hashBS'
+        hashBS' = hash $ hashObject pubKeyHash pubKeyRep
         addressPrefix MainNet = Prefix 0x00
         addressPrefix TestNet3 = Prefix 0x6F
 
 addressToPubKeyHash :: Address -> PubKeyHash
 addressToPubKeyHash (Address address) =
-  PubKeyHash hash
+  Hash hash
   where
     (_, Payload hash, _) = decodeBase58Check address
 
@@ -128,25 +129,21 @@ deserializePrivateKey =
   where
     getLazyBS bs = BL.fromChunks [bs]
 
-pubKeyHash :: PublicKeyRep -> PubKeyHash
-pubKeyHash =
-  PubKeyHash
-  . convert
-  . hashWith RIPEMD160
-  . hashWith SHA256
-  . serializePublicKeyRep
+instance Binary PublicKeyRep where
+  get = deserializePublicKeyRep
+  put = serializePublicKeyRep
 
-serializePublicKeyRep :: PublicKeyRep -> ByteString
+serializePublicKeyRep :: PublicKeyRep -> Put
 
 -- See: https://github.com/bitcoinbook/bitcoinbook/blob/first_edition/ch04.asciidoc#public-key-formats
-serializePublicKeyRep (PublicKeyRep Uncompressed pubKey) = BL.toStrict . runPut $ do
+serializePublicKeyRep (PublicKeyRep Uncompressed pubKey) =  do
   putWord8  4
   putByteString . unrollWithPad BE 32 $ x
   putByteString . unrollWithPad BE 32 $ y
   where Point x y = public_q pubKey
 
 -- See: https://github.com/bitcoinbook/bitcoinbook/blob/first_edition/ch04.asciidoc#compressed-public-keys
-serializePublicKeyRep (PublicKeyRep Compressed pubKey) = BL.toStrict . runPut $ do
+serializePublicKeyRep (PublicKeyRep Compressed pubKey) = do
   putWord8 prefix
   putByteString . unrollWithPad BE 32 $ x
   where
@@ -156,9 +153,23 @@ serializePublicKeyRep (PublicKeyRep Compressed pubKey) = BL.toStrict . runPut $ 
              else 3
     isEven n = n `mod` 2 == 0 
 
-deserializePublicKeyRep :: ByteString -> Either String PublicKey
-deserializePublicKeyRep bs = do
-  ecPoint <- ecPointFromOct btcEcGroup (bs)
-  let (x, y) = ecPointToAffineGFp btcEcGroup ecPoint
-      btcPubKey = PublicKey btcCurve (Point x y)
-  return btcPubKey
+deserializePublicKeyRep :: Get PublicKeyRep
+deserializePublicKeyRep = do
+  prefix <- lookAhead getWord8
+  let pubKeyFormat = case prefix of
+        0x04 -> Uncompressed
+        0x03 -> Compressed 
+        0x02 -> Compressed 
+  bs <- getByteString $ repLength pubKeyFormat
+  case getPubKey bs of
+    Left error -> fail $ "failed deserializing public key: " ++ error
+    Right pubKey -> return $ PublicKeyRep pubKeyFormat pubKey
+  where
+    getPubKey :: ByteString -> Either String PublicKey
+    getPubKey bs = do
+      ecPoint <- ecPointFromOct btcEcGroup bs
+      let (x, y) = ecPointToAffineGFp btcEcGroup ecPoint
+          btcPubKey = PublicKey btcCurve (Point x y)
+      return btcPubKey
+    repLength Uncompressed = 65
+    repLength Compressed = 33

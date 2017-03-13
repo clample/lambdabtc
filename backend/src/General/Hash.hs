@@ -4,6 +4,7 @@ module General.Hash
   , doubleSHA
   , CheckSum(..)
   , checksum
+  , pubKeyHash
   ) where
 
 import qualified Data.ByteString as BS
@@ -14,7 +15,7 @@ import Data.Binary (Binary(..), Word32)
 import qualified Data.Binary as BIN
 import Data.Binary.Put (Put, putByteString, putWord32be)
 import Data.Binary.Get (Get, getByteString, getWord32be, runGet, getRemainingLazyByteString)
-import Crypto.Hash.Algorithms (SHA256(..))
+import Crypto.Hash.Algorithms (SHA256(..), RIPEMD160(..))
 import Crypto.Hash (hashWith)
 import Data.ByteArray (convert)
 
@@ -34,21 +35,32 @@ instance Binary (Hash a) where
 
 putHash :: Hash a -> Put
 putHash (Hash hash') =
-  putByteString . BS.reverse $ hash'
+  putByteString $ hash'
 
 getHash :: Get (Hash a)
 getHash =
-  Hash . BS.reverse <$> getByteString 32
+  Hash <$> getByteString 32
 
-hashObject :: Binary a => a -> Hash a
-hashObject b = Hash $
-  BS.reverse . doubleSHA . BL.toStrict . BIN.encode $ b
+hashObject :: Binary a => HashFunction -> a -> Hash a
+hashObject (HashFunction hashF) b = Hash $
+  hashF . BL.toStrict . BIN.encode $ b
 
 instance Arbitrary (Hash a) where
   arbitrary = Hash . BS.pack <$> vectorOf 32 arbitrary
 
-doubleSHA :: ByteString -> ByteString
-doubleSHA = convert . hashWith SHA256 . hashWith SHA256
+newtype HashFunction = HashFunction (ByteString -> ByteString)
+
+doubleSHA :: HashFunction
+doubleSHA = HashFunction
+  $ convert
+  . hashWith SHA256
+  . hashWith SHA256
+
+pubKeyHash :: HashFunction
+pubKeyHash = HashFunction
+  $ convert
+  . hashWith RIPEMD160
+  . hashWith SHA256
 
 newtype CheckSum = CheckSum Word32
   deriving (Show, Eq)
@@ -72,4 +84,5 @@ checksum bs = flip runGet hashBS $
     getRemainingLazyByteString
     return cs
   where
-    hashBS = BL.fromChunks [doubleSHA bs]
+    hashBS = BL.fromChunks [doubleSHA' bs]
+    HashFunction doubleSHA' = doubleSHA

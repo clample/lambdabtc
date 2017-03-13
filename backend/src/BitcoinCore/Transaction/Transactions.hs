@@ -16,6 +16,7 @@ import Crypto.PubKey.ECC.ECDSA (signWith, Signature(..), PrivateKey(..), PublicK
 import Crypto.Hash.Algorithms (SHA256(..))
 
 import Control.Lens (makeLenses, (^.), mapped, set)
+import qualified Data.Binary as BIN
 import Data.Binary.Put (Put, putWord8, putWord32le, putWord64le, putByteString, runPut)
 import Data.Binary.Get (Get, getWord32le, getByteString, getWord64le, getWord8)
 import Data.Binary (Binary(..), Word32)
@@ -208,7 +209,7 @@ getTxValue =
 scriptSig :: Signature -> PublicKey -> Script
 scriptSig signature pubKey = Script [Txt der, Txt compressedPubkey]
   where der = (BL.toStrict . runPut $ putDerSignature signature)
-        compressedPubkey = serializePublicKeyRep
+        compressedPubkey = BL.toStrict . BIN.encode
           $ PublicKeyRep Compressed pubKey
           -- TODO: This scriptSig will only be valid for
           -- pay to pub key hash scripts where the compressed pub key is hashed

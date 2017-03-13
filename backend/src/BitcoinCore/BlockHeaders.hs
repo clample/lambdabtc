@@ -4,7 +4,7 @@ module BitcoinCore.BlockHeaders where
 
 import General.Types (Network(..))
 import BitcoinCore.MerkleTrees (MerkleHash(..))
-import General.Hash (Hash(..), hashObject)
+import General.Hash (Hash(..), hashObject, doubleSHA)
 
 import Data.ByteString (ByteString)
 import Data.Time.Clock.POSIX (POSIXTime)
@@ -128,7 +128,7 @@ instance Binary Nonce where
 verifyHeaders :: [BlockHeader] -> Bool
 verifyHeaders [newest] = True
 verifyHeaders (old:new:rest) =
-  (hashObject old == (new^.prevBlockHash)) &&
+  (hashObject doubleSHA old == (new^.prevBlockHash)) &&
   verifyHeaders (new:rest)
 
 instance Arbitrary BlockHeader where

@@ -6,7 +6,6 @@ import General.Types (Network(..))
 import BitcoinCore.Transaction.Script
 import BitcoinCore.Transaction.Optcodes
 import BitcoinCore.Keys
-import BitcoinCore.Transaction.Transactions
 import BitcoinCore.KeysTest
 import BitcoinCore.Transaction.TransactionsTest
 import Protocol.PersistenceTest
@@ -16,17 +15,16 @@ import Protocol.ServerTest
 import Protocol.UtilTest
 import General.TypesTest
 import General.UtilTest
+import General.Hash (hashObject, pubKeyHash, Hash(..))
 
 import Test.Framework (defaultMain, testGroup)
 import Test.Framework.Providers.HUnit (testCase)
 import Test.HUnit
-import Crypto.PubKey.ECC.ECDSA (PublicKey(..), PrivateKey(..))
-import Crypto.PubKey.ECC.Types (Curve, getCurveByName, Point(..), CurveName(SEC_p256k1))
-import Data.ByteString (length)
+import Crypto.PubKey.ECC.ECDSA (PrivateKey(..))
 import qualified Data.ByteString.Lazy as BL
-import Data.Base58String.Bitcoin (Base58String, toText, fromBytes, toBytes, b58String, fromText)
-import qualified Data.Text as T
-import Data.ByteString.Base16 (decode, encode)
+import Data.Base58String.Bitcoin (toText, b58String)
+import Data.ByteString.Base16 (decode)
+import qualified Data.Binary as BIN
 import Data.Binary.Put (runPut)
 
 main :: IO ()
@@ -90,24 +88,19 @@ tests =
   ]
 
 -- This key rep is from https://en.bitcoin.it/wiki/Technical_background_of_version_1_Bitcoin_addresses
-testPublicKey :: PublicKey
-testPublicKey =
-  case eitherPubKey of
-    Left err -> error err
-    Right pubKey -> pubKey
+testPublicKeyRep :: PublicKeyRep
+testPublicKeyRep = BIN.decode lazyBS
   where
-    eitherPubKey =
-      deserializePublicKeyRep . fst . decode $ 
+    lazyBS = BL.fromChunks [bs]
+    bs = fst . decode $ 
       "0450863AD64A87AE8A2FE83C1AF1A8403CB53F53E486D8511DAD8A04887E5B23522CD470243453A299FA9E77237716103ABC11A1DF38855ED6F2EE187E9C582BA6"
 
 
 pubKeyHashTest :: Assertion
 pubKeyHashTest = assertEqual
   "public key hashing should give the expected output"
-  (PubKeyHash . fst . decode $ "010966776006953D5567439E5E39F86A0D273BEE")
-  (pubKeyHash pubKeyRep)
-  where
-    pubKeyRep = PublicKeyRep Uncompressed testPublicKey
+  (fst . decode $ "010966776006953D5567439E5E39F86A0D273BEE")
+  (hash $ hashObject pubKeyHash testPublicKeyRep)
   
 
 -- See https://en.bitcoin.it/wiki/Technical_background_of_version_1_Bitcoin_addresses
@@ -115,9 +108,7 @@ addressTest :: Assertion
 addressTest = assertEqual
   "We should derive the correct address from a given public key"
   (Address $ toText $ b58String "16UwLL9Risc3QfPqBUvKofHmBQ7wMtjvM")
-  (getAddress pubKeyRep MainNet)
-  where
-    pubKeyRep = (PublicKeyRep Uncompressed testPublicKey)
+  (getAddress testPublicKeyRep MainNet)
 
 testWIFPrivateKey :: (PrivateKey, WIFPrivateKey) -> Assertion
 testWIFPrivateKey (input, expected) = assertEqual
@@ -142,10 +133,6 @@ payToPubkeyHashTest :: Assertion
 payToPubkeyHashTest = assertEqual
   "payToPubkeyHash should have correct output"
   (fst . decode $ "76a914010966776006953d5567439e5e39f86a0d273bee88ac")
-  (BL.toStrict . runPut . putScript . payToPubkeyHash . pubKeyHash $ PublicKeyRep Uncompressed pubKey)
-  where
-    pubKey = case eitherPubKey of
-               Right p -> p
-               Left err -> error err
-    eitherPubKey = deserializePublicKeyRep . fst . decode $ "0450863AD64A87AE8A2FE83C1AF1A8403CB53F53E486D8511DAD8A04887E5B23522CD470243453A299FA9E77237716103ABC11A1DF38855ED6F2EE187E9C582BA6"
+  (BL.toStrict . runPut . putScript . payToPubkeyHash . hashObject pubKeyHash $ testPublicKeyRep)
+
 

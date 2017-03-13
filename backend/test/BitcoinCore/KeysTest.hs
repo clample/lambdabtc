@@ -8,8 +8,10 @@ import Crypto.PubKey.ECC.ECDSA (PrivateKey(..), PublicKey(..))
 import Crypto.PubKey.ECC.Types (ecc_n, common_curve, getCurveByName, CurveName(SEC_p256k1))
 import Crypto.PubKey.ECC.Generate (generateQ)
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Char8 as Char8
 import Data.Base58String.Bitcoin (fromText, toBytes)
+import qualified Data.Binary as BIN
 
 instance Arbitrary PrivateKey where
   arbitrary = do
@@ -42,13 +44,8 @@ publicKeyInvertible = testProperty
   prop_publicKeyInvertible
 
 prop_publicKeyInvertible :: PublicKeyRep -> Bool
-prop_publicKeyInvertible pubKeyRep@(PublicKeyRep format pubKey) =
-  pubKey == deserializedPubKey
-  where
-    deserializedPubKey =
-      case (deserializePublicKeyRep . serializePublicKeyRep) pubKeyRep of
-        Left err -> error err
-        Right dpk -> dpk
+prop_publicKeyInvertible pubKeyRep =
+  (BIN.decode . BIN.encode) pubKeyRep == pubKeyRep
 
 privateKeyInvertibleWIF = testProperty
   "Private key should be invertible between WIF and private key"
@@ -64,7 +61,7 @@ uncompressedPubKeyLength = testProperty
 
 prop_uncompressedPubKeyLength :: PublicKey -> Bool
 prop_uncompressedPubKeyLength pubKey = 
-  (BS.length . serializePublicKeyRep) (PublicKeyRep Uncompressed pubKey) == 65
+  (BL.length . BIN.encode) (PublicKeyRep Uncompressed pubKey) == 65
   
 compressedPubKeyLength = testProperty
   "Compressed public key should always be 33 bytes"
@@ -72,7 +69,7 @@ compressedPubKeyLength = testProperty
 
 prop_compressedPubKeyLength :: PublicKey -> Bool
 prop_compressedPubKeyLength pubKey = 
-  (BS.length . serializePublicKeyRep) (PublicKeyRep Compressed pubKey) == 33
+  (BL.length . BIN.encode) (PublicKeyRep Compressed pubKey) == 33
 
 addressLength = testProperty
   "Address should always be 25 bytes"

@@ -29,7 +29,7 @@ import BitcoinCore.BlockHeaders ( BlockHash(..)
                                 )
 import BitcoinCore.BloomFilter ( NFlags(..)
                                , defaultFilterWithElements)
-import BitcoinCore.Keys (PubKeyHash(..), addressToPubKeyHash, Address(..))
+import BitcoinCore.Keys (addressToPubKeyHash, Address(..))
 import BitcoinCore.Inventory (InventoryVector(..), ObjectType(..))
 import BitcoinCore.Transaction.Transactions ( Value(..)
                                             , Transaction(..)
@@ -48,7 +48,7 @@ import General.Types ( HasNetwork(..)
                      , HasPool(..))
 import General.InternalMessaging (InternalMessage(..), UIUpdaterMessage(..))
 import General.Util (Addr(..))
-import General.Hash (Hash(..), hashObject)
+import General.Hash (Hash(..), hashObject, doubleSHA)
 
 import Network.Socket (Socket)
 import Data.Time.Clock.POSIX (getPOSIXTime)
@@ -345,13 +345,12 @@ handleResponse' (Message (TxMessageBody message) _) = do
     persistTransaction' (message^.transaction)
   where
     addUTXOs = do
-      let getPubKeyHashBS (PubKeyHash bs) = bs
-      pubKeyHashes <- map (getPubKeyHashBS . addressToPubKeyHash) <$> getAllAddresses'
+      pubKeyHashes <- map (hash . addressToPubKeyHash) <$> getAllAddresses'
       let indexedPubkeyHashes = zip [1..] pubKeyHashes
           persistentUTXOs = getUTXOS indexedPubkeyHashes (message^.transaction)
       persistUTXOs' persistentUTXOs
     isTransactionHandled' = do
-      let txHash = hashObject $ message^.transaction
+      let txHash = hashObject doubleSHA $ message^.transaction
       mTx <- getTransactionFromHash' txHash
       return $ case mTx of
         Nothing -> False
@@ -442,7 +441,7 @@ queryBlockLocatorHashes' lastBlock' =
       mBlockHeader <- getBlockHeader' i
       case mBlockHeader of
         Nothing -> fail $ "Unable to get block header with index " ++ show i
-        Just header -> return . hashObject $ header
+        Just header -> return . hashObject doubleSHA $ header
 
 isNewSync' :: Connection' Bool
 isNewSync' = (== []) <$> getAllAddresses'
@@ -469,8 +468,7 @@ sendVersion' = do
 setFilter' :: Connection' ()
 setFilter' = do
   context <- getContext'
-  let getPubKeyHashBS (PubKeyHash bs) = bs
-  pubKeyHashes <- map (getPubKeyHashBS . addressToPubKeyHash) <$> getAllAddresses'
+  pubKeyHashes <- map (hash . addressToPubKeyHash) <$> getAllAddresses'
   let
     (filter', filterContext') = defaultFilterWithElements pubKeyHashes
     filterloadMessage = Message
@@ -488,10 +486,9 @@ handleInternalMessage' (SendTX transaction') = do
 
 handleInternalMessage' (AddAddress address) = do
   context <- getContext'
-  let getPubKeyHashBS (PubKeyHash bs) = bs
-      body = FilteraddMessageBody
+  let body = FilteraddMessageBody
            . FilteraddMessage
-           . getPubKeyHashBS
+           . hash
            . addressToPubKeyHash
            $ address
       messageContext = MessageContext (context^.network)

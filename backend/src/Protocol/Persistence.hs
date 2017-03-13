@@ -7,7 +7,7 @@ import General.Persistence ( PersistentBlockHeader(..)
                            , PersistentUTXO
                            , PersistentTransaction(..))
 import General.Types (HasNetwork(..), HasPool(..))
-import General.Hash (Hash(..), hashObject)
+import General.Hash (Hash(..), hashObject, doubleSHA)
 import BitcoinCore.Keys (Address(..))
 import BitcoinCore.BlockHeaders (genesisBlock, BlockHeader(..), BlockHash(..))
 import BitcoinCore.Transaction.Transactions ( Transaction(..)
@@ -87,7 +87,7 @@ persistTransaction :: ConnectionPool -> Transaction -> IO ()
 persistTransaction pool transaction =
   runSqlPool (insert_ persistentTransaction) pool
   where persistentTransaction = PersistentTransaction hash'
-        hash' = hash . hashObject $ transaction
+        hash' = hash . hashObject doubleSHA $ transaction
 
 getBlockWithIndex :: ConnectionPool -> BlockIndex -> IO (Maybe BlockHeader)
 getBlockWithIndex pool i = (fmap . fmap) decodeBlockHeader $
