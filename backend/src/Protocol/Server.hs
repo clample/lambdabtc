@@ -5,18 +5,7 @@ import Protocol.Messages (parseMessage, Message(..), MessageBody(..), MessageCon
 import Protocol.MessageBodies 
 import Protocol.Network (connectToPeer, sock, addr)
 import Protocol.Util (getUTXOS, HasLastBlock(..), BlockIndex(..))
-import Protocol.Persistence ( getLastBlock
-                            , persistGenesisBlock
-                            , persistHeaders
-                            , persistHeader
-                            , getBlockWithIndex
-                            , getAllAddresses
-                            , persistUTXOs
-                            , persistTransaction
-                            , getBlockHeaderFromHash
-                            , nHeadersSinceKey
-                            , getTransactionFromHash
-                            , deleteHeaders)
+import qualified Protocol.Persistence as Persistence
 import Protocol.ConnectionM ( ConnectionContext(..)
                             , IOHandlers(..)
                             , peerSocket
@@ -80,7 +69,7 @@ import Data.Maybe (catMaybes)
 
 connectTestnet :: Config -> IO () 
 connectTestnet config = do
-  persistGenesisBlock config
+  Persistence.persistGenesisBlock config
   (context, ioHandlers) <- getConnectionContext config
   forkIO $ listener (ioHandlers^.listenChan) (ioHandlers^.peerSocket)
   forkIO $ writer (ioHandlers^.writerChan) (ioHandlers^.peerSocket)
@@ -94,7 +83,7 @@ getConnectionContext config = do
   listenChan' <- atomically $ newTBMChan 16
   time' <- getPOSIXTime
   randGen' <- getStdGen
-  lastBlock' <- getLastBlock (config^.pool)
+  lastBlock' <- Persistence.getLastBlock (config^.pool)
   let connectionContext = ConnectionContext
         { _connectionContextVersion = 60002
         , _connectionContextLastBlock = lastBlock'
@@ -159,10 +148,6 @@ connectionLoop ioHandlers context = do
     Just (Just internalMessage) ->
       interpretConnProd ioHandlers context (handleInternalMessage' internalMessage)
   connectionLoop ioHandlers context
-
-----------
--- type KeyId = Integer
-  -- KeyId is 1 based
 
 data ConnectionInteraction next
   = GetContext (ConnectionContext -> next)
@@ -276,37 +261,37 @@ interpretConnProd ioHandlers context conn = case conn of
     writeUiUpdaterMessage (ioHandlers^.uiUpdaterChan) m
     interpretConnProd ioHandlers context n
   Free (GetBlockHeader i f) -> do
-    mBlock <- getBlockWithIndex (ioHandlers^.pool) i
+    mBlock <- Persistence.getBlockWithIndex (ioHandlers^.pool) i
     interpretConnProd ioHandlers context (f mBlock)
   Free (BlockHeaderCount f) -> do
-    blockHeaderCount <- getLastBlock $ ioHandlers^.pool
+    blockHeaderCount <- Persistence.getLastBlock $ ioHandlers^.pool
     interpretConnProd ioHandlers context (f blockHeaderCount)
   Free (PersistBlockHeaders headers n) -> do
-    persistHeaders (ioHandlers^.pool) headers
+    Persistence.persistHeaders (ioHandlers^.pool) headers
     interpretConnProd ioHandlers context n
   Free (PersistBlockHeader header n) -> do
-    persistHeader (ioHandlers^.pool) header
+    Persistence.persistHeader (ioHandlers^.pool) header
     interpretConnProd ioHandlers context n
   Free (GetBlockHeaderFromHash hash f) -> do
-    mBlock <- getBlockHeaderFromHash (ioHandlers^.pool) hash
+    mBlock <- Persistence.getBlockHeaderFromHash (ioHandlers^.pool) hash
     interpretConnProd ioHandlers context (f mBlock)
   Free (DeleteBlockHeaders inx n) -> do
-    deleteHeaders (ioHandlers^.pool) inx
+    Persistence.deleteHeaders (ioHandlers^.pool) inx
     interpretConnProd ioHandlers context n
   Free (NHeadersSinceKey n keyId f) -> do
-    headers <- nHeadersSinceKey (ioHandlers^.pool) n keyId
+    headers <- Persistence.nHeadersSinceKey (ioHandlers^.pool) n keyId
     interpretConnProd ioHandlers context (f headers)
   Free (PersistTransaction tx n) -> do
-    persistTransaction (ioHandlers^.pool) tx
+    Persistence.persistTransaction (ioHandlers^.pool) tx
     interpretConnProd ioHandlers context n
   Free (GetTransactionFromHash hash f) -> do
-    mTx <- getTransactionFromHash (ioHandlers^.pool) hash
+    mTx <- Persistence.getTransactionFromHash (ioHandlers^.pool) hash
     interpretConnProd ioHandlers context (f mTx)
   Free (GetAllAddresses f) -> do
-    addresses <- getAllAddresses (ioHandlers^.pool)
+    addresses <- Persistence.getAllAddresses (ioHandlers^.pool)
     interpretConnProd ioHandlers context (f addresses)
   Free (PersistUTXOs utxos n) -> do
-    persistUTXOs (ioHandlers^.pool) utxos
+    Persistence.persistUTXOs (ioHandlers^.pool) utxos
     interpretConnProd ioHandlers context n
   Pure r -> return r
 
