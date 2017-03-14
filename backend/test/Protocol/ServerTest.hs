@@ -65,9 +65,6 @@ interpretConnTest mockHandles context conn =  case conn of
     interpretConnTest mockHandles context (f context)
   Free (SetContext c n) -> do
     interpretConnTest mockHandles c n 
-  Free (IncrementLastBlock i n) -> do
-    let newContext = lastBlock %~ (\(BlockIndex old) -> BlockIndex (old + i)) $ context
-    interpretConnTest mockHandles newContext n
   Free (ReadMessage f) -> do
     case mockHandles^.incomingMessageList of
       [] ->

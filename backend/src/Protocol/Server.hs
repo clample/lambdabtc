@@ -152,7 +152,6 @@ connectionLoop ioHandlers context = do
 data ConnectionInteraction next
   = GetContext (ConnectionContext -> next)
   | SetContext ConnectionContext next
-  | IncrementLastBlock Int next
   | ReadMessage (Maybe Message -> next)
   | WriteMessage Message next
   | WriteUIUpdaterMessage UIUpdaterMessage next
@@ -171,7 +170,6 @@ data ConnectionInteraction next
 instance Functor ConnectionInteraction where
   fmap f (GetContext                g) = GetContext                (f . g)
   fmap f (SetContext              c x) = SetContext              c (f x)
-  fmap f (IncrementLastBlock      i x) = IncrementLastBlock      i (f x)
   fmap f (ReadMessage               g) = ReadMessage               (f . g)
   fmap f (WriteMessage            m x) = WriteMessage            m (f x)
   fmap f (WriteUIUpdaterMessage   m x) = WriteUIUpdaterMessage   m (f x)
@@ -195,10 +193,6 @@ getContext' = liftF (GetContext id)
 
 setContext' :: ConnectionContext -> Connection' ()
 setContext' c = liftF (SetContext c ())
--- TODO: Can we move this out of the interpreter and into our free monad
---       and just expose a generic way to update the state?
-incrementLastBlock' :: Int -> Connection' ()
-incrementLastBlock' i = liftF (IncrementLastBlock i ())
 
 readMessage' :: Connection' (Maybe Message)
 readMessage' = liftF (ReadMessage id)
@@ -248,9 +242,6 @@ interpretConnProd ioHandlers context conn = case conn of
     interpretConnProd ioHandlers context (f context)
   Free (SetContext c n) -> do
     interpretConnProd ioHandlers c n
-  Free (IncrementLastBlock i n) -> do
-    let newContext = lastBlock %~ (\(BlockIndex old) -> BlockIndex (old + i)) $ context
-    interpretConnProd ioHandlers newContext n
   Free (ReadMessage f) -> do
     mMessage <- liftIO . atomically . readTBMChan $ (ioHandlers^.listenChan)
     interpretConnProd ioHandlers context (f mMessage)
@@ -295,6 +286,12 @@ interpretConnProd ioHandlers context conn = case conn of
     interpretConnProd ioHandlers context n
   Pure r -> return r
 
+incrementLastBlock' :: Int -> Connection' ()
+incrementLastBlock' i = do
+  context <- getContext'
+  let newContext = lastBlock %~ (\(BlockIndex old) -> BlockIndex (old + i)) $ context
+  setContext' newContext
+  
 -- Logic for handling response in free monad
 handleResponse' :: Message -> Connection' ()
 handleResponse' (Message (PingMessageBody message) _) = 
