@@ -20,6 +20,7 @@ import System.Random (StdGen)
 import Control.Lens (makeLenses)
 import Network.Socket (Socket)
 import Database.Persist.Sql (ConnectionPool)
+import BitcoinCore.BlockHeaders (BlockHeader)
 
 data ConnectionContext = ConnectionContext
   { _connectionContextVersion :: Int
@@ -32,6 +33,7 @@ data ConnectionContext = ConnectionContext
   , _connectionContextTime :: POSIXTime
   , _randGen :: StdGen
   , _connectionContextNetwork :: Network
+  , _rejectedBlocks :: [BlockHeader]  
   } 
 
 makeLenses ''ConnectionContext
