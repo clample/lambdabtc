@@ -15,17 +15,20 @@ import Protocol.Persistence ( getLastBlock
                             , persistTransaction
                             , getBlockHeaderFromHash
                             , nHeadersSinceKey
-                            , getTransactionFromHash)
+                            , getTransactionFromHash
+                            , deleteHeaders)
 import Protocol.ConnectionM ( ConnectionContext(..)
                             , IOHandlers(..)
                             , peerSocket
                             , myAddr
                             , writerChan
                             , listenChan
-                            , randGen)
+                            , randGen
+                            , rejectedBlocks)
 import BitcoinCore.BlockHeaders ( BlockHash(..)
                                 , BlockHeader(..)
                                 , verifyHeaders
+                                , prevBlockHash
                                 , hashBlock
                                 )
 import BitcoinCore.BloomFilter ( NFlags(..)
@@ -71,8 +74,9 @@ import Control.Concurrent.STM (atomically)
 import Control.Concurrent (forkIO)
 import Data.Binary (Binary(..))
 import Data.ByteString.Base16 (decode)
-import Control.Lens ((^.), (%~))
+import Control.Lens ((^.), (%~), (.~))
 import Control.Monad.Free (Free(..), liftF)
+import Data.Maybe (catMaybes)
 
 connectTestnet :: Config -> IO () 
 connectTestnet config = do
@@ -100,6 +104,7 @@ getConnectionContext config = do
         , _connectionContextTime = time'
         , _randGen = randGen'
         , _connectionContextNetwork = config^.network
+        , _rejectedBlocks = [] 
         }
       ioHandlers = IOHandlers
         { _peerSocket = peer'^.sock
@@ -161,6 +166,7 @@ connectionLoop ioHandlers context = do
 
 data ConnectionInteraction next
   = GetContext (ConnectionContext -> next)
+  | SetContext ConnectionContext next
   | IncrementLastBlock Int next
   | ReadMessage (Maybe Message -> next)
   | WriteMessage Message next
@@ -170,6 +176,7 @@ data ConnectionInteraction next
   | PersistBlockHeaders [BlockHeader] next
   | PersistBlockHeader BlockHeader next
   | GetBlockHeaderFromHash BlockHash (Maybe (BlockIndex, BlockHeader) -> next)
+  | DeleteBlockHeaders BlockIndex next
   | PersistTransaction Transaction next
   | NHeadersSinceKey Int BlockIndex ([BlockHeader] -> next)
   | GetTransactionFromHash TxHash (Maybe Integer -> next)
@@ -178,6 +185,7 @@ data ConnectionInteraction next
 
 instance Functor ConnectionInteraction where
   fmap f (GetContext                g) = GetContext                (f . g)
+  fmap f (SetContext              c x) = SetContext              c (f x)
   fmap f (IncrementLastBlock      i x) = IncrementLastBlock      i (f x)
   fmap f (ReadMessage               g) = ReadMessage               (f . g)
   fmap f (WriteMessage            m x) = WriteMessage            m (f x)
@@ -187,6 +195,7 @@ instance Functor ConnectionInteraction where
   fmap f (PersistBlockHeaders     h x) = PersistBlockHeaders     h (f x)
   fmap f (PersistBlockHeader      h x) = PersistBlockHeader      h (f x)
   fmap f (GetBlockHeaderFromHash  h g) = GetBlockHeaderFromHash  h (f . g)
+  fmap f (DeleteBlockHeaders      i x) = DeleteBlockHeaders      i (f x)
   fmap f (PersistTransaction      t x) = PersistTransaction      t (f x)
   fmap f (NHeadersSinceKey        n i g) = NHeadersSinceKey         n i (f . g)
   fmap f (GetTransactionFromHash  h g) = GetTransactionFromHash  h (f . g)
@@ -199,6 +208,8 @@ type Connection' = Free ConnectionInteraction
 getContext' :: Connection' ConnectionContext
 getContext' = liftF (GetContext id)
 
+setContext' :: ConnectionContext -> Connection' ()
+setContext' c = liftF (SetContext c ())
 -- TODO: Can we move this out of the interpreter and into our free monad
 --       and just expose a generic way to update the state?
 incrementLastBlock' :: Int -> Connection' ()
@@ -228,6 +239,9 @@ persistHeader' header = liftF (PersistBlockHeader header ())
 getBlockHeaderFromHash' :: BlockHash -> Connection' (Maybe (BlockIndex, BlockHeader))
 getBlockHeaderFromHash' hash = liftF (GetBlockHeaderFromHash hash id)
 
+deleteBlockHeaders' :: BlockIndex -> Connection' ()
+deleteBlockHeaders' inx = liftF (DeleteBlockHeaders inx ())
+
 persistTransaction' :: Transaction -> Connection' ()
 persistTransaction' tx = liftF (PersistTransaction tx ())
 
@@ -247,6 +261,8 @@ interpretConnProd :: IOHandlers -> ConnectionContext -> Connection' r -> IO r
 interpretConnProd ioHandlers context conn = case conn of
   Free (GetContext f) -> do
     interpretConnProd ioHandlers context (f context)
+  Free (SetContext c n) -> do
+    interpretConnProd ioHandlers c n
   Free (IncrementLastBlock i n) -> do
     let newContext = lastBlock %~ (\(BlockIndex old) -> BlockIndex (old + i)) $ context
     interpretConnProd ioHandlers newContext n
@@ -274,6 +290,9 @@ interpretConnProd ioHandlers context conn = case conn of
   Free (GetBlockHeaderFromHash hash f) -> do
     mBlock <- getBlockHeaderFromHash (ioHandlers^.pool) hash
     interpretConnProd ioHandlers context (f mBlock)
+  Free (DeleteBlockHeaders inx n) -> do
+    deleteHeaders (ioHandlers^.pool) inx
+    interpretConnProd ioHandlers context n
   Free (NHeadersSinceKey n keyId f) -> do
     headers <- nHeadersSinceKey (ioHandlers^.pool) n keyId
     interpretConnProd ioHandlers context (f headers)
@@ -309,8 +328,35 @@ handleResponse' (Message (HeadersMessageBody (HeadersMessage headers)) _) = do
     then do
       persistHeaders' headers
       incrementLastBlock' newHeadersN
-    else fail "We recieved invalid headers"
-         -- todo: does `fail` actually make sense here?
+    else constructChain headers
+  where
+    constructChain :: [BlockHeader] -> Connection' ()
+    constructChain headers = do  
+      let prev = (head headers)^.prevBlockHash
+      context <- getContext'
+      let rejectedBlocks' = context^.rejectedBlocks
+      connectingBlock <- getBlockHeaderFromHash' prev
+      case connectingBlock of
+        Nothing -> do let newPrev = filter (\header -> hashBlock header == prev) rejectedBlocks'
+                      case newPrev of 
+                        [] -> addRejected headers 
+                        (x:xs) -> constructChain (x:headers)
+        Just (index, header) -> do let newLength = index + BlockIndex (length headers)
+                                   if ( newLength > context^.lastBlock 
+                                       && verifyHeaders (header:headers))
+                                     then do
+                                        let inxs = enumFromTo (index + 1) (context^.lastBlock)
+                                        newRejected <- mapM getBlockHeader' inxs
+                                        -- also remove inxs headers from rejected
+                                        addRejected $ catMaybes newRejected
+                                        deleteBlockHeaders' (index + 1)
+                                        persistHeaders' headers
+                                        setContext' (lastBlock .~ newLength $ context)
+                                     else addRejected headers                                
+    addRejected :: [BlockHeader] -> Connection' ()
+    addRejected headers = do
+      prevContext <- getContext' 
+      setContext' $ rejectedBlocks %~ (++ headers) $ prevContext
 
 handleResponse' (Message (MerkleblockMessageBody (message)) _) = do
   mostRecentHeader <- getMostRecentHeader'
@@ -437,13 +483,11 @@ getHeadersOrBlocksMessage' bodyConstructor messageConstructor = do
 -- we diverge from their main chain
 queryBlockLocatorHashes' :: BlockIndex -> Connection' [BlockHash]
 queryBlockLocatorHashes' lastBlock' =
-  mapM queryBlockHash (blockLocatorIndices lastBlock')
+  catMaybes <$> mapM getMBlockHash (blockLocatorIndices lastBlock')
   where
-    queryBlockHash i = do
-      mBlockHeader <- getBlockHeader' i
-      case mBlockHeader of
-        Nothing -> fail $ "Unable to get block header with index " ++ show i
-        Just header -> return . hashBlock $ header
+    getMBlockHash i = do
+      header <- getBlockHeader' i
+      return $ hashBlock <$> header
 
 isNewSync' :: Connection' Bool
 isNewSync' = (== []) <$> getAllAddresses'

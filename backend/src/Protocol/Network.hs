@@ -40,10 +40,12 @@ connectToPeer n config = do
   let seed' = Just . seed $ config^.configNetwork
       port' = Just . networkPort $ config^.configNetwork
   addrInfo <- (!! n) <$> getAddrInfo Nothing seed' port'
-  peerSocket <- socket AF_INET Stream 0 -- (addrFamily addrInfo) Stream defaultProtocol
+  peerSocket <- socket AF_INET Stream 0 
+  -- peerSocket <- socket (addrFamily addrInfo) Stream defaultProtocol -- switch with previous line
     -- connect to local node: AF_INET Stream 0
   setSocketOption peerSocket KeepAlive 1
-  connect peerSocket (SockAddrInet 8333 0x0100007f) -- (addrAddress addrInfo)
+  connect peerSocket (SockAddrInet 8333 0x0100007f)
+  --connect peerSocket (addrAddress addrInfo) -- switch with previous line
     -- connect to local node: (SockAddrInet 8333 0x0100007f)
     -- connect to local node
   return $ Peer peerSocket (addrFromSock $ addrAddress addrInfo)

@@ -57,7 +57,10 @@ tests =
       getBlockWithIndexAndHash
       ],
     testGroup "Protocol Server Tests" [
-      pingAndPong
+      pingAndPong,
+      -- versionAndVerack,
+      -- expected failure. See test case for details
+      longerChain
       ],
     testGroup "Protocol Util Tests" [
       persistentBlockHeaderInvertible

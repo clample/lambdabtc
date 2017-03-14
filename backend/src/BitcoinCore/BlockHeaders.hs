@@ -157,6 +157,28 @@ instance Arbitrary Difficulty where
 instance Arbitrary Nonce where
   arbitrary = Nonce . BS.pack <$> vectorOf 4 arbitrary
 
+newtype ValidHeaders = ValidHeaders [BlockHeader]
+  deriving (Show)
+
+instance Arbitrary ValidHeaders where
+  arbitrary = do
+    oldestHeader <- arbitrary :: Gen BlockHeader
+    let header1 = oldestHeader
+    header2 <- nextHeader header1
+    header3 <- nextHeader header2
+    header4 <- nextHeader header3
+    let validHeaders = [header1, header2, header3, header4]
+    return $ ValidHeaders validHeaders
+    where
+      nextHeader h =
+        BlockHeader
+        <$> arbitrary
+        <*> pure (hashBlock h)
+        <*> arbitrary
+        <*> arbitrary
+        <*> arbitrary
+        <*> arbitrary
+
 -- The genesis blocks were determined by hand, referencing
 -- https://github.com/bitcoin/bitcoin/blob/812714fd80e96e28cd288c553c83838cecbfc2d9/src/chainparams.cpp
 genesisBlock :: Network -> BlockHeader

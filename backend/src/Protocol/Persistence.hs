@@ -61,6 +61,13 @@ persistHeaders pool headers = do
       -- sqlite rejects if we insert all at once
   runSqlPool (mapM_ insertMany_ chunkedPersistentHeaders) pool
 
+-- | deletes all headers with index >= inx.
+deleteHeaders :: ConnectionPool -> BlockIndex -> IO ()
+deleteHeaders pool inx = do
+  lastBlock <- getLastBlock pool
+  let inxs = enumFromTo inx lastBlock
+  runSqlPool (mapM_ (DB.delete . toDbKey) inxs) pool
+  
 getBlockHeaderFromHash :: ConnectionPool -> BlockHash -> IO (Maybe (BlockIndex, BlockHeader))
 getBlockHeaderFromHash pool (Hash hash') = do
   matches <- runSqlPool (selectList [PersistentBlockHeaderHash ==. hash'] []) pool
