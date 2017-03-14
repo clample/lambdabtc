@@ -57,7 +57,9 @@ tests =
       getBlockWithIndexAndHash
       ],
     testGroup "Protocol Server Tests" [
-      pingAndPong
+      pingAndPong,
+      versionAndVerack,
+      longerChain
       ],
     testGroup "Protocol Util Tests" [
       persistentBlockHeaderInvertible

@@ -7,12 +7,13 @@ import Protocol.Messages ( Message(..)
                          , MessageContext(..)
                          , arbitraryPingMessage
                          , arbitraryVersionMessage)
+import Protocol.MessageBodies ( HeadersMessage( HeadersMessage))
 import Protocol.Server
 import Protocol.ConnectionM ( ConnectionContext(..))
 import General.InternalMessaging ( UIUpdaterMessage(..)
                                  , InternalMessage(..))
 import BitcoinCore.Transaction.Transactions (TxHash, hashTransaction)
-import BitcoinCore.BlockHeaders (BlockHeader(..), hashBlock)
+import BitcoinCore.BlockHeaders (BlockHeader(..), hashBlock, ValidHeaders(..))
 import BitcoinCore.Keys (Address(..))
 import General.Types (Network(..))
 import General.Persistence (PersistentUTXO(..))
@@ -62,6 +63,8 @@ interpretConnTest :: MockHandles -> ConnectionContext -> Connection' r -> Identi
 interpretConnTest mockHandles context conn =  case conn of
   Free (GetContext f) -> do
     interpretConnTest mockHandles context (f context)
+  Free (SetContext c n) -> do
+    interpretConnTest mockHandles c n 
   Free (IncrementLastBlock i n) -> do
     let newContext = lastBlock %~ (\(BlockIndex old) -> BlockIndex (old + i)) $ context
     interpretConnTest mockHandles newContext n
@@ -101,6 +104,9 @@ interpretConnTest mockHandles context conn =  case conn of
           Nothing -> Nothing
           Just i -> Just (BlockIndex i, headers !! i)
     interpretConnTest mockHandles context (f mBlockHeader)
+  Free (DeleteBlockHeaders (BlockIndex inx) n) -> do
+    let newMockHandles = mockDB.blockHeaders %~ (take inx) $ mockHandles 
+    interpretConnTest newMockHandles context n
   Free (NHeadersSinceKey n (BlockIndex i) f) -> do
     let headers = mockHandles^.mockDB.blockHeaders
         nHeaders = (drop i . take n) $ headers
@@ -152,6 +158,20 @@ prop_versionAndVerack (ArbVersionMessage message) =
       (Message (VersionMessageBody _) _) -> True
       _                                  -> False
 
+longerChain = testProperty
+  "Should switch to longer chain" prop_longerChain
+
+prop_longerChain :: ValidHeaders -> MessageContext -> Bool
+prop_longerChain (ValidHeaders (h1:h2:hs)) msgContext = 
+  resultHandle^.mockDB.blockHeaders == (h1:h2:hs)   
+  where
+    mockHandle = (mockDB . blockHeaders .~ [h1,h2]) 
+               $ blankMockHandles
+    headersMessage = (Message (HeadersMessageBody (HeadersMessage (h2:hs))) msgContext)
+    (resultHandle, _) = runIdentity $ interpretConnTest mockHandle 
+        genericConnectionContext (handleResponse' headersMessage)
+
+
 blankMockHandles :: MockHandles
 blankMockHandles = MockHandles
   { _incomingMessageList = []
@@ -176,4 +196,5 @@ genericConnectionContext = ConnectionContext
   , _connectionContextTime = fromInteger 10000
   , _randGen = mkStdGen 1
   , _connectionContextNetwork = TestNet3
+  , _rejectedBlocks = []
   }

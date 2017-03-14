@@ -74,7 +74,7 @@ import Control.Concurrent.STM (atomically)
 import Control.Concurrent (forkIO)
 import Data.Binary (Binary(..))
 import Data.ByteString.Base16 (decode)
-import Control.Lens ((^.), (%~))
+import Control.Lens ((^.), (%~), (.~))
 import Control.Monad.Free (Free(..), liftF)
 import Data.Maybe (catMaybes)
 
@@ -176,7 +176,7 @@ data ConnectionInteraction next
   | PersistBlockHeaders [BlockHeader] next
   | PersistBlockHeader BlockHeader next
   | GetBlockHeaderFromHash BlockHash (Maybe (BlockIndex, BlockHeader) -> next)
-  | DeleteBlockHeaders [BlockIndex] next
+  | DeleteBlockHeaders BlockIndex next
   | PersistTransaction Transaction next
   | NHeadersSinceKey Int BlockIndex ([BlockHeader] -> next)
   | GetTransactionFromHash TxHash (Maybe Integer -> next)
@@ -239,8 +239,8 @@ persistHeader' header = liftF (PersistBlockHeader header ())
 getBlockHeaderFromHash' :: BlockHash -> Connection' (Maybe (BlockIndex, BlockHeader))
 getBlockHeaderFromHash' hash = liftF (GetBlockHeaderFromHash hash id)
 
-deleteBlockHeaders' :: [BlockIndex] -> Connection' ()
-deleteBlockHeaders' inxs = liftF (DeleteBlockHeaders inxs ())
+deleteBlockHeaders' :: BlockIndex -> Connection' ()
+deleteBlockHeaders' inx = liftF (DeleteBlockHeaders inx ())
 
 persistTransaction' :: Transaction -> Connection' ()
 persistTransaction' tx = liftF (PersistTransaction tx ())
@@ -290,8 +290,8 @@ interpretConnProd ioHandlers context conn = case conn of
   Free (GetBlockHeaderFromHash hash f) -> do
     mBlock <- getBlockHeaderFromHash (ioHandlers^.pool) hash
     interpretConnProd ioHandlers context (f mBlock)
-  Free (DeleteBlockHeaders inxs n) -> do
-    deleteHeaders (ioHandlers^.pool) inxs
+  Free (DeleteBlockHeaders inx n) -> do
+    deleteHeaders (ioHandlers^.pool) inx
     interpretConnProd ioHandlers context n
   Free (NHeadersSinceKey n keyId f) -> do
     headers <- nHeadersSinceKey (ioHandlers^.pool) n keyId
@@ -322,9 +322,7 @@ handleResponse' (Message (VersionMessageBody body) _) = do
 
 handleResponse' (Message (HeadersMessageBody (HeadersMessage headers)) _) = do
   mostRecentHeader <- getMostRecentHeader'
-  context <- getContext'
-  let rejectedBlocks' = context^.rejectedBlocks
-      isValid = verifyHeaders (mostRecentHeader:headers)
+  let isValid = verifyHeaders (mostRecentHeader:headers)
       newHeadersN = fromIntegral . length $ headers
   if isValid
     then do
@@ -335,13 +333,15 @@ handleResponse' (Message (HeadersMessageBody (HeadersMessage headers)) _) = do
     constructChain :: [BlockHeader] -> Connection' ()
     constructChain headers = do  
       let prev = (head headers)^.prevBlockHash
+      context <- getContext'
+      let rejectedBlocks' = context^.rejectedBlocks
       connectingBlock <- getBlockHeaderFromHash' prev
       case connectingBlock of
         Nothing -> do let newPrev = filter (\header -> hashBlock header == prev) rejectedBlocks'
                       case newPrev of 
                         [] -> addRejected headers 
                         (x:xs) -> constructChain (x:headers)
-        Just (index, header) -> do let newLength = index + length (headers)
+        Just (index, header) -> do let newLength = index + BlockIndex (length headers)
                                    if ( newLength > context^.lastBlock 
                                        && verifyHeaders (header:headers))
                                      then do
@@ -349,8 +349,9 @@ handleResponse' (Message (HeadersMessageBody (HeadersMessage headers)) _) = do
                                         newRejected <- mapM getBlockHeader' inxs
                                         -- also remove inxs headers from rejected
                                         addRejected $ catMaybes newRejected
-                                        deleteBlockHeaders' inxs
+                                        deleteBlockHeaders' (index + 1)
                                         persistHeaders' headers
+                                        setContext' (lastBlock .~ newLength $ context)
                                      else addRejected headers                                
     addRejected :: [BlockHeader] -> Connection' ()
     addRejected headers = do

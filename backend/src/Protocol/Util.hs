@@ -1,3 +1,5 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+
 module Protocol.Util where
 
 import General.Persistence ( PersistentBlockHeader(..)
@@ -125,10 +127,12 @@ instance Arbitrary CCode where
 -- 0 based counting
 -- genesis block has index 0
 newtype BlockIndex = BlockIndex Int
-  deriving (Show, Eq)
+  deriving (Show, Eq, Ord, Num, Enum)
 
-instance Ord BlockIndex where
-  (BlockIndex a) <= (BlockIndex b) = a <= b
+-- instance Ord BlockIndex where
+--   (BlockIndex a) <= (BlockIndex b) = a <= b
+
+
 
 toDbKey :: BlockIndex -> DB.Key PersistentBlockHeader
 toDbKey (BlockIndex i) = DB.toSqlKey . fromIntegral $ i + 1
