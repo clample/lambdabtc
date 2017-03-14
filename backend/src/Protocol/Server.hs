@@ -483,13 +483,11 @@ getHeadersOrBlocksMessage' bodyConstructor messageConstructor = do
 -- we diverge from their main chain
 queryBlockLocatorHashes' :: BlockIndex -> Connection' [BlockHash]
 queryBlockLocatorHashes' lastBlock' =
-  mapM queryBlockHash (blockLocatorIndices lastBlock')
+  catMaybes <$> mapM getMBlockHash (blockLocatorIndices lastBlock')
   where
-    queryBlockHash i = do
-      mBlockHeader <- getBlockHeader' i
-      case mBlockHeader of
-        Nothing -> fail $ "Unable to get block header with index " ++ show i
-        Just header -> return . hashBlock $ header
+    getMBlockHash i = do
+      header <- getBlockHeader' i
+      return $ hashBlock <$> header
 
 isNewSync' :: Connection' Bool
 isNewSync' = (== []) <$> getAllAddresses'
