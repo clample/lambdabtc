@@ -311,34 +311,6 @@ handleResponse' (Message (HeadersMessageBody (HeadersMessage headers)) _) = do
       persistHeaders' headers
       incrementLastBlock' newHeadersN
     else constructChain headers
-  where
-    constructChain :: [BlockHeader] -> Connection' ()
-    constructChain headers = do  
-      let prev = (head headers)^.prevBlockHash
-      context <- getContext'
-      let rejectedBlocks' = context^.rejectedBlocks
-      connectingBlock <- getBlockHeaderFromHash' prev
-      case connectingBlock of
-        Nothing -> do let newPrev = filter (\header -> hashBlock header == prev) rejectedBlocks'
-                      case newPrev of 
-                        [] -> addRejected headers 
-                        (x:xs) -> constructChain (x:headers)
-        Just (index, header) -> do let newLength = index + BlockIndex (length headers)
-                                   if ( newLength > context^.lastBlock 
-                                       && verifyHeaders (header:headers))
-                                     then do
-                                        let inxs = enumFromTo (index + 1) (context^.lastBlock)
-                                        newRejected <- mapM getBlockHeader' inxs
-                                        -- also remove inxs headers from rejected
-                                        addRejected $ catMaybes newRejected
-                                        deleteBlockHeaders' (index + 1)
-                                        persistHeaders' headers
-                                        setContext' (lastBlock .~ newLength $ context)
-                                     else addRejected headers                                
-    addRejected :: [BlockHeader] -> Connection' ()
-    addRejected headers = do
-      prevContext <- getContext' 
-      setContext' $ rejectedBlocks %~ (++ headers) $ prevContext
 
 handleResponse' (Message (MerkleblockMessageBody (message)) _) = do
   mostRecentHeader <- getMostRecentHeader'
@@ -394,6 +366,46 @@ writeMessageWithBody' body = do
   context <- getContext'
   let message = Message body (MessageContext (context^.network))
   writeMessage' message
+
+-- Try to construct a new blockchain using `headers`
+-- if we can construct a new blockchain and it's longer than the active chain,
+-- then we replace the active chain. Otherwise, we store `headers` in rejectedBlocks
+-- in case we are able to construct a longer chain later on.
+constructChain :: [BlockHeader] -> Connection' ()
+constructChain headers = do  
+  let connectingBlockHash = (head headers)^.prevBlockHash
+  context <- getContext'
+  connectingBlock <- getBlockHeaderFromHash' connectingBlockHash
+  case connectingBlock of
+    -- `headers` does not connect to the active chain
+    Nothing ->
+      do let rejectedBlocks' = context^.rejectedBlocks
+             newConnectingBlockHash = filter (\header -> hashBlock header == connectingBlockHash) rejectedBlocks'
+         case newConnectingBlockHash of 
+           [] -> addRejected headers -- we can't add any blocks from `rejectedBlocks` to our candidate chain
+           (x:xs) -> constructChain (x:headers) -- we can add `x` from `rejectedBlocks` to our candidate chain and try again
+    -- `headers` does connect to the active chain
+    Just (index, header) ->
+      do let newLength = index + BlockIndex (length headers)
+         if ( newLength > context^.lastBlock 
+              && verifyHeaders (header:headers))
+            
+           -- We have constructed a longer chain -> replace our active chain
+           then do
+           let inxs = enumFromTo (index + 1) (context^.lastBlock)
+           newRejected <- mapM getBlockHeader' inxs
+           -- TODO: also remove inxs headers from rejected
+           addRejected $ catMaybes newRejected
+           deleteBlockHeaders' (index + 1)
+           persistHeaders' headers
+           setContext' (lastBlock .~ newLength $ context)
+
+           -- We weren't able to construct a longer active chain
+           else addRejected headers
+  where
+    addRejected headers = do
+      prevContext <- getContext' 
+      setContext' $ rejectedBlocks %~ (++ headers) $ prevContext
 
 -- returns the leftmose header that we are currently persisting
 firstHeaderMatch' :: [BlockHash] -> Connection' BlockIndex
