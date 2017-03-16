@@ -391,21 +391,25 @@ constructChain headers = do
               && verifyHeaders (header:headers))
             
            -- We have constructed a longer chain -> replace our active chain
-           then do
-           let inxs = enumFromTo (index + 1) (context^.lastBlock)
-           newRejected <- mapM getBlockHeader' inxs
-           -- TODO: also remove inxs headers from rejected
-           addRejected $ catMaybes newRejected
-           deleteBlockHeaders' (index + 1)
-           persistHeaders' headers
-           setContext' (lastBlock .~ newLength $ context)
-
+           then replaceChain headers index
+           
            -- We weren't able to construct a longer active chain
            else addRejected headers
   where
     addRejected headers = do
       prevContext <- getContext' 
       setContext' $ rejectedBlocks %~ (++ headers) $ prevContext
+    replaceChain newChain startingIndex = do
+      context <- getContext'
+      let inxs = enumFromTo (startingIndex + 1) (context^.lastBlock)
+          newLength = startingIndex + BlockIndex (length headers)
+      newRejected <- mapM getBlockHeader' inxs
+      -- TODO: also remove inxs headers from rejected
+      addRejected $ catMaybes newRejected
+      deleteBlockHeaders' (startingIndex + 1)
+      persistHeaders' newChain
+      setContext' (lastBlock .~ newLength $ context)
+
 
 -- returns the leftmose header that we are currently persisting
 firstHeaderMatch' :: [BlockHash] -> Connection' BlockIndex
