@@ -9,7 +9,9 @@ import Protocol.Messages ( Message(..)
                          , arbitraryVersionMessage)
 import Protocol.MessageBodies ( HeadersMessage( HeadersMessage))
 import Protocol.Server
-import Protocol.ConnectionM ( ConnectionContext(..))
+import Protocol.ConnectionM ( ConnectionContext(..)
+                            , MutableConnectionContext(..)
+                            , mutableContext)
 import General.InternalMessaging ( UIUpdaterMessage(..)
                                  , InternalMessage(..))
 import BitcoinCore.Transaction.Transactions (TxHash, hashTransaction)
@@ -63,8 +65,9 @@ interpretConnTest :: MockHandles -> ConnectionContext -> Connection' r -> Identi
 interpretConnTest mockHandles context conn =  case conn of
   Free (GetContext f) -> do
     interpretConnTest mockHandles context (f context)
-  Free (SetContext c n) -> do
-    interpretConnTest mockHandles c n 
+  Free (SetContext mc n) -> do
+    let newContext = mutableContext .~ mc $ context
+    interpretConnTest mockHandles newContext n 
   Free (ReadMessage f) -> do
     case mockHandles^.incomingMessageList of
       [] ->
@@ -90,10 +93,12 @@ interpretConnTest mockHandles context conn =  case conn of
     interpretConnTest mockHandles context (f blockHeaderCount)
   Free (PersistBlockHeaders headers n) -> do
     let newMockHandles = mockDB.blockHeaders %~ (++ headers) $ mockHandles
-    interpretConnTest newMockHandles context n
+        newContext = incrementLastBlock context (length headers)
+    interpretConnTest newMockHandles newContext n
   Free (PersistBlockHeader header n) -> do
     let newMockHandles = mockDB.blockHeaders %~ (++ [header]) $ mockHandles
-    interpretConnTest newMockHandles context n
+        newContext = incrementLastBlock context 1
+    interpretConnTest newMockHandles newContext n
   Free (GetBlockHeaderFromHash hash f) -> do
     let headers = mockHandles^.mockDB.blockHeaders
         mIndex = findIndex (\header -> hashBlock header == hash) headers
@@ -102,7 +107,8 @@ interpretConnTest mockHandles context conn =  case conn of
           Just i -> Just (BlockIndex i, headers !! i)
     interpretConnTest mockHandles context (f mBlockHeader)
   Free (DeleteBlockHeaders (BlockIndex inx) n) -> do
-    let newMockHandles = mockDB.blockHeaders %~ (take inx) $ mockHandles 
+    let newMockHandles = mockDB.blockHeaders %~ (take inx) $ mockHandles
+        newContext = lastBlock .~ blockHeaderCount $ context
     interpretConnTest newMockHandles context n
   Free (NHeadersSinceKey n (BlockIndex i) f) -> do
     let headers = mockHandles^.mockDB.blockHeaders
@@ -193,7 +199,9 @@ genericConnectionContext = ConnectionContext
   , _connectionContextPeerAddr = Addr (0, 0, 0, 1) 80
   , _connectionContextRelay = True
   , _connectionContextTime = fromInteger 10000
-  , _randGen = mkStdGen 1
   , _connectionContextNetwork = TestNet3
-  , _rejectedBlocks = []
+  , _mutableContext = MutableConnectionContext
+    { _randGen = mkStdGen 1
+    , _rejectedBlocks = []
+    }
   }

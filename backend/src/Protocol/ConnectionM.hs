@@ -22,6 +22,8 @@ import Network.Socket (Socket)
 import Database.Persist.Sql (ConnectionPool)
 import BitcoinCore.BlockHeaders (BlockHeader)
 
+
+-- Only elements of `mutableContext` will be exposed for updates in the Connection' monad
 data ConnectionContext = ConnectionContext
   { _connectionContextVersion :: Int
   , _connectionContextLastBlock :: BlockIndex
@@ -31,12 +33,17 @@ data ConnectionContext = ConnectionContext
     -- https://github.com/bitcoin/bips/blob/master/bip-0037.mediawiki#extensions-to-existing-messages
     -- Relay should be set to False when functioning as an SPV node
   , _connectionContextTime :: POSIXTime
-  , _randGen :: StdGen
   , _connectionContextNetwork :: Network
-  , _rejectedBlocks :: [BlockHeader]  
-  } 
+  , _mutableContext :: MutableConnectionContext
+  }
+
+data MutableConnectionContext = MutableConnectionContext
+  { _randGen :: StdGen
+  , _rejectedBlocks :: [BlockHeader]
+  }
 
 makeLenses ''ConnectionContext
+makeLenses ''MutableConnectionContext
 
 data IOHandlers = IOHandlers
   { _peerSocket :: Socket
