@@ -87,3 +87,21 @@ prop_getBlockWithIndexAndHash pool header = ioProperty $ do
         Nothing -> return False
         Just headerFromIndex -> return
           (headerFromIndex == headerFromHash)
+
+deleteAndGetBlocksTest = buildTest $ do
+  pool <- createTestDbPool
+  return $ testProperty
+    "Deleting blocks should not mess up indices when persisting new blocks"
+    (prop_deleteAndGetBlocksTest pool)
+
+prop_deleteAndGetBlocksTest :: ConnectionPool -> [BlockHeader] -> BlockHeader -> Property
+prop_deleteAndGetBlocksTest pool initialHeaders newHeader = ioProperty $ do
+  persistHeaders pool initialHeaders
+  deleteHeaders pool (BlockIndex 0)
+  persistHeader pool newHeader
+  mFirstHeader <- getBlockWithIndex pool (BlockIndex 0)
+  deleteHeaders pool (BlockIndex 0) -- clean db for next test
+  case mFirstHeader of
+    Nothing -> return False
+    Just firstHeader -> return $
+      hashBlock firstHeader == hashBlock newHeader

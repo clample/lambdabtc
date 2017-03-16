@@ -54,7 +54,8 @@ tests =
       persistAndRetrieveBlockHeader,
       persistAndRetrieveTransaction,
       persistAndGetLastBlock,
-      getBlockWithIndexAndHash
+      getBlockWithIndexAndHash,
+      deleteAndGetBlocksTest
       ],
     testGroup "Protocol Server Tests" [
       pingAndPong,
