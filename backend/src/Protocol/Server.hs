@@ -310,20 +310,11 @@ handleResponse' (Message (VersionMessageBody body) _) = do
   let lastBlockPeer = body^.lastBlock
   synchronizeHeaders' lastBlockPeer
 
-handleResponse' (Message (HeadersMessageBody (HeadersMessage headers)) _) = do
-  mostRecentHeader <- getMostRecentHeader'
-  let isValid = verifyHeaders (mostRecentHeader:headers)
-  if isValid
-    then persistHeaders' headers
-    else constructChain headers
+handleResponse' (Message (HeadersMessageBody (HeadersMessage headers)) _) =
+  handleNewHeaders headers
 
-handleResponse' (Message (MerkleblockMessageBody message) _) = do
-  mostRecentHeader <- getMostRecentHeader'
-  let isValid = verifyHeaders [mostRecentHeader, message^.blockHeader]
-  if isValid
-    then persistHeader' $ message^.blockHeader
-    else fail "We recieved invalid header"
-      -- todo: does `fail` actually make sense here?
+handleResponse' (Message (MerkleblockMessageBody message) _) =
+  handleNewHeaders [message^.blockHeader]
 
 handleResponse' (Message (GetHeadersMessageBody message) _) = do
   match <- firstHeaderMatch' (message^.blockLocatorHashes)
@@ -369,6 +360,14 @@ writeMessageWithBody' body = do
   context <- getContext'
   let message = Message body (MessageContext (context^.network))
   writeMessage' message
+
+handleNewHeaders :: [BlockHeader] -> Connection' ()
+handleNewHeaders newHeaders = do
+  mostRecentHeader <- getMostRecentHeader'
+  let isValid = verifyHeaders (mostRecentHeader:newHeaders)
+  if isValid
+    then persistHeaders' newHeaders
+    else constructChain newHeaders
 
 -- Try to construct a new blockchain using `headers`
 -- if we can construct a new blockchain and it's longer than the active chain,
