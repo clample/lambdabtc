@@ -377,38 +377,44 @@ writeMessageWithBody' body = do
 constructChain :: [BlockHeader] -> Connection' ()
 constructChain headers = do  
   let connectingBlockHash = (head headers)^.prevBlockHash
-  context <- getContext'
   connectingBlock <- getBlockHeaderFromHash' connectingBlockHash
   case connectingBlock of
+    
     -- `headers` does not connect to the active chain
-    Nothing ->
-      do let rejectedBlocks' = context^.mutableContext.rejectedBlocks
-             newConnectingBlockHash = filter (\header -> hashBlock header == connectingBlockHash) rejectedBlocks'
-         case newConnectingBlockHash of 
-           [] -> addRejected headers -- we can't add any blocks from `rejectedBlocks` to our candidate chain
-           (x:xs) -> constructChain (x:headers) -- we can add `x` from `rejectedBlocks` to our candidate chain and try again
+    Nothing -> constructChainFromRejectedBlocks connectingBlockHash
+    
     -- `headers` does connect to the active chain
-    Just (index, header) ->
-      do let newLength = index + BlockIndex (length headers)
-         if newLength > context^.lastBlock 
-              && verifyHeaders (header:headers)
-            
-           -- We have constructed a longer chain -> replace our active chain
-           then replaceChain headers index
-           
-           -- We weren't able to construct a longer active chain
-           else addRejected headers
+    Just (index, header) -> replaceChainIfLonger header index
   where
+    constructChainFromRejectedBlocks connectingBlockHash = do
+      context <- getContext'
+      let rejectedBlocks' = context^.mutableContext.rejectedBlocks
+          newConnectingBlockHash = filter (\header -> hashBlock header == connectingBlockHash) rejectedBlocks'
+      case newConnectingBlockHash of 
+        [] -> addRejected headers
+          -- we can't add any blocks from `rejectedBlocks` to our candidate chain
+        (x:xs) -> constructChain (x:headers)
+          -- we can add `x` from `rejectedBlocks` to our candidate chain and try again
+
     addRejected headers = do
       prevContext <- getContext' 
       setContext' $ rejectedBlocks %~ (++ headers) $ prevContext^.mutableContext
-    replaceChain newChain startingIndex = do
+
+    replaceChainIfLonger connectionHeader connectionIndex = do
       context <- getContext'
-      let inxs = enumFromTo (startingIndex + 1) (context^.lastBlock)
+      let newLength = connectionIndex + BlockIndex (length headers)
+      if newLength > context^.lastBlock
+         && verifyHeaders (connectionHeader:headers)
+        then replaceChain headers connectionIndex
+        else addRejected headers
+      
+    replaceChain newChain connectionIndex = do
+      context <- getContext'
+      let inxs = enumFromTo (connectionIndex + 1) (context^.lastBlock)
       newRejected <- mapM getBlockHeader' inxs
       -- TODO: also remove inxs headers from rejected
       addRejected $ catMaybes newRejected
-      deleteBlockHeaders' (startingIndex + 1)
+      deleteBlockHeaders' (connectionIndex + 1)
       persistHeaders' newChain
 
 
