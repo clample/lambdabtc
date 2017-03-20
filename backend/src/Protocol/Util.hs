@@ -110,13 +110,13 @@ getUTXOS indexedPubkeys transaction =
         
 isRelevantScript :: ByteString -> Script -> Bool
 isRelevantScript pubkeyHash (Script components) =
-  or $ map isRelevantComponent components
+  any isRelevantComponent components
   where isRelevantComponent (Txt bs) = bs == pubkeyHash
         isRelevantComponent (OP _) = False
 
 getPersistentUTXO :: Transaction -> Int -> Script -> Int -> PersistentUTXO
-getPersistentUTXO tx outIndex script keySetId' = PersistentUTXO
-  hash' outIndex scriptBS keySetId'
+getPersistentUTXO tx outIndex script = PersistentUTXO
+  hash' outIndex scriptBS
   where
     hash' = hash . hashTransaction $ tx
     scriptBS = toStrict . runPut $ putScript script

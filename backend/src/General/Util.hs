@@ -40,7 +40,7 @@ import Data.Tuple (swap)
 import Test.QuickCheck.Arbitrary (Arbitrary(..))
 import Test.QuickCheck.Gen (choose, elements)
 
-data Payload = Payload ByteString
+newtype Payload = Payload ByteString
   deriving (Show, Eq)
 
 putPayload :: Payload -> Put

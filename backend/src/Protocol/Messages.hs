@@ -58,7 +58,7 @@ data MessageBody
 data Message = Message MessageBody MessageContext
   deriving (Show, Eq)
 
-data MessageContext = MessageContext
+newtype MessageContext = MessageContext
   { _messageContextNetwork :: Network
   } deriving (Show, Eq)
 
@@ -401,7 +401,7 @@ arbitraryFilterloadMessage = do
     maxNHashFuncs = 0xffffffff -- 4 bytes
     maxNTweak     = 0xffffffff -- 4 bytes
 
-arbitraryPingMessage = do
+arbitraryPingMessage =
   PingMessageBody . PingMessage <$> arbitrary
 
 arbitraryFilteraddMessage = do
@@ -415,6 +415,6 @@ arbitraryInvMessage =
 arbitraryGetDataMessage =
   GetDataMessageBody . GetDataMessage <$> arbitrary
 
-arbitraryRejectMessage = do
+arbitraryRejectMessage =
   RejectMessageBody <$>
     (RejectMessage <$> arbitrary <*> arbitrary <*> arbitrary)

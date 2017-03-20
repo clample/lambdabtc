@@ -39,7 +39,7 @@ import Data.Binary (Binary(..))
 import Data.Binary.Put (runPut, putWord8, putByteString, Put)
 import Data.Binary.Get (runGet, getWord8, getByteString, Get, lookAhead)
 import qualified Data.ByteString.Lazy as BL
-
+import Data.Maybe (fromMaybe)
 
 data PublicKeyRep = PublicKeyRep PubKeyFormat PublicKey
   deriving (Eq, Show)
@@ -49,10 +49,10 @@ data PubKeyFormat = Compressed | Uncompressed
 
 -- WIFPrivateKey and Address have base58 -> use text rep
 -- TODO: add base58 type?
-data WIFPrivateKey  = WIF T.Text
+newtype WIFPrivateKey  = WIF T.Text
   deriving (Eq, Show)
 
-data Address = Address T.Text
+newtype Address = Address T.Text
   deriving (Eq, Show)
 
 type PubKeyHash = Hash PublicKeyRep
@@ -63,9 +63,9 @@ btcCurve :: Curve
 btcCurve = getCurveByName SEC_p256k1
 
 btcEcGroup :: EcGroup
-btcEcGroup = case ecGroupFromCurveOID "secp256k1" of
-               Just ecGroup -> ecGroup
-               Nothing -> error "Unable to get secp256k1 ec group. This should never happen."
+btcEcGroup = fromMaybe
+  (error "Unable to get secp256k1 ec group. This should never happen.")
+  (ecGroupFromCurveOID "secp256k1")
 
 genKeys :: IO (PublicKey, PrivateKey)
 genKeys = generate btcCurve
@@ -82,8 +82,7 @@ getPubKey privKey =
 getAddress :: PublicKeyRep  -> Network -> Address 
 getAddress pubKeyRep network =
   Address $ encodeBase58Check (addressPrefix network) payload
-  where payload = Payload $ hashBS'
-        hashBS' = hash $ hashPubKeyRep pubKeyRep
+  where payload = Payload . hash . hashPubKeyRep $ pubKeyRep
         addressPrefix MainNet = Prefix 0x00
         addressPrefix TestNet3 = Prefix 0x6F
 

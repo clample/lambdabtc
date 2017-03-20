@@ -71,7 +71,7 @@ developmentConfig = do
     createSqlitePool (dbFile network') (getConnectionSize env)
   chan <- atomically $ newTBMChan 16
   uiUpdaterChan' <- atomically $ newTBMChan 16
-  return $ Config
+  return Config
     { _environment = Development
     , _port = 49535
     , _websocketPort = 49536
@@ -101,7 +101,7 @@ type Action = ActionT Error ConfigM ()
 getOptions :: Config -> Options
 getOptions config =
   def { settings = getSettings
-      , verbose = case (config^.environment) of
+      , verbose = case config^.environment of
                     Development -> 1
                     Production -> 0
                     Test -> 0

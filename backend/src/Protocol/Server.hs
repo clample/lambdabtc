@@ -49,7 +49,7 @@ import General.Hash (Hash(..))
 import Network.Socket (Socket)
 import Data.Time.Clock.POSIX (getPOSIXTime)
 import Control.Monad.State.Lazy (liftIO)
-import Control.Monad (when, filterM)
+import Control.Monad (when, filterM, unless)
 import System.Random (randomR, getStdGen)
 import Conduit (runConduit, (.|), mapC, mapMC, Conduit)
 import Data.Conduit.Network (sourceSocket, sinkSocket)
@@ -243,7 +243,7 @@ persistUTXOs' persistentUTXOs = liftF (PersistUTXOs persistentUTXOs ())
 
 interpretConnProd :: IOHandlers -> ConnectionContext -> Connection' r -> IO r
 interpretConnProd ioHandlers context conn = case conn of
-  Free (GetContext f) -> do
+  Free (GetContext f) -> 
     interpretConnProd ioHandlers context (f context)
   Free (SetContext mc n) -> do
     let newContext = mutableContext .~ mc $ context
@@ -314,16 +314,14 @@ handleResponse' (Message (HeadersMessageBody (HeadersMessage headers)) _) = do
   mostRecentHeader <- getMostRecentHeader'
   let isValid = verifyHeaders (mostRecentHeader:headers)
   if isValid
-    then do
-      persistHeaders' headers
+    then persistHeaders' headers
     else constructChain headers
 
-handleResponse' (Message (MerkleblockMessageBody (message)) _) = do
+handleResponse' (Message (MerkleblockMessageBody message) _) = do
   mostRecentHeader <- getMostRecentHeader'
-  let isValid = verifyHeaders [mostRecentHeader, (message^.blockHeader)]
+  let isValid = verifyHeaders [mostRecentHeader, message^.blockHeader]
   if isValid
-    then do
-      persistHeader' $ message^.blockHeader
+    then persistHeader' $ message^.blockHeader
     else fail "We recieved invalid header"
       -- todo: does `fail` actually make sense here?
 
@@ -333,7 +331,7 @@ handleResponse' (Message (GetHeadersMessageBody message) _) = do
   writeMessageWithBody' . HeadersMessageBody $ HeadersMessage {_blockHeaders = matchingHeaders }
  
 handleResponse' (Message (InvMessageBody message) _) = do
-  desiredInvs <- map toFilteredBlock <$> filterM (desiredData) (message^.invVectors)
+  desiredInvs <- map toFilteredBlock <$> filterM desiredData (message^.invVectors)
   writeMessageWithBody' . GetDataMessageBody $ GetDataMessage desiredInvs
   where
     -- TODO: query db, etc to see if we actually need the data
@@ -346,7 +344,7 @@ handleResponse' (Message (InvMessageBody message) _) = do
 --       and then proceed to persist duplicate UTXOs
 handleResponse' (Message (TxMessageBody message) _) = do
   isHandled <- isTransactionHandled'
-  when (not isHandled) $ do
+  unless isHandled $ do
     addUTXOs
     writeUiUpdaterMessage' . IncomingFunds . Satoshis $ 1000
     persistTransaction' (message^.transaction)
@@ -364,7 +362,7 @@ handleResponse' (Message (TxMessageBody message) _) = do
         Just _  -> True
 
 handleResponse' message = error $
-  "We are not yet able to handle message" ++ (show message)
+  "We are not yet able to handle message" ++ show message
 
 writeMessageWithBody' :: MessageBody -> Connection' ()
 writeMessageWithBody' body = do
@@ -392,8 +390,8 @@ constructChain headers = do
     -- `headers` does connect to the active chain
     Just (index, header) ->
       do let newLength = index + BlockIndex (length headers)
-         if ( newLength > context^.lastBlock 
-              && verifyHeaders (header:headers))
+         if newLength > context^.lastBlock 
+              && verifyHeaders (header:headers)
             
            -- We have constructed a longer chain -> replace our active chain
            then replaceChain headers index

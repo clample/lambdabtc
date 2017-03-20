@@ -24,6 +24,7 @@ import Control.Monad (replicateM)
 import Data.Bits ((.&.))
 import Crypto.Hash (hashWith)
 import Data.ByteArray (convert)
+import Data.Maybe (fromMaybe)
 
 import Test.QuickCheck.Arbitrary (Arbitrary(..))
 import Test.QuickCheck.Gen (choose, suchThat)
@@ -51,7 +52,7 @@ data UTXO = UTXO
   , _outIndex :: TxIndex
   } deriving (Eq, Show)
 
-data Value = Satoshis Int
+newtype Value = Satoshis Int
   deriving (Eq, Show)
 
 newtype TxVersion = TxVersion Int
@@ -82,7 +83,7 @@ outputScripts transaction = map (^.outputScript) (transaction^.outputs)
 -------------------- Transaction signing
 signedTransaction :: UTXO -> Script -> (PublicKey, PrivateKey) -> [TxOutput] -> Transaction
 signedTransaction utxo' oldInputScript keys outputs'  = 
-  (set (inputs.mapped.signatureScript) newInputScript transaction)
+  set (inputs.mapped.signatureScript) newInputScript transaction
   where
     newInputScript = scriptSig (signedHash oldInputScript (snd keys) transaction) (fst keys)
     
@@ -98,15 +99,14 @@ signedTransaction utxo' oldInputScript keys outputs'  =
 -- behaviour by performing one SHA in `intermediateHash`
 -- and allowing `signWith` to perform the second hash
 signedHash :: Script -> PrivateKey -> Transaction -> Signature
-signedHash oldInputScript privateKey intermediateTransaction =
-  case signWith 100 privateKey SHA256 intermediateHash' of
-    Nothing -> error "Unable to sign hash"
-    Just sig -> sig
+signedHash oldInputScript privateKey intermediateTransaction = fromMaybe
+  (error "Unable to sign hash")
+  (signWith 100 privateKey SHA256 intermediateHash')
   where intermediateHash' = intermediateHash intermediateTransaction oldInputScript
 
 intermediateHash :: Transaction -> Script -> ByteString
 intermediateHash intermediateTransaction oldInputScript =
-  convert . (hashWith SHA256) $ bs
+  convert . hashWith SHA256 $ bs
   where bs = BL.toStrict . runPut $ do
           put (set (inputs.mapped.signatureScript) oldInputScript intermediateTransaction)
           putWord32le sighashAll
@@ -211,7 +211,7 @@ getTxValue =
 
 scriptSig :: Signature -> PublicKey -> Script
 scriptSig signature pubKey = Script [Txt der, Txt compressedPubkey]
-  where der = (BL.toStrict . runPut $ putDerSignature signature)
+  where der = BL.toStrict . runPut $ putDerSignature signature
         compressedPubkey = BL.toStrict . BIN.encode
           $ PublicKeyRep Compressed pubKey
           -- TODO: This scriptSig will only be valid for
@@ -230,7 +230,7 @@ putDERInt :: Integer -> Put
 putDERInt int = do
   let intBS = unroll BE int
       headByte = BS.head intBS
-  if (headByte .&. 0x80 == 0x80)
+  if headByte .&. 0x80 == 0x80
     then putByteString $ 0x00 `BS.cons` intBS
     else putByteString intBS
     
@@ -274,7 +274,7 @@ putTxVersion (TxVersion v) =
   putWord32le . fromIntegral $ v
 
 getTxVersion :: Get TxVersion
-getTxVersion = do
+getTxVersion =
   TxVersion . fromIntegral <$> getWord32le
 
 defaultVersion :: TxVersion 

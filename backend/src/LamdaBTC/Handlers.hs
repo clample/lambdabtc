@@ -1,4 +1,3 @@
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveGeneric #-}
 
@@ -42,7 +41,7 @@ import Database.Persist (Entity(..), get)
 import Control.Monad.Reader (ask)
 import Control.Monad.Trans.Class (lift)
 import Control.Lens ((^.))
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, fromMaybe)
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString as BS
 import Control.Concurrent.STM.TBMChan (writeTBMChan)
@@ -150,9 +149,9 @@ buildTransaction txRaw = do
 getUTXOAndKeys :: ActionT Error ConfigM (UTXO, (PublicKey, PrivateKey), Script)
 getUTXOAndKeys = do
   mpUTXO <- runDB $ get (PersistentUTXOKey 1)
-  let putxo = case mpUTXO of
-                Nothing -> error $ "There are no utxo's in the db"
-                Just pUTXO -> pUTXO
+  let putxo = fromMaybe
+        (error "There are no utxo's in the db")
+        mpUTXO
 
       -- TODO: Create a function `decodeUtxo :: PersistentUTXO -> UTXO`
       utxo = UTXO {_outTxHash = Hash . persistentUTXOOutTxHash $ putxo
@@ -161,10 +160,10 @@ getUTXOAndKeys = do
       scriptBS = persistentUTXOScript putxo
       oldInputScript = runGet (getScript . BS.length $ scriptBS) (BL.fromChunks [scriptBS]) 
   mpKeySet <- runDB $ get (KeySetKey . fromIntegral . persistentUTXOKeySetId $ putxo)
-  let (KeySet address privKeyT) = case mpKeySet of
-                                    Nothing -> error $ "unable to find keyset with id "
-                                      ++ (show . persistentUTXOKeySetId) putxo
-                                    Just pKeySet -> pKeySet
+  let (KeySet address privKeyT) = fromMaybe
+        (error $ "unable to find keyset with id "
+          ++ (show . persistentUTXOKeySetId) putxo)
+        mpKeySet
       privKey = getPrivateKeyFromWIF . WIF $ privKeyT
       keySet = (getPubKey privKey, privKey)
   return (utxo, keySet, oldInputScript)
@@ -186,5 +185,5 @@ handleIncomingFunds connection val = do
   sendTextData connection valText
   
 getStatusH :: Action
-getStatusH = do
+getStatusH =
   status ok200

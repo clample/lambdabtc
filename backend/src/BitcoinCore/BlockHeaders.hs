@@ -28,22 +28,22 @@ data BlockHeader = BlockHeader
   , _nonce :: Nonce
   } deriving (Eq, Show)
 
-data BlockVersion = BlockVersion Int
+newtype BlockVersion = BlockVersion Int
   deriving (Eq, Show)
 
 type PrevBlockHash = BlockHash
 type BlockHash = Hash BlockHeader
 
-data Timestamp = Timestamp POSIXTime
+newtype Timestamp = Timestamp POSIXTime
   deriving (Eq, Show)
 
-data Difficulty = Difficulty ByteString
+newtype Difficulty = Difficulty ByteString
   deriving (Eq)
 
 instance Show Difficulty where
   show (Difficulty bs) = "Difficulty " ++ (show . encode $ bs)
 
-data Nonce = Nonce ByteString
+newtype Nonce = Nonce ByteString
   deriving (Eq)
 
 instance Show Nonce where

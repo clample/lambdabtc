@@ -50,7 +50,7 @@ persistGenesisBlock config = do
     runSqlPool (insert_ . encodeBlockHeader . genesisBlock $ (config^.network)) (config^.pool)
 
 persistHeader :: ConnectionPool -> BlockHeader -> IO ()
-persistHeader pool header = do
+persistHeader pool header =
   runSqlPool (insert_ $ encodeBlockHeader header) pool
 
 persistHeaders :: ConnectionPool -> [BlockHeader] -> IO ()
@@ -75,7 +75,7 @@ getBlockHeaderFromHash pool (Hash hash') = do
     []       -> return Nothing
     [header] -> do
       let DB.Entity persistentKey persistentHeader = header
-          key = fromDbKey $ persistentKey
+          key = fromDbKey persistentKey
           blockHeader = decodeBlockHeader persistentHeader
       return . Just $ (key , blockHeader) 
     _        -> fail "Multiple blocks found with same hash."
@@ -103,7 +103,7 @@ getBlockWithIndex pool i = (fmap . fmap) decodeBlockHeader $
   
 nHeadersSinceKey :: ConnectionPool -> Int -> BlockIndex -> IO [BlockHeader]
 nHeadersSinceKey pool n key = do
-  let key' = toDbKey $ key
+  let key' = toDbKey key
   persistentHeaders <- runSqlPool (selectList [ PersistentBlockHeaderId >=. key'] [LimitTo n]) pool
   return $ map getHeaderFromEntity persistentHeaders
 
