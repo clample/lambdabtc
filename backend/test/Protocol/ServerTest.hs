@@ -22,7 +22,8 @@ import BitcoinCore.BlockHeaders ( BlockHeader(..)
                                 , hashBlock
                                 , ValidHeaders(..)
                                 , ValidBlockTree(..)
-                                , verifyHeaders)
+                                , verifyHeaders
+                                , showBlocks)
 import BitcoinCore.Keys (Address(..))
 import General.Types (Network(..))
 import General.Persistence (PersistentUTXO(..))
@@ -214,17 +215,23 @@ longerChain' = testProperty
 
 prop_longerChain' :: ValidBlockTree -> MessageContext -> Property
 prop_longerChain' (ValidBlockTree tree) msgContext = counterexample
-  (displayLogs logAll $ resultHandle^.logs)
-  (length activeChain == length (head . sortOn length . branches $ tree))
+  debugString
+  (length activeChain == length longestBranch)
   where
     ic = (handlers.mockDB.blockHeaders .~ [genesisBlock]) defaultIC
     genesisBlock = tree^.node
     toHeadersMessage hs = (Message (HeadersMessageBody (HeadersMessage hs)) msgContext)
     branches' = filter (/= []) . map (drop 1) . branches $ tree
+    longestBranch = head . sortOn length . branches $ tree
     activeChain = resultHandle^.handlers.mockDB.blockHeaders
     (resultHandle, _) = runIdentity $ interpretConnTest ic $
       mapM (handleResponse' . toHeadersMessage) branches'
     logAll _ = True
+    debugString = unlines
+      [ displayLogs logAll $ resultHandle^.logs
+      , "Active chain: " ++ showBlocks activeChain
+      , "Actual longest chain: " ++ showBlocks longestBranch
+      ]
 
 defaultIC :: TestInterpreterContext
 defaultIC = TestInterpreterContext

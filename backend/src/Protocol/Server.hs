@@ -29,6 +29,7 @@ import BitcoinCore.BlockHeaders ( BlockHash(..)
                                 , verifyHeaders
                                 , prevBlockHash
                                 , hashBlock
+                                , showBlocks
                                 )
 import BitcoinCore.BloomFilter ( NFlags(..)
                                , defaultFilterWithElements)
@@ -397,7 +398,8 @@ handleNewHeaders newHeaders = do
 constructChain :: [BlockHeader] -> Connection' ()
 constructChain headers = do  
   let connectingBlockHash = (head headers)^.prevBlockHash
-  log' $ LogEntry Debug "constructing chain"
+  logDebug' $ "Constructing Chain with headers "
+    ++ showBlocks headers
   connectingBlock <- getBlockHeaderFromHash' connectingBlockHash
   case connectingBlock of
     
@@ -405,7 +407,9 @@ constructChain headers = do
     Nothing -> constructChainFromRejectedBlocks connectingBlockHash
     
     -- `headers` does connect to the active chain
-    Just (index, header) -> replaceChainIfLonger header index
+    Just (index, header) -> do
+      logDebug' "Constructing chain. Found block connecting to main chain."
+      replaceChainIfLonger header index
   where
     constructChainFromRejectedBlocks connectingBlockHash = do
       context <- getContext'
@@ -430,6 +434,7 @@ constructChain headers = do
         else addRejected headers
       
     replaceChain newChain connectionIndex = do
+      logDebug' "Replacing main chain"
       context <- getContext'
       let inxs = enumFromTo (connectionIndex + 1) (context^.lastBlock)
       newRejected <- mapM getBlockHeader' inxs
@@ -588,3 +593,5 @@ writeUiUpdaterMessage :: TBMChan UIUpdaterMessage -> UIUpdaterMessage -> IO ()
 writeUiUpdaterMessage chan message =
   liftIO . atomically $ writeTBMChan chan message
 
+logDebug' :: String -> Connection' ()
+logDebug' = log' . LogEntry Debug

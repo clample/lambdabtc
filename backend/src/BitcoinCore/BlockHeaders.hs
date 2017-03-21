@@ -232,3 +232,5 @@ genesisBlock TestNet3 = BlockHeader
   (Timestamp . fromIntegral $ 1296688602)
   (Difficulty . fst . decode $ "FFFF001D")
   (Nonce . fst . decode $ "1aa4ae18")
+
+showBlocks = unwords . map (show . hashBlock)
