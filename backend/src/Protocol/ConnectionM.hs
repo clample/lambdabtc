@@ -82,3 +82,10 @@ instance HasPeerAddr ConnectionContext where
 
 instance HasNetwork ConnectionContext where
   network = connectionContextNetwork
+
+data InterpreterContext = InterpreterContext
+  { _ioHandlers :: IOHandlers
+  , _context    :: ConnectionContext
+  }
+
+makeLenses ''InterpreterContext

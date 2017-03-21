@@ -140,7 +140,11 @@ interpretConnTest mockHandles context conn =  case conn of
     let newMockHandles = mockDB.utxos %~ (++ newUtxos) $ mockHandles
     interpretConnTest newMockHandles context n
   Pure r -> return (mockHandles, r)
-  where blockHeaderCount = BlockIndex $ (length $ mockHandles^.mockDB.blockHeaders) - 1
+  where
+    blockHeaderCount = BlockIndex $ (length $ mockHandles^.mockDB.blockHeaders) - 1
+    incrementLastBlock :: ConnectionContext -> Int -> ConnectionContext
+    incrementLastBlock c i =
+      lastBlock %~ (\(BlockIndex old) -> BlockIndex (old + i)) $ c
 
 pingAndPong = testCase
   "We should respond to a single ping message with a single pong message"
