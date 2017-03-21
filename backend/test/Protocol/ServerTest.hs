@@ -39,7 +39,8 @@ import Protocol.Util (HasLastBlock(..), BlockIndex(..))
 
 import Control.Lens (makeLenses, (^.), (%~), (.~))
 import Control.Monad.Free (Free(..))
-import Data.List (findIndex, any, sortOn)
+import Data.List (findIndex, any, maximumBy)
+import Data.Function (on)
 import Control.Monad.Identity (Identity(..), runIdentity)
 import System.Random (mkStdGen)
 import Test.QuickCheck.Gen (generate)
@@ -222,7 +223,7 @@ prop_longerChain' (ValidBlockTree tree) msgContext = counterexample
     genesisBlock = tree^.node
     toHeadersMessage hs = (Message (HeadersMessageBody (HeadersMessage hs)) msgContext)
     branches' = filter (/= []) . map (drop 1) . branches $ tree
-    longestBranch = head . sortOn length . branches $ tree
+    longestBranch = maximumBy (compare `on` length) . branches $ tree
     activeChain = resultHandle^.handlers.mockDB.blockHeaders
     (resultHandle, _) = runIdentity $ interpretConnTest ic $
       mapM (handleResponse' . toHeadersMessage) branches'
