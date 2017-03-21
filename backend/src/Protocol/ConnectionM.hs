@@ -86,6 +86,15 @@ instance HasNetwork ConnectionContext where
 data InterpreterContext = InterpreterContext
   { _ioHandlers :: IOHandlers
   , _context    :: ConnectionContext
+  , _logs :: [LogEntry]
   }
 
+data LogEntry = LogEntry
+  { _logLevel :: LogLevel
+  , _logStr   :: String
+  }
+
+data LogLevel = Debug | Error
+
 makeLenses ''InterpreterContext
+makeLenses ''LogEntry

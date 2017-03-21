@@ -10,7 +10,12 @@ import Protocol.ConnectionM ( ConnectionContext(..)
                             , IOHandlers(..)
                             , MutableConnectionContext(..)
                             , InterpreterContext(..)
+                            , LogEntry(..)
+                            , LogLevel
+                            , logLevel
+                            , logStr
                             , ioHandlers
+                            , logs
                             , context
                             , peerSocket
                             , myAddr
@@ -112,7 +117,8 @@ getConnectionContext config = do
         , _ioHandlersPool = config^.pool}
       ic = InterpreterContext
         { _ioHandlers = ioHandlers'
-        , _context = connectionContext}
+        , _context = connectionContext
+        , _logs = [] }
   return ic
   
 listener :: TBMChan Message -> Socket -> IO ()
@@ -177,6 +183,7 @@ data ConnectionInteraction next
   | GetTransactionFromHash TxHash (Maybe Integer -> next)
   | GetAllAddresses ([Address] -> next)
   | PersistUTXOs [PersistentUTXO] next
+  | Log LogEntry next
 
 instance Functor ConnectionInteraction where
   fmap f (GetContext                g) = GetContext                (f . g)
@@ -195,6 +202,7 @@ instance Functor ConnectionInteraction where
   fmap f (GetTransactionFromHash  h g) = GetTransactionFromHash  h (f . g)
   fmap f (GetAllAddresses           g) = GetAllAddresses           (f . g)
   fmap f (PersistUTXOs            u x) = PersistUTXOs            u (f x)
+  fmap f (Log                    le x) = Log                    le (f x)
 
 type Connection' = Free ConnectionInteraction
 
@@ -246,6 +254,9 @@ getAllAddresses' = liftF (GetAllAddresses id)
 
 persistUTXOs' :: [PersistentUTXO] -> Connection' ()
 persistUTXOs' persistentUTXOs = liftF (PersistUTXOs persistentUTXOs ())
+
+log' :: LogEntry -> Connection' ()
+log' le = liftF (Log le ())
 
 interpretConnProd :: InterpreterContext -> Connection' r -> IO r
 interpretConnProd ic conn = case conn of
@@ -301,6 +312,9 @@ interpretConnProd ic conn = case conn of
   Free (PersistUTXOs utxos n) -> do
     Persistence.persistUTXOs (ic^.ioHandlers.pool) utxos
     interpretConnProd ic n
+  Free (Log le n) -> do
+    let newIC = logs %~ (++ [le]) $ ic
+    interpretConnProd newIC n
   Pure r -> return r
   where
     incrementLastBlock :: InterpreterContext -> Int -> InterpreterContext

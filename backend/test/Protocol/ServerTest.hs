@@ -11,7 +11,8 @@ import Protocol.MessageBodies ( HeadersMessage( HeadersMessage))
 import Protocol.Server
 import Protocol.ConnectionM ( ConnectionContext(..)
                             , MutableConnectionContext(..)
-                            , mutableContext)
+                            , mutableContext
+                            , LogEntry)
 import General.InternalMessaging ( UIUpdaterMessage(..)
                                  , InternalMessage(..))
 import BitcoinCore.Transaction.Transactions (TxHash, hashTransaction)
@@ -73,6 +74,7 @@ data MockDB = MockDB
 data TestInterpreterContext = TestInterpreterContext
   { _context  :: ConnectionContext
   , _handlers :: MockHandles
+  , _logs :: [LogEntry]
   }
 
 makeLenses ''MockHandles
@@ -147,6 +149,9 @@ interpretConnTest ic conn =  case conn of
   Free (PersistUTXOs newUtxos n) -> do
     let newIC = handlers.mockDB.utxos %~ (++ newUtxos) $ ic
     interpretConnTest newIC n
+  Free (Log le n) -> do
+    let newIC = logs %~ (++ [le]) $ ic
+    interpretConnTest newIC n
   Pure r -> return (ic, r)
   where
     blockHeaderCount = BlockIndex $ (length $ ic^.handlers.mockDB.blockHeaders) - 1
@@ -220,6 +225,7 @@ defaultIC :: TestInterpreterContext
 defaultIC = TestInterpreterContext
   { _context = genericConnectionContext
   , _handlers = blankMockHandles
+  , _logs = []
   }
 
 blankMockHandles :: MockHandles
