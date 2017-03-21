@@ -12,7 +12,9 @@ import Protocol.Server
 import Protocol.ConnectionM ( ConnectionContext(..)
                             , MutableConnectionContext(..)
                             , mutableContext
-                            , LogEntry)
+                            , LogEntry
+                            , displayLogs
+                            , LogLevel(..))
 import General.InternalMessaging ( UIUpdaterMessage(..)
                                  , InternalMessage(..))
 import BitcoinCore.Transaction.Transactions (TxHash, hashTransaction)
@@ -41,6 +43,7 @@ import Control.Monad.Identity (Identity(..), runIdentity)
 import System.Random (mkStdGen)
 import Test.QuickCheck.Gen (generate)
 import Test.QuickCheck (ioProperty, Property)
+import Test.QuickCheck.Property (counterexample)
 
 newtype ArbPingMessage = ArbPingMessage Message
   deriving (Show, Eq)
@@ -209,9 +212,10 @@ longerChain' = testProperty
   "We should use the correct active chain"
   prop_longerChain'
 
-prop_longerChain' :: ValidBlockTree -> MessageContext -> Bool
-prop_longerChain' (ValidBlockTree tree) msgContext = 
-  length activeChain == length (head . sortOn length . branches $ tree)
+prop_longerChain' :: ValidBlockTree -> MessageContext -> Property
+prop_longerChain' (ValidBlockTree tree) msgContext = counterexample
+  (displayLogs logAll $ resultHandle^.logs)
+  (length activeChain == length (head . sortOn length . branches $ tree))
   where
     ic = (handlers.mockDB.blockHeaders .~ [genesisBlock]) defaultIC
     genesisBlock = tree^.node
@@ -220,6 +224,7 @@ prop_longerChain' (ValidBlockTree tree) msgContext =
     activeChain = resultHandle^.handlers.mockDB.blockHeaders
     (resultHandle, _) = runIdentity $ interpretConnTest ic $
       mapM (handleResponse' . toHeadersMessage) branches'
+    logAll _ = True
 
 defaultIC :: TestInterpreterContext
 defaultIC = TestInterpreterContext

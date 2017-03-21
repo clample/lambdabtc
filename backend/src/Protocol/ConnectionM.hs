@@ -17,7 +17,7 @@ import Protocol.Util (HasLastBlock(..), BlockIndex(..))
 import Data.Conduit.TMChan (TBMChan)
 import Data.Time.Clock.POSIX (POSIXTime)
 import System.Random (StdGen)
-import Control.Lens (makeLenses)
+import Control.Lens (makeLenses, (^.))
 import Network.Socket (Socket)
 import Database.Persist.Sql (ConnectionPool)
 import BitcoinCore.BlockHeaders (BlockHeader)
@@ -92,9 +92,17 @@ data InterpreterContext = InterpreterContext
 data LogEntry = LogEntry
   { _logLevel :: LogLevel
   , _logStr   :: String
-  }
+  } deriving (Show, Eq)
 
 data LogLevel = Debug | Error
+  deriving (Show, Eq)
 
 makeLenses ''InterpreterContext
 makeLenses ''LogEntry
+
+displayLogs :: (LogLevel -> Bool) -> [LogEntry] -> String
+displayLogs f ls = unlines
+                   . map formatLog
+                   . filter (f . _logLevel) $ ls
+  where
+    formatLog l = show (l^.logLevel) ++  " " ++ show (l^.logStr)

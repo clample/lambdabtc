@@ -11,7 +11,7 @@ import Protocol.ConnectionM ( ConnectionContext(..)
                             , MutableConnectionContext(..)
                             , InterpreterContext(..)
                             , LogEntry(..)
-                            , LogLevel
+                            , LogLevel(..)
                             , logLevel
                             , logStr
                             , ioHandlers
@@ -397,6 +397,7 @@ handleNewHeaders newHeaders = do
 constructChain :: [BlockHeader] -> Connection' ()
 constructChain headers = do  
   let connectingBlockHash = (head headers)^.prevBlockHash
+  log' $ LogEntry Debug "constructing chain"
   connectingBlock <- getBlockHeaderFromHash' connectingBlockHash
   case connectingBlock of
     
