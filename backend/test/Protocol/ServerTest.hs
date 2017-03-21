@@ -15,19 +15,31 @@ import Protocol.ConnectionM ( ConnectionContext(..)
 import General.InternalMessaging ( UIUpdaterMessage(..)
                                  , InternalMessage(..))
 import BitcoinCore.Transaction.Transactions (TxHash, hashTransaction)
-import BitcoinCore.BlockHeaders (BlockHeader(..), hashBlock, ValidHeaders(..))
+import BitcoinCore.BlockHeaders ( BlockHeader(..)
+                                , hashBlock
+                                , ValidHeaders(..)
+                                , ValidBlockTree(..)
+                                , verifyHeaders)
 import BitcoinCore.Keys (Address(..))
 import General.Types (Network(..))
 import General.Persistence (PersistentUTXO(..))
-import General.Util (Addr(..), IP(..), Port(..))
+import General.Util ( Addr(..)
+                    , IP(..)
+                    , Port(..)
+                    , getBranch
+                    , Tree(..)
+                    , node
+                    , subTree
+                    , branches)
 import Protocol.Util (HasLastBlock(..), BlockIndex(..))
 
 import Control.Lens (makeLenses, (^.), (%~), (.~))
 import Control.Monad.Free (Free(..))
-import Data.List (findIndex, any)
+import Data.List (findIndex, any, sortOn)
 import Control.Monad.Identity (Identity(..), runIdentity)
 import System.Random (mkStdGen)
 import Test.QuickCheck.Gen (generate)
+import Test.QuickCheck (ioProperty, Property)
 
 newtype ArbPingMessage = ArbPingMessage Message
   deriving (Show, Eq)
@@ -176,6 +188,21 @@ prop_longerChain (ValidHeaders (h1:h2:hs)) msgContext =
     (resultHandle, _) = runIdentity $ interpretConnTest mockHandle 
         genericConnectionContext (handleResponse' headersMessage)
 
+longerChain' = testProperty
+  "We should use the correct active chain"
+  prop_longerChain'
+
+prop_longerChain' :: ValidBlockTree -> MessageContext -> Bool
+prop_longerChain' (ValidBlockTree tree) msgContext = 
+  length activeChain == length (head . sortOn length . branches $ tree)
+  where
+    mockHandle = (mockDB.blockHeaders .~ [genesisBlock]) blankMockHandles
+    genesisBlock = tree^.node
+    toHeadersMessage hs = (Message (HeadersMessageBody (HeadersMessage hs)) msgContext)
+    branches' = filter (/= []) . map (drop 1) . branches $ tree
+    activeChain = resultHandle^.mockDB.blockHeaders
+    (resultHandle, _) = runIdentity $ interpretConnTest mockHandle genericConnectionContext $
+      mapM (handleResponse' . toHeadersMessage) branches'
 
 blankMockHandles :: MockHandles
 blankMockHandles = MockHandles

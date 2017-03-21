@@ -5,6 +5,7 @@ module BitcoinCore.BlockHeaders where
 import General.Types (Network(..))
 import BitcoinCore.MerkleTrees (MerkleHash(..))
 import General.Hash (Hash(..), hashObject, doubleSHA)
+import General.Util (Tree(..), node, subTree, getBranch, branches)
 
 import Data.ByteString (ByteString)
 import Data.Time.Clock.POSIX (POSIXTime)
@@ -13,9 +14,10 @@ import Data.Binary.Get (Get, getWord32le, getByteString)
 import Data.Binary (Binary(..))
 import Data.ByteString.Base16 (decode, encode)
 import Control.Lens (makeLenses, (^.))
+import Control.Monad (replicateM)
 -----------
 import Test.QuickCheck.Arbitrary (Arbitrary(..))
-import Test.QuickCheck.Gen (choose, vectorOf, Gen)
+import Test.QuickCheck.Gen (choose, vectorOf, Gen, sized)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as Char8
 
@@ -169,15 +171,48 @@ instance Arbitrary ValidHeaders where
     header4 <- nextHeader header3
     let validHeaders = [header1, header2, header3, header4]
     return $ ValidHeaders validHeaders
-    where
-      nextHeader h =
-        BlockHeader
-        <$> arbitrary
-        <*> pure (hashBlock h)
-        <*> arbitrary
-        <*> arbitrary
-        <*> arbitrary
-        <*> arbitrary
+
+nextHeader :: BlockHeader -> Gen BlockHeader
+nextHeader h =
+  BlockHeader
+  <$> arbitrary
+  <*> pure (hashBlock h)
+  <*> arbitrary
+  <*> arbitrary
+  <*> arbitrary
+  <*> arbitrary
+
+newtype ValidBlockTree = ValidBlockTree (Tree BlockHeader)
+  deriving (Show, Eq)
+
+instance Arbitrary ValidBlockTree where
+  arbitrary = do
+    genesisBlock <- arbitrary
+    ValidBlockTree <$> (sized $ arbBlockTree genesisBlock)
+
+arbBlockTree :: BlockHeader -> Int -> Gen (Tree BlockHeader)
+arbBlockTree parentBlock 0 = do
+  next <- nextHeader parentBlock
+  return $ Tree
+    { _node = next
+    , _subTree = []
+    }
+arbBlockTree parentBlock n = do
+  next     <- nextHeader parentBlock
+  l1 <- choose (0, n `div` 2)
+  l2 <- choose (0, n `div` 2)
+  subTree' <- replicateM l1 $ arbBlockTree next l2
+  return $ Tree
+    { _node = next
+    , _subTree = subTree'
+    }
+
+{--
+-- all headers from ValidBlockTree will
+-- be included in the result
+splitTree :: Tree BlockHeader -> Gen [[BlockHeader]]
+splitTree (ValidBlockTree tree) = return $ branches tree
+--}
 
 -- The genesis blocks were determined by hand, referencing
 -- https://github.com/bitcoin/bitcoin/blob/812714fd80e96e28cd288c553c83838cecbfc2d9/src/chainparams.cpp

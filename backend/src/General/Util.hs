@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module General.Util
   ( Payload(..)
@@ -16,7 +17,12 @@ module General.Util
   , Endian(..)
   , Addr(..)
   , IP(..)
-  , Port(..)) where
+  , Port(..)
+  , Tree(..)
+  , node
+  , subTree
+  , getBranch
+  , branches) where
 
 import Prelude hiding (take)
 
@@ -36,6 +42,7 @@ import Data.Binary.Put (Put, putWord8, putWord16le, putWord32le, putWord64le, ru
 import Data.Bits (shiftR, shiftL, (.|.))
 import Data.List (unfoldr)
 import Data.Tuple (swap)
+import Control.Lens (makeLenses, (^.))
 
 import Test.QuickCheck.Arbitrary (Arbitrary(..))
 import Test.QuickCheck.Gen (choose, elements)
@@ -188,3 +195,29 @@ instance Arbitrary Payload where
   arbitrary = do
     str <- arbitrary
     return (Payload $ Char8.pack str)
+
+data Tree a = Tree
+  { _node    :: a
+  , _subTree :: [Tree a]
+  } deriving (Show, Eq)
+
+makeLenses ''Tree
+
+getBranch :: [Int] -> Tree a -> Maybe [a]
+getBranch is tree = reverse <$> getBranchStep [] is tree
+
+getBranchStep :: [a] -> [Int] -> Tree a -> Maybe [a]
+getBranchStep acc (i:is) tree = do
+  let val = tree^.node
+  subTree' <- getSubTree i tree
+  getBranchStep (val:acc) is subTree'
+
+getSubTree :: Int -> Tree a -> Maybe (Tree a)
+getSubTree i tree =
+  if i < 0 || length (tree^.subTree) <= i 
+  then Just $ (tree^.subTree) !! i
+  else Nothing
+
+branches :: Tree a -> [[a]]
+branches (Tree a []) = [[a]]
+branches (Tree a ts) = concat $ map (\t -> map (a:) (branches t)) ts
