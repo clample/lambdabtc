@@ -12,7 +12,12 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 
-import Crypto.PubKey.ECC.ECDSA (signWith, Signature(..), PrivateKey(..), PublicKey(..))
+import Crypto.PubKey.ECC.ECDSA
+  ( signWith
+  , Signature(..)
+  , PrivateKey(..)
+  , PublicKey(..)
+  )
 import Crypto.Hash.Algorithms (SHA256(..))
 
 import Control.Lens (makeLenses, (^.), mapped, set)
