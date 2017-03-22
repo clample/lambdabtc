@@ -1,56 +1,70 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Protocol.Server where
 
-import Protocol.Messages (parseMessage, Message(..), MessageBody(..), MessageContext(..))
+import Protocol.Messages
+  ( parseMessage
+  , Message(..)
+  , MessageBody(..)
+  , MessageContext(..)
+  )
 import Protocol.MessageBodies 
 import Protocol.Network (connectToPeer, sock, addr)
 import Protocol.Util (getUTXOS, HasLastBlock(..), BlockIndex(..))
 import qualified Protocol.Persistence as Persistence
-import Protocol.ConnectionM ( ConnectionContext(..)
-                            , IOHandlers(..)
-                            , MutableConnectionContext(..)
-                            , InterpreterContext(..)
-                            , LogEntry(..)
-                            , LogLevel(..)
-                            , logLevel
-                            , logStr
-                            , ioHandlers
-                            , logs
-                            , context
-                            , peerSocket
-                            , myAddr
-                            , writerChan
-                            , listenChan
-                            , randGen
-                            , rejectedBlocks
-                            , mutableContext)
-import BitcoinCore.BlockHeaders ( BlockHash(..)
-                                , BlockHeader(..)
-                                , verifyHeaders
-                                , prevBlockHash
-                                , hashBlock
-                                , showBlocks
-                                )
-import BitcoinCore.BloomFilter ( NFlags(..)
-                               , defaultFilterWithElements)
+import Protocol.ConnectionM
+  ( ConnectionContext(..)
+  , IOHandlers(..)
+  , MutableConnectionContext(..)
+  , InterpreterContext(..)
+  , LogEntry(..)
+  , LogLevel(..)
+  , logLevel
+  , logStr
+  , ioHandlers
+  , logs
+  , context
+  , peerSocket
+  , myAddr
+  , writerChan
+  , listenChan
+  , randGen
+  , rejectedBlocks
+  , mutableContext
+  )
+import BitcoinCore.BlockHeaders
+  ( BlockHash(..)
+  , BlockHeader(..)
+  , verifyHeaders
+  , prevBlockHash
+  , hashBlock
+  , showBlocks
+  )
+import BitcoinCore.BloomFilter
+  ( NFlags(..)
+  , defaultFilterWithElements
+  )
 import BitcoinCore.Keys (addressToPubKeyHash, Address(..))
 import BitcoinCore.Inventory (InventoryVector(..), ObjectType(..))
-import BitcoinCore.Transaction.Transactions ( Value(..)
-                                            , Transaction(..)
-                                            , TxHash
-                                            , hashTransaction
-                                            )
-import General.Config ( Config(..)
-                      , HasAppChan(..)
-                      , HasUIUpdaterChan(..)
-                      )
+import BitcoinCore.Transaction.Transactions
+  ( Value(..)
+  , Transaction(..)
+  , TxHash
+  , hashTransaction
+  )
+import General.Config
+  ( Config(..)
+  , HasAppChan(..)
+  , HasUIUpdaterChan(..)
+  )
 import General.Persistence (PersistentUTXO(..))
-import General.Types ( HasNetwork(..)
-                     , HasVersion(..)
-                     , HasRelay(..)
-                     , HasTime(..)
-                     , HasPeerAddr(..)
-                     , HasPool(..))
+import General.Types
+  ( HasNetwork(..)
+  , HasVersion(..)
+  , HasRelay(..)
+  , HasTime(..)
+  , HasPeerAddr(..)
+  , HasPool(..)
+  )
 import General.InternalMessaging (InternalMessage(..), UIUpdaterMessage(..))
 import General.Util (Addr(..))
 import General.Hash (Hash(..))
@@ -63,13 +77,15 @@ import System.Random (randomR, getStdGen)
 import Conduit (runConduit, (.|), mapC, mapMC, Conduit)
 import Data.Conduit.Network (sourceSocket, sinkSocket)
 import Data.Conduit.Serialization.Binary (conduitGet, conduitPut)
-import Data.Conduit.TMChan ( sourceTBMChan
-                           , sinkTBMChan
-                           , newTBMChan
-                           , TBMChan
-                           , writeTBMChan
-                           , readTBMChan
-                           , tryReadTBMChan)
+import Data.Conduit.TMChan
+  ( sourceTBMChan
+  , sinkTBMChan
+  , newTBMChan
+  , TBMChan
+  , writeTBMChan
+  , readTBMChan
+  , tryReadTBMChan
+  )
 import Control.Concurrent.STM (atomically)
 import Control.Concurrent (forkIO)
 import Data.Binary (Binary(..))
