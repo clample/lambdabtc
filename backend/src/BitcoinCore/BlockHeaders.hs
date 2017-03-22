@@ -131,6 +131,7 @@ instance Binary Nonce where
 -- We will assume that incoming headers are sorted [oldest ... newest]
 -- TODO: try take any order headers and sort them if needed
 verifyHeaders :: [BlockHeader] -> Bool
+verifyHeaders [] = error $ "We should never need to verify an empty list of headers"
 verifyHeaders [newest] = True
 verifyHeaders (old:new:rest) =
   (hashBlock old == (new^.prevBlockHash)) &&
