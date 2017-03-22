@@ -170,12 +170,13 @@ connection ic = do
   
 connectionLoop :: InterpreterContext -> IO ()
 connectionLoop ic = do
-  mmResponse <-  liftIO . atomically . tryReadTBMChan $ (ic^.ioHandlers.listenChan)
+  let readChan = liftIO . atomically . tryReadTBMChan
+  mmResponse <-  readChan $ (ic^.ioHandlers.listenChan)
   case mmResponse of
     Nothing -> fail "listenChan is closed and empty"
     Just Nothing -> return () -- chan is empty
     Just (Just response) -> interpretConnProd ic (handleResponse' response)
-  mmInternalMessage <- liftIO . atomically . tryReadTBMChan $ (ic^.ioHandlers.appChan)
+  mmInternalMessage <- readChan $ (ic^.ioHandlers.appChan)
   case mmInternalMessage of
     Nothing -> fail "appChan is closed and empty"
     Just Nothing -> return () -- chan is empty
@@ -263,7 +264,8 @@ persistHeader' header = do
   liftF (PersistBlockHeader header ())
   incrementLastBlock' 1
 
-getBlockHeaderFromHash' :: BlockHash -> Connection' (Maybe (BlockIndex, BlockHeader))
+getBlockHeaderFromHash' :: BlockHash
+                        -> Connection' (Maybe (BlockIndex, BlockHeader))
 getBlockHeaderFromHash' hash = liftF (GetBlockHeaderFromHash hash id)
 
 deleteBlockHeaders' :: BlockIndex -> Connection' ()
@@ -299,7 +301,8 @@ log' le = liftF (Log le ())
 incrementLastBlock' :: Int -> Connection' ()
 incrementLastBlock' i = do
   context <- getContext'
-  let newContext = mutableContext.lastBlock %~ (\(BlockIndex bi) -> (BlockIndex (bi + i)))
+  let newContext = mutableContext.lastBlock
+                   %~ (\(BlockIndex bi) -> (BlockIndex (bi + i)))
                    $ context
   setContext' $ newContext^.mutableContext
   
@@ -382,15 +385,18 @@ handleResponse' (Message (MerkleblockMessageBody message) _) =
 handleResponse' (Message (GetHeadersMessageBody message) _) = do
   match <- firstHeaderMatch' (message^.blockLocatorHashes)
   matchingHeaders <- 2000 `nHeadersSinceKey'` match
-  writeMessageWithBody' . HeadersMessageBody $ HeadersMessage {_blockHeaders = matchingHeaders }
+  writeMessageWithBody'
+    . HeadersMessageBody
+    $ HeadersMessage {_blockHeaders = matchingHeaders }
  
 handleResponse' (Message (InvMessageBody message) _) = do
-  desiredInvs <- map toFilteredBlock <$> filterM desiredData (message^.invVectors)
+  let desiredData = message^.invVectors
+      desiredInvs = map toFilteredBlock desiredData
   writeMessageWithBody' . GetDataMessageBody $ GetDataMessage desiredInvs
   where
-    -- TODO: query db, etc to see if we actually need the data
-    desiredData _ = return True
-    toFilteredBlock (InventoryVector MSG_BLOCK hash) = InventoryVector MSG_FILTERED_BLOCK hash
+    toFilteredBlock (InventoryVector MSG_BLOCK hash) = InventoryVector
+                                                       MSG_FILTERED_BLOCK
+                                                       hash
     toFilteredBlock invVector = invVector
 
 -- TODO: If this is not atomic, then there is a race condition
@@ -434,7 +440,8 @@ handleNewHeaders newHeaders = do
 
 -- Try to construct a new blockchain using `headers`
 -- if we can construct a new blockchain and it's longer than the active chain,
--- then we replace the active chain. Otherwise, we store `headers` in rejectedBlocks
+-- then we replace the active chain. Otherwise,
+-- we store `headers` in rejectedBlocks
 -- in case we are able to construct a longer chain later on.
 constructChain :: [BlockHeader] -> Connection' ()
 constructChain headers = do  
@@ -450,18 +457,22 @@ constructChain headers = do
     -- `headers` does connect to the active chain
     Just (index, header) -> do
       logDebug' $
-        "Constructing chain. Found block connecting to main chain at: " ++ show index
+        "Constructing chain. Found block connecting to main chain at: "
+        ++ show index
       replaceChainIfLonger header index
   where
     constructChainFromRejectedBlocks connectingBlockHash = do
       context <- getContext'
       let rejectedBlocks' = context^.mutableContext.rejectedBlocks
-          newConnectingBlockHash = filter (\header -> hashBlock header == connectingBlockHash) rejectedBlocks'
+          blockMatches header = hashBlock header == connectingBlockHash
+          newConnectingBlockHash = filter blockMatches rejectedBlocks'
       case newConnectingBlockHash of 
         [] -> addRejected headers
-          -- we can't add any blocks from `rejectedBlocks` to our candidate chain
+          -- we can't add any blocks from `rejectedBlocks`
+          -- to our candidate chain
         (x:xs) -> constructChain (x:headers)
-          -- we can add `x` from `rejectedBlocks` to our candidate chain and try again
+          -- we can add `x` from `rejectedBlocks`
+          -- to our candidate chain and try again
 
     addRejected headers = do
       prevContext <- getContext' 
@@ -472,7 +483,8 @@ constructChain headers = do
       let newLength = connectionIndex + BlockIndex (length headers)
           headersAreValid = verifyHeaders (connectionHeader:headers)
       logDebug' $ "Checking if we should replace the chain."
-        ++ "\n\tActiveChain length: " ++ show (context^.mutableContext.lastBlock)
+        ++ "\n\tActiveChain length: "
+        ++ show (context^.mutableContext.lastBlock)
         ++ "\n\tNewChain length: " ++ show newLength
         ++ "\n\tNew chain is valid? " ++ show headersAreValid
       if newLength > context^.mutableContext.lastBlock
@@ -483,7 +495,9 @@ constructChain headers = do
     replaceChain newChain connectionIndex = do
       logDebug' "Replacing main chain"
       context <- getContext'
-      let inxs = enumFromTo (connectionIndex + 1) (context^.mutableContext.lastBlock)
+      let inxs = enumFromTo
+                 (connectionIndex + 1)
+                 (context^.mutableContext.lastBlock)
       newRejected <- mapM getBlockHeader' inxs
       -- TODO: also remove inxs headers from rejected
       addRejected $ catMaybes newRejected
@@ -505,7 +519,8 @@ getMostRecentHeader' = do
   blockHeaderCount <- blockHeaderCount'
   mLastBlockHeader <- getBlockHeader' blockHeaderCount
   case mLastBlockHeader of
-    Nothing -> fail "Unable to get most recent block header. This should never happen"
+    Nothing -> fail
+      "Unable to get most recent block header. This should never happen"
     Just lastBlockHeader -> return lastBlockHeader
 
 synchronizeHeaders' :: BlockIndex -> Connection' ()
@@ -529,9 +544,12 @@ synchronizeHeaders' lastBlockPeer = do
       case mResponse of
         Nothing -> fail "unable to read message"
         -- TODO: handleResponse' will fail for a lot of message types
-        Just response@(Message (HeadersMessageBody _) _) -> handleResponse' response
+        -- TODO: can we simplify this logic?
+        --       Why handle headers messages differently?
+        Just response@(Message (HeadersMessageBody _) _) ->
+          handleResponse' response
         Just response -> handleResponse' response >> handleMessages'
-
+    
 getHeaders' :: Connection' ()
 getHeaders' = getHeadersOrBlocksMessage' GetHeadersMessageBody GetHeadersMessage
 
@@ -546,12 +564,18 @@ getHeadersOrBlocksMessage' :: (a -> MessageBody)
                            -> Connection' ()
 getHeadersOrBlocksMessage' bodyConstructor messageConstructor = do
   context <- getContext'
-  let getHeadersMessage' lastBlock' = do
+  let allBlocksHashStop = Hash . fst . decode $
+        "0000000000000000000000000000000000000000000000000000000000000000"
+      getHeadersMessage' lastBlock' = do
         blockLocatorHashes' <- queryBlockLocatorHashes' lastBlock'
+        -- TODO: This `let` in a `let` is practice
+        --       simplify this!
+        let message = messageConstructor
+                      (context^.version)
+                      blockLocatorHashes'
+                      allBlocksHashStop
         return $ Message
-          (bodyConstructor (messageConstructor (context^.version) blockLocatorHashes'
-           (Hash . fst . decode $
-            "0000000000000000000000000000000000000000000000000000000000000000")))
+          (bodyConstructor message)
           (MessageContext (context^.network))
   message <- getHeadersMessage' (context^.mutableContext.lastBlock)
   writeMessage' message
@@ -575,7 +599,7 @@ isNewSync' = (== []) <$> getAllAddresses'
 sendVersion' :: Connection' ()
 sendVersion' = do
   context <- getContext'
-  let nonce' = Nonce64 . fst $ randomR (0, 0xffffffffffffffff) (context^.mutableContext.randGen)
+  let nonce' = Nonce64 . fst $ randomR (0, maxNonce) randGen'
                -- TODO: We need to update the randGen after calling randomR
       versionMessage = Message
         (VersionMessageBody (VersionMessage
@@ -587,6 +611,8 @@ sendVersion' = do
           (context^.relay)
           (context^.time)))
         (MessageContext (context^.network))
+      maxNonce = 0xffffffffffffffff -- 8 bytes
+      randGen' = context^.mutableContext.randGen
   writeMessage' versionMessage
 
 setFilter' :: Connection' ()
@@ -596,7 +622,8 @@ setFilter' = do
   let
     (filter', filterContext') = defaultFilterWithElements pubKeyHashes
     filterloadMessage = Message
-      (FilterloadMessageBody (FilterloadMessage filter' filterContext' BLOOM_UPDATE_NONE))
+      (FilterloadMessageBody
+        (FilterloadMessage filter' filterContext' BLOOM_UPDATE_NONE))
       (MessageContext (context^.network))
   writeMessage' filterloadMessage
 
@@ -620,17 +647,25 @@ handleInternalMessage' (AddAddress address) = do
   writeMessage' filterAddMessage
 
 blockLocatorIndices :: BlockIndex -> [BlockIndex]
-blockLocatorIndices lastBlock' = reverse . addGenesisIndiceIfNeeded $ blockLocatorIndicesStep 10 1 [lastBlock']
+blockLocatorIndices lastBlock' = reverse
+                                 . addGenesisIndiceIfNeeded
+                                 $ blockLocatorIndicesStep 10 1 [lastBlock']
   where addGenesisIndiceIfNeeded indices@((BlockIndex 0):xs) = indices
         addGenesisIndiceIfNeeded xs   = (BlockIndex 0):xs
 
 blockLocatorIndicesStep :: Int -> Int -> [BlockIndex] -> [BlockIndex]
 blockLocatorIndicesStep c step indices@((BlockIndex i):is)
-  | c > 0 && i > 0 = blockLocatorIndicesStep (c - 1) step ((BlockIndex $ i - 1):indices)
-  | i - step > 0 = blockLocatorIndicesStep c (step * 2) ((BlockIndex $ i - step):indices)
+  | c > 0 && i > 0 = blockLocatorIndicesStep
+                     (c - 1)
+                     step
+                     ((BlockIndex $ i - 1):indices)
+  | i - step > 0 = blockLocatorIndicesStep
+                   c
+                   (step * 2)
+                   ((BlockIndex $ i - step):indices)
   | otherwise = indices
-blockLocatorIndicesStep _ _ [] =
-  error "blockLocatorIndicesStep must be called with a nonempty accummulator array "
+blockLocatorIndicesStep _ _ [] = error
+  "blockLocatorIndicesStep must be called with a nonempty accummulator array"
 
 writeMessage :: TBMChan Message -> Message -> IO ()
 writeMessage chan message = 
