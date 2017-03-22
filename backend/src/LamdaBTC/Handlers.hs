@@ -11,28 +11,32 @@ module LamdaBTC.Handlers
   ) where
 
 import BitcoinCore.Keys
-import BitcoinCore.Transaction.Transactions ( Transaction(..)
-                                            , TxOutput(..)
-                                            , UTXO(..)
-                                            , TxIndex(..)
-                                            , signedTransaction)
+import BitcoinCore.Transaction.Transactions
+  ( Transaction(..)
+  , TxOutput(..)
+  , UTXO(..)
+  , TxIndex(..)
+  , signedTransaction
+  )
 import qualified BitcoinCore.Transaction.Transactions as TX
 import BitcoinCore.Transaction.Script (payToPubkeyHash, getScript, Script(..))
 import General.InternalMessaging (InternalMessage(..))
-
 import General.Persistence
 import General.Config
 import General.Types (HasNetwork(..), Network(..))
 import General.Util (maybeRead)
-import Crypto.PubKey.ECC.ECDSA (PrivateKey(..), PublicKey(..))
 import General.Hash (Hash(..))
 
-import Network.HTTP.Types.Status (internalServerError500, ok200, badRequest400)
-import Data.Aeson ( object
-                  , (.=)
-                  , Value (Null)
-                  , FromJSON)
-import Web.Scotty.Trans (status, showError, json, jsonData, ActionT)
+import Crypto.PubKey.ECC.ECDSA (PrivateKey(..), PublicKey(..))
+import qualified Network.HTTP.Types.Status as Status
+import Data.Aeson
+  ( object
+  , (.=)
+  , Value (Null)
+  , FromJSON
+  )
+import Web.Scotty.Trans (ActionT)
+import qualified Web.Scotty.Trans as ScottyT
 import GHC.Generics
 import Control.Monad.IO.Class (liftIO)
 import qualified Data.Text as T 
@@ -51,18 +55,18 @@ import Network.WebSockets (Connection, sendTextData)
 
 defaultH :: Environment -> Error -> Action
 defaultH e x = do
-  status internalServerError500
+  ScottyT.status Status.internalServerError500
   let o = case e of
-        Development -> object ["error" .= showError x]
+        Development -> object ["error" .= ScottyT.showError x]
         Production -> Null
-        Test -> object ["error" .= showError x]
-  json o
+        Test -> object ["error" .= ScottyT.showError x]
+  ScottyT.json o
 
 getFundRequestsH :: Action
 getFundRequestsH = do
   fundRequests <- runDB (selectList [] [])
-  status ok200
-  json (fundRequests :: [Entity FundRequest])
+  ScottyT.status Status.ok200
+  ScottyT.json (fundRequests :: [Entity FundRequest])
 
 postFundRequestsH :: Action
 postFundRequestsH = do
@@ -72,19 +76,19 @@ postFundRequestsH = do
   let WIF privKeyTxt = getWIFPrivateKey privKey
       address@(Address addressText) =
         getAddress (PublicKeyRep Compressed pubKey) (config^.network)
-  fundRequestRaw <- jsonData
+  fundRequestRaw <- ScottyT.jsonData
   let eitherFundRequest = validateFundRequest address fundRequestRaw
       keyset = KeySet addressText privKeyTxt
   case eitherFundRequest of
     Left errorMessage -> do
-      status badRequest400
-      json $ object ["error" .= showError errorMessage]
+      ScottyT.status Status.badRequest400
+      ScottyT.json $ object ["error" .= ScottyT.showError errorMessage]
     Right fundRequest -> do
       runDB (insert_ keyset)
       runDB (insert_ fundRequest)
       sendInternalMessage $ AddAddress address
-      json fundRequest
-      status ok200
+      ScottyT.json fundRequest
+      ScottyT.status Status.ok200
 
 genKeySet :: Network -> IO KeySet
 genKeySet network' = do
@@ -127,10 +131,10 @@ instance FromJSON TransactionRaw
 
 postTransactionsH :: Action
 postTransactionsH = do
-  transactionRaw <- jsonData
+  transactionRaw <- ScottyT.jsonData
   transaction <- buildTransaction transactionRaw
   sendInternalMessage (SendTX transaction)
-  status ok200
+  ScottyT.status Status.ok200
 
 buildTransaction :: TransactionRaw -> ActionT Error ConfigM Transaction
 buildTransaction txRaw = do
@@ -186,4 +190,4 @@ handleIncomingFunds connection val = do
   
 getStatusH :: Action
 getStatusH =
-  status ok200
+  ScottyT.status Status.ok200
