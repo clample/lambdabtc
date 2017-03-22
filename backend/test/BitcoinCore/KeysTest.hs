@@ -6,14 +6,26 @@ import BitcoinCore.Keys
 import General.Types (Network(..))
 import General.Hash (Hash(..))
 
-import Crypto.PubKey.ECC.ECDSA (PrivateKey(..), PublicKey(..))
-import Crypto.PubKey.ECC.Types (ecc_n, common_curve, getCurveByName, CurveName(SEC_p256k1))
+import Crypto.PubKey.ECC.ECDSA
+  ( PrivateKey(..)
+  , PublicKey(..)
+  )
+import Crypto.PubKey.ECC.Types
+  ( ecc_n
+  , common_curve
+  , getCurveByName
+  , CurveName(SEC_p256k1)
+  )
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
-import Data.Base58String.Bitcoin (fromText, toBytes)
+import Data.Base58String.Bitcoin
+  ( fromText
+  , toText
+  , b58String
+  , toBytes
+  )
 import qualified Data.Binary as BIN
 import Data.ByteString.Base16 (decode)
-import Data.Base58String.Bitcoin (toText, b58String)
 import Control.Lens ((^.))
 
 instance Arbitrary PrivateKey where
