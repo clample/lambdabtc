@@ -97,7 +97,6 @@ getConnectionContext config = do
   lastBlock' <- Persistence.getLastBlock (config^.pool)
   let connectionContext = ConnectionContext
         { _connectionContextVersion = 60002
-        , _connectionContextLastBlock = lastBlock'
         , _myAddr = Addr (0, 0, 0, 0) 18333 
         , _connectionContextPeerAddr = peer'^.addr
         , _connectionContextRelay = False 
@@ -108,6 +107,7 @@ getConnectionContext config = do
       mutableContext' = MutableConnectionContext
         { _randGen = randGen'
         , _rejectedBlocks = []
+        , _connectionContextLastBlock = lastBlock'
         }
       ioHandlers' = IOHandlers
         { _peerSocket = peer'^.sock
@@ -237,7 +237,8 @@ persistHeaders' headers = do
   logDebug' $
     "Adding blocks to main chain: " ++ showBlocks headers
     ++ "\n\t`lastBlock` changed from "
-    ++ show (contextOld^.lastBlock) ++ " to " ++ show (contextNew^.lastBlock)
+    ++ show (contextOld^.mutableContext.lastBlock)
+    ++ " to " ++ show (contextNew^.mutableContext.lastBlock)
   
 
 persistHeader' :: BlockHeader -> Connection' ()
@@ -254,7 +255,8 @@ deleteBlockHeaders' inx = do
   logDebug' $
     "Deleting all blocks all blocks with index >= " ++ show inx
     ++ "\n\t`lastBlock` changed from "
-    ++ show (contextOld^.lastBlock) ++ " to " ++ show (contextNew^.lastBlock)
+    ++ show (contextOld^.mutableContext.lastBlock)
+    ++ " to " ++ show (contextNew^.mutableContext.lastBlock)
 
 persistTransaction' :: Transaction -> Connection' ()
 persistTransaction' tx = liftF (PersistTransaction tx ())
@@ -311,7 +313,7 @@ interpretConnProd ic conn = case conn of
     Persistence.deleteHeaders (ic^.ioHandlers.pool) inx
     lastBlock' <- Persistence.getLastBlock $ ic^.ioHandlers.pool
       -- TODO: Ideally we should find out `lastBlock'` without a db query
-    let newIC = context.lastBlock .~ lastBlock' $ ic
+    let newIC = context.mutableContext.lastBlock .~ lastBlock' $ ic
     interpretConnProd newIC n
   Free (NHeadersSinceKey n keyId f) -> do
     headers <- Persistence.nHeadersSinceKey (ic^.ioHandlers.pool) n keyId
@@ -335,7 +337,7 @@ interpretConnProd ic conn = case conn of
   where
     incrementLastBlock :: InterpreterContext -> Int -> InterpreterContext
     incrementLastBlock c i =
-      context.lastBlock %~ (\(BlockIndex old) -> BlockIndex (old + i)) $ c
+      context.mutableContext.lastBlock %~ (\(BlockIndex old) -> BlockIndex (old + i)) $ c
 
 -- Logic for handling response in free monad
 handleResponse' :: Message -> Connection' ()
@@ -446,10 +448,10 @@ constructChain headers = do
       let newLength = connectionIndex + BlockIndex (length headers)
           headersAreValid = verifyHeaders (connectionHeader:headers)
       logDebug' $ "Checking if we should replace the chain."
-        ++ "\n\tActiveChain length: " ++ show (context^.lastBlock)
+        ++ "\n\tActiveChain length: " ++ show (context^.mutableContext.lastBlock)
         ++ "\n\tNewChain length: " ++ show newLength
         ++ "\n\tNew chain is valid? " ++ show headersAreValid
-      if newLength > context^.lastBlock
+      if newLength > context^.mutableContext.lastBlock
          && headersAreValid
         then replaceChain headers connectionIndex
         else addRejected headers
@@ -457,7 +459,7 @@ constructChain headers = do
     replaceChain newChain connectionIndex = do
       logDebug' "Replacing main chain"
       context <- getContext'
-      let inxs = enumFromTo (connectionIndex + 1) (context^.lastBlock)
+      let inxs = enumFromTo (connectionIndex + 1) (context^.mutableContext.lastBlock)
       newRejected <- mapM getBlockHeader' inxs
       -- TODO: also remove inxs headers from rejected
       addRejected $ catMaybes newRejected
@@ -497,7 +499,7 @@ synchronizeHeaders' lastBlockPeer = do
       handleMessages'
       synchronizeHeaders' lastBlockPeer
   where
-    outOfSync' context = context^.lastBlock < lastBlockPeer
+    outOfSync' context = context^.mutableContext.lastBlock < lastBlockPeer
     handleMessages' = do
       mResponse <- readMessage'
       case mResponse of
@@ -527,7 +529,7 @@ getHeadersOrBlocksMessage' bodyConstructor messageConstructor = do
            (Hash . fst . decode $
             "0000000000000000000000000000000000000000000000000000000000000000")))
           (MessageContext (context^.network))
-  message <- getHeadersMessage' (context^.lastBlock)
+  message <- getHeadersMessage' (context^.mutableContext.lastBlock)
   writeMessage' message
 
 -- returns a list of some of the block hashes for headers we've persisted
@@ -555,7 +557,7 @@ sendVersion' = do
         (VersionMessageBody (VersionMessage
           (context^.version)
           nonce'
-          (context^.lastBlock)
+          (context^.mutableContext.lastBlock)
           (context^.peerAddr)
           (context^.myAddr)
           (context^.relay)

@@ -26,7 +26,6 @@ import BitcoinCore.BlockHeaders (BlockHeader)
 -- Only elements of `mutableContext` will be exposed for updates in the Connection' monad
 data ConnectionContext = ConnectionContext
   { _connectionContextVersion :: Int
-  , _connectionContextLastBlock :: BlockIndex
   , _myAddr :: Addr
   , _connectionContextPeerAddr :: Addr
   , _connectionContextRelay :: Bool
@@ -40,6 +39,7 @@ data ConnectionContext = ConnectionContext
 data MutableConnectionContext = MutableConnectionContext
   { _randGen :: StdGen
   , _rejectedBlocks :: [BlockHeader]
+  , _connectionContextLastBlock :: BlockIndex
   }
 
 makeLenses ''ConnectionContext
@@ -74,7 +74,7 @@ instance HasRelay ConnectionContext where
 instance HasTime ConnectionContext where
   time = connectionContextTime
 
-instance HasLastBlock ConnectionContext where
+instance HasLastBlock MutableConnectionContext where
   lastBlock = connectionContextLastBlock
 
 instance HasPeerAddr ConnectionContext where
