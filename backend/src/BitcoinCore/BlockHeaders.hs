@@ -5,7 +5,7 @@ module BitcoinCore.BlockHeaders where
 import General.Types (Network(..))
 import BitcoinCore.MerkleTrees (MerkleHash(..))
 import General.Hash (Hash(..), hashObject, doubleSHA)
-import General.Util (Tree(..), node, subTree, getBranch, branches)
+import General.Util (Tree(..))
 
 import Data.ByteString (ByteString)
 import Data.Time.Clock.POSIX (POSIXTime)

@@ -4,7 +4,7 @@ module BitcoinCore.Transaction.Transactions where
 
 import General.Util
 import BitcoinCore.Transaction.Script
-import BitcoinCore.Keys (serializePublicKeyRep, PublicKeyRep(..), PubKeyFormat(..))
+import BitcoinCore.Keys (PublicKeyRep(..), PubKeyFormat(..))
 import General.Hash (Hash(..), hashObject, doubleSHA)
 
 import Prelude hiding (concat, reverse, sequence)

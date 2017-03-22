@@ -4,7 +4,7 @@ module Protocol.Util where
 
 import General.Persistence ( PersistentBlockHeader(..)
                            , PersistentUTXO(..))
-import General.Hash (Hash(..), doubleSHA)
+import General.Hash (Hash(..))
 import BitcoinCore.BlockHeaders  ( BlockHeader(..)
                                  , BlockVersion(..)
                                  , Difficulty(..)

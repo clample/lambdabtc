@@ -31,7 +31,6 @@ import General.Hash (CheckSum(..), checksum)
 import Data.Maybe (listToMaybe)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as BL
-import Data.ByteString.Base16 (decode, encode)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as Char8
 import qualified Data.Text as T
