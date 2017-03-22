@@ -564,20 +564,15 @@ getHeadersOrBlocksMessage' :: (a -> MessageBody)
                            -> Connection' ()
 getHeadersOrBlocksMessage' bodyConstructor messageConstructor = do
   context <- getContext'
+  let lastBlock' = context^.mutableContext.lastBlock
+  blockLocatorHashes' <- queryBlockLocatorHashes' lastBlock'
   let allBlocksHashStop = Hash . fst . decode $
         "0000000000000000000000000000000000000000000000000000000000000000"
-      getHeadersMessage' lastBlock' = do
-        blockLocatorHashes' <- queryBlockLocatorHashes' lastBlock'
-        -- TODO: This `let` in a `let` is practice
-        --       simplify this!
-        let message = messageConstructor
-                      (context^.version)
-                      blockLocatorHashes'
-                      allBlocksHashStop
-        return $ Message
-          (bodyConstructor message)
-          (MessageContext (context^.network))
-  message <- getHeadersMessage' (context^.mutableContext.lastBlock)
+      body = bodyConstructor $ messageConstructor
+             (context^.version)
+             blockLocatorHashes'
+             allBlocksHashStop
+      message = Message body (MessageContext (context^.network))
   writeMessage' message
 
 -- returns a list of some of the block hashes for headers we've persisted
