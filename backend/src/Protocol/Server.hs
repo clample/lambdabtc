@@ -233,6 +233,7 @@ persistHeaders' :: [BlockHeader] -> Connection' ()
 persistHeaders' headers = do
   contextOld <- getContext'
   liftF (PersistBlockHeaders headers ())
+  incrementLastBlock' $ length headers
   contextNew <- getContext'
   logDebug' $
     "Adding blocks to main chain: " ++ showBlocks headers
@@ -242,7 +243,9 @@ persistHeaders' headers = do
   
 
 persistHeader' :: BlockHeader -> Connection' ()
-persistHeader' header = liftF (PersistBlockHeader header ())
+persistHeader' header = do
+  liftF (PersistBlockHeader header ())
+  incrementLastBlock' 1
 
 getBlockHeaderFromHash' :: BlockHash -> Connection' (Maybe (BlockIndex, BlockHeader))
 getBlockHeaderFromHash' hash = liftF (GetBlockHeaderFromHash hash id)
@@ -251,6 +254,7 @@ deleteBlockHeaders' :: BlockIndex -> Connection' ()
 deleteBlockHeaders' inx = do
   contextOld <- getContext'
   liftF (DeleteBlockHeaders inx ())
+  setLastBlock' (inx - 1)
   contextNew <- getContext'
   logDebug' $
     "Deleting all blocks all blocks with index >= " ++ show inx
@@ -276,6 +280,19 @@ persistUTXOs' persistentUTXOs = liftF (PersistUTXOs persistentUTXOs ())
 log' :: LogEntry -> Connection' ()
 log' le = liftF (Log le ())
 
+incrementLastBlock' :: Int -> Connection' ()
+incrementLastBlock' i = do
+  context <- getContext'
+  let newContext = mutableContext.lastBlock %~ (\(BlockIndex bi) -> (BlockIndex (bi + i)))
+                   $ context
+  setContext' $ newContext^.mutableContext
+  
+setLastBlock' :: BlockIndex -> Connection' ()
+setLastBlock' i = do
+  context <- getContext'
+  let newContext = mutableContext.lastBlock .~ i $ context
+  setContext' $ newContext^.mutableContext
+
 interpretConnProd :: InterpreterContext -> Connection' r -> IO r
 interpretConnProd ic conn = case conn of
   Free (GetContext f) -> 
@@ -300,21 +317,16 @@ interpretConnProd ic conn = case conn of
     interpretConnProd ic (f blockHeaderCount)
   Free (PersistBlockHeaders headers n) -> do
     Persistence.persistHeaders (ic^.ioHandlers.pool) headers
-    let newIC = incrementLastBlock ic (length headers)
-    interpretConnProd newIC n
+    interpretConnProd ic n
   Free (PersistBlockHeader header n) -> do
     Persistence.persistHeader (ic^.ioHandlers.pool) header
-    let newIC = incrementLastBlock ic 1
     interpretConnProd ic n
   Free (GetBlockHeaderFromHash hash f) -> do
     mBlock <- Persistence.getBlockHeaderFromHash (ic^.ioHandlers.pool) hash
     interpretConnProd ic (f mBlock)
   Free (DeleteBlockHeaders inx n) -> do
     Persistence.deleteHeaders (ic^.ioHandlers.pool) inx
-    lastBlock' <- Persistence.getLastBlock $ ic^.ioHandlers.pool
-      -- TODO: Ideally we should find out `lastBlock'` without a db query
-    let newIC = context.mutableContext.lastBlock .~ lastBlock' $ ic
-    interpretConnProd newIC n
+    interpretConnProd ic n
   Free (NHeadersSinceKey n keyId f) -> do
     headers <- Persistence.nHeadersSinceKey (ic^.ioHandlers.pool) n keyId
     interpretConnProd ic (f headers)
@@ -334,10 +346,6 @@ interpretConnProd ic conn = case conn of
     let newIC = logs %~ (++ [le]) $ ic
     interpretConnProd newIC n
   Pure r -> return r
-  where
-    incrementLastBlock :: InterpreterContext -> Int -> InterpreterContext
-    incrementLastBlock c i =
-      context.mutableContext.lastBlock %~ (\(BlockIndex old) -> BlockIndex (old + i)) $ c
 
 -- Logic for handling response in free monad
 handleResponse' :: Message -> Connection' ()

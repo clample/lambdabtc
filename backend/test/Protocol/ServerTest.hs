@@ -119,12 +119,10 @@ interpretConnTest ic conn =  case conn of
   Free (BlockHeaderCount f) -> do
     interpretConnTest ic (f blockHeaderCount)
   Free (PersistBlockHeaders headers n) -> do
-    let newIC = handlers.mockDB.blockHeaders %~ (++ headers)
-          $ incrementLastBlock ic (length headers)
+    let newIC = handlers.mockDB.blockHeaders %~ (++ headers) $ ic
     interpretConnTest newIC n
   Free (PersistBlockHeader header n) -> do
-    let newIC = handlers.mockDB.blockHeaders %~ (++ [header])
-          $ incrementLastBlock ic 1
+    let newIC = handlers.mockDB.blockHeaders %~ (++ [header]) $ ic
     interpretConnTest newIC n
   Free (GetBlockHeaderFromHash hash f) -> do
     let headers = ic^.handlers.mockDB.blockHeaders
@@ -134,9 +132,8 @@ interpretConnTest ic conn =  case conn of
           Just i -> Just (BlockIndex i, headers !! i)
     interpretConnTest ic (f mBlockHeader)
   Free (DeleteBlockHeaders bi@(BlockIndex inx) n) -> do
-    let ic'  = handlers.mockDB.blockHeaders %~ (take inx) $ ic
-        ic'' = context.lastBlock .~ (bi - 1) $ ic'
-    interpretConnTest ic'' n
+    let newIC  = handlers.mockDB.blockHeaders %~ (take inx) $ ic
+    interpretConnTest newIC n
   Free (NHeadersSinceKey n (BlockIndex i) f) -> do
     let headers = ic^.handlers.mockDB.blockHeaders
         nHeaders = (drop i . take n) $ headers
@@ -160,9 +157,6 @@ interpretConnTest ic conn =  case conn of
   Pure r -> return (ic, r)
   where
     blockHeaderCount = BlockIndex $ (length $ ic^.handlers.mockDB.blockHeaders) - 1
-    incrementLastBlock ::  TestInterpreterContext -> Int -> TestInterpreterContext
-    incrementLastBlock c i =
-      context.lastBlock %~ (\(BlockIndex old) -> BlockIndex (old + i)) $ c
 
 pingAndPong = testCase
   "We should respond to a single ping message with a single pong message"
@@ -258,7 +252,6 @@ blankMockHandles = MockHandles
 genericConnectionContext :: ConnectionContext
 genericConnectionContext = ConnectionContext
   { _connectionContextVersion = 100
-  , _connectionContextLastBlock = BlockIndex 0
   , _myAddr = Addr (0, 0, 0, 0) 80
   , _connectionContextPeerAddr = Addr (0, 0, 0, 1) 80
   , _connectionContextRelay = True
@@ -267,5 +260,6 @@ genericConnectionContext = ConnectionContext
   , _mutableContext = MutableConnectionContext
     { _randGen = mkStdGen 1
     , _rejectedBlocks = []
+    , _connectionContextLastBlock = BlockIndex 0
     }
   }
