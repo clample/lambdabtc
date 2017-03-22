@@ -22,22 +22,35 @@ module BitcoinCore.Keys
 
 import General.Util
 import General.Types (Network(..))
-import General.Hash (Hash(..), hashObject, ripemdSha256)
+import General.Hash
+  ( Hash(..)
+  , hashObject
+  , ripemdSha256
+  )
 
 import Prelude hiding (take, concat)
 import Data.ByteString (ByteString)
-import Crypto.PubKey.ECC.Types ( Curve
-                               , getCurveByName
-                               , Point(..)
-                               , CurveName(SEC_p256k1))
+import Crypto.PubKey.ECC.Types
+  ( Curve
+  , getCurveByName
+  , Point(..)
+  , CurveName(SEC_p256k1)
+  )
 import Crypto.PubKey.ECC.Generate (generate, generateQ)
 import Crypto.PubKey.ECC.ECDSA ( PublicKey(..)
                                , PrivateKey(..))
-import Crypto.OpenSSL.ECC (ecGroupFromCurveOID, EcGroup, ecPointFromOct, ecPointToAffineGFp)
+import Crypto.OpenSSL.ECC
+  ( ecGroupFromCurveOID
+  , EcGroup
+  , ecPointFromOct
+  , ecPointToAffineGFp
+  )
 import qualified Data.Text as T
 import Data.Binary (Binary(..))
-import Data.Binary.Put (runPut, putWord8, putByteString, Put)
-import Data.Binary.Get (runGet, getWord8, getByteString, Get, lookAhead)
+import Data.Binary.Put (Put)
+import qualified Data.Binary.Put as Put
+import Data.Binary.Get (Get)
+import qualified Data.Binary.Get as Get
 import qualified Data.ByteString.Lazy as BL
 import Data.Maybe (fromMaybe)
 
@@ -110,8 +123,8 @@ privateKeyPrefix = Prefix 0x80
 serializePrivateKey :: PrivateKey -> ByteString
 serializePrivateKey =
   BL.toStrict
-  . runPut
-  . putByteString
+  . Put.runPut
+  . Put.putByteString
   . unrollWithPad BE 32
   . fromIntegral
   . private_d
@@ -120,7 +133,7 @@ deserializePrivateKey :: ByteString -> PrivateKey
 deserializePrivateKey =
   PrivateKey btcCurve
   . roll BE
-  . runGet (getByteString 32)
+  . Get.runGet (Get.getByteString 32)
   . getLazyBS
   where
     getLazyBS bs = BL.fromChunks [bs]
@@ -136,15 +149,15 @@ serializePublicKeyRep :: PublicKeyRep -> Put
 
 -- See: https://github.com/bitcoinbook/bitcoinbook/blob/first_edition/ch04.asciidoc#public-key-formats
 serializePublicKeyRep (PublicKeyRep Uncompressed pubKey) =  do
-  putWord8  4
-  putByteString . unrollWithPad BE 32 $ x
-  putByteString . unrollWithPad BE 32 $ y
+  Put.putWord8  4
+  Put.putByteString . unrollWithPad BE 32 $ x
+  Put.putByteString . unrollWithPad BE 32 $ y
   where Point x y = public_q pubKey
 
 -- See: https://github.com/bitcoinbook/bitcoinbook/blob/first_edition/ch04.asciidoc#compressed-public-keys
 serializePublicKeyRep (PublicKeyRep Compressed pubKey) = do
-  putWord8 prefix
-  putByteString . unrollWithPad BE 32 $ x
+  Put.putWord8 prefix
+  Put.putByteString . unrollWithPad BE 32 $ x
   where
     Point x y = public_q pubKey
     prefix = if isEven y
@@ -154,12 +167,12 @@ serializePublicKeyRep (PublicKeyRep Compressed pubKey) = do
 
 deserializePublicKeyRep :: Get PublicKeyRep
 deserializePublicKeyRep = do
-  prefix <- lookAhead getWord8
+  prefix <- Get.lookAhead Get.getWord8
   let pubKeyFormat = case prefix of
         0x04 -> Uncompressed
         0x03 -> Compressed 
         0x02 -> Compressed 
-  bs <- getByteString $ repLength pubKeyFormat
+  bs <- Get.getByteString $ repLength pubKeyFormat
   case getPubKey bs of
     Left error -> fail $ "failed deserializing public key: " ++ error
     Right pubKey -> return $ PublicKeyRep pubKeyFormat pubKey
