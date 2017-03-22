@@ -14,6 +14,7 @@ import Data.Base58String.Bitcoin (fromText, toBytes)
 import qualified Data.Binary as BIN
 import Data.ByteString.Base16 (decode)
 import Data.Base58String.Bitcoin (toText, b58String)
+import Control.Lens ((^.))
 
 instance Arbitrary PrivateKey where
   arbitrary = do
