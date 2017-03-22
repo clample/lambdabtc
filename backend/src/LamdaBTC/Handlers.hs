@@ -74,11 +74,11 @@ postFundRequestsH = do
   -- TODO: Refractor to use genKeySet
   (pubKey, privKey) <- liftIO genKeys
   let WIF privKeyTxt = getWIFPrivateKey privKey
-      address@(Address addressText) =
+      address =
         getAddress (PublicKeyRep Compressed pubKey) (config^.network)
   fundRequestRaw <- ScottyT.jsonData
   let eitherFundRequest = validateFundRequest address fundRequestRaw
-      keyset = KeySet addressText privKeyTxt
+      keyset = KeySet (address^.addrTxt) privKeyTxt
   case eitherFundRequest of
     Left errorMessage -> do
       ScottyT.status Status.badRequest400
@@ -94,8 +94,8 @@ genKeySet :: Network -> IO KeySet
 genKeySet network' = do
   (pubKey, privKey) <- liftIO genKeys
   let WIF privKeyText = getWIFPrivateKey privKey
-      (Address addressText) = getAddress (PublicKeyRep Compressed pubKey) network'
-  return (KeySet addressText privKeyText)
+      address = getAddress (PublicKeyRep Compressed pubKey) network'
+  return $ KeySet (address^.addrTxt) privKeyText
 
 -- FundRequest:  
 -- Documented in BIP 0021
@@ -111,7 +111,7 @@ data FundRequestRaw = FundRequestRaw
 instance FromJSON FundRequestRaw
 
 validateFundRequest :: Address -> FundRequestRaw -> Either Error FundRequest
-validateFundRequest (Address address) (FundRequestRaw labelR messageR amountR) =
+validateFundRequest address (FundRequestRaw labelR messageR amountR) =
   let
     ma :: Maybe Double
     ma = maybeRead amountR
@@ -120,7 +120,7 @@ validateFundRequest (Address address) (FundRequestRaw labelR messageR amountR) =
     case ma of
       Nothing -> Left "Unable to parse amount"
       Just a -> Right $
-        FundRequest labelR messageR a address uri
+        FundRequest labelR messageR a (address^.addrTxt) uri
 
 data TransactionRaw = TransactionRaw
   { recieverAddress :: String

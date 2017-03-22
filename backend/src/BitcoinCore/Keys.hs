@@ -1,3 +1,4 @@
+{-# Language TemplateHaskell #-}
 {-# Language OverloadedStrings #-}
 module BitcoinCore.Keys
   ( PublicKeyRep(..)
@@ -17,6 +18,7 @@ module BitcoinCore.Keys
   , PubKeyHash(..)
   , addressToPubKeyHash
   , hashPubKeyRep
+  , addrTxt
   ) where
 
 
@@ -53,6 +55,7 @@ import Data.Binary.Get (Get)
 import qualified Data.Binary.Get as Get
 import qualified Data.ByteString.Lazy as BL
 import Data.Maybe (fromMaybe)
+import Control.Lens (makeLenses, (^.))
 
 data PublicKeyRep = PublicKeyRep PubKeyFormat PublicKey
   deriving (Eq, Show)
@@ -65,8 +68,11 @@ data PubKeyFormat = Compressed | Uncompressed
 newtype WIFPrivateKey  = WIF T.Text
   deriving (Eq, Show)
 
-newtype Address = Address T.Text
+newtype Address = Address
+  { _addrTxt :: T.Text }
   deriving (Eq, Show)
+
+makeLenses ''Address
 
 type PubKeyHash = Hash PublicKeyRep
 
@@ -100,10 +106,10 @@ getAddress pubKeyRep network =
         addressPrefix TestNet3 = Prefix 0x6F
 
 addressToPubKeyHash :: Address -> PubKeyHash
-addressToPubKeyHash (Address address) =
+addressToPubKeyHash address =
   Hash hash
   where
-    (_, Payload hash, _) = decodeBase58Check address
+    (_, Payload hash, _) = decodeBase58Check $ address^.addrTxt
 
 getWIFPrivateKey :: PrivateKey -> WIFPrivateKey
 getWIFPrivateKey privateKey =

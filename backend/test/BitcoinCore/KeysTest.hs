@@ -81,8 +81,11 @@ prop_addressLength :: PublicKeyRep -> Network -> Bool
 prop_addressLength pubKeyRep network =
   addressLength == 25
   where
-    (Address b58) = getAddress pubKeyRep network
-    addressLength = (BS.length . toBytes . fromText) b58
+    address = getAddress pubKeyRep network
+    addressLength = BS.length
+                    . toBytes
+                    . fromText
+                    $ address^.addrTxt
 
 pubKeyHashTest = testCase "Hash public key correctly" pubKeyHashAssert
 
