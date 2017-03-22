@@ -230,7 +230,15 @@ blockHeaderCount' :: Connection' BlockIndex
 blockHeaderCount' = liftF (BlockHeaderCount id)
 
 persistHeaders' :: [BlockHeader] -> Connection' ()
-persistHeaders' headers = liftF (PersistBlockHeaders headers ())
+persistHeaders' headers = do
+  contextOld <- getContext'
+  liftF (PersistBlockHeaders headers ())
+  contextNew <- getContext'
+  logDebug' $
+    "Adding blocks to main chain: " ++ showBlocks headers
+    ++ "\n\t`lastBlock` changed from "
+    ++ show (contextOld^.lastBlock) ++ " to " ++ show (contextNew^.lastBlock)
+  
 
 persistHeader' :: BlockHeader -> Connection' ()
 persistHeader' header = liftF (PersistBlockHeader header ())
@@ -239,7 +247,14 @@ getBlockHeaderFromHash' :: BlockHash -> Connection' (Maybe (BlockIndex, BlockHea
 getBlockHeaderFromHash' hash = liftF (GetBlockHeaderFromHash hash id)
 
 deleteBlockHeaders' :: BlockIndex -> Connection' ()
-deleteBlockHeaders' inx = liftF (DeleteBlockHeaders inx ())
+deleteBlockHeaders' inx = do
+  contextOld <- getContext'
+  liftF (DeleteBlockHeaders inx ())
+  contextNew <- getContext'
+  logDebug' $
+    "Deleting all blocks all blocks with index >= " ++ show inx
+    ++ "\n\t`lastBlock` changed from "
+    ++ show (contextOld^.lastBlock) ++ " to " ++ show (contextNew^.lastBlock)
 
 persistTransaction' :: Transaction -> Connection' ()
 persistTransaction' tx = liftF (PersistTransaction tx ())
@@ -408,7 +423,8 @@ constructChain headers = do
     
     -- `headers` does connect to the active chain
     Just (index, header) -> do
-      logDebug' "Constructing chain. Found block connecting to main chain."
+      logDebug' $
+        "Constructing chain. Found block connecting to main chain at: " ++ show index
       replaceChainIfLonger header index
   where
     constructChainFromRejectedBlocks connectingBlockHash = do
@@ -428,8 +444,13 @@ constructChain headers = do
     replaceChainIfLonger connectionHeader connectionIndex = do
       context <- getContext'
       let newLength = connectionIndex + BlockIndex (length headers)
+          headersAreValid = verifyHeaders (connectionHeader:headers)
+      logDebug' $ "Checking if we should replace the chain."
+        ++ "\n\tActiveChain length: " ++ show (context^.lastBlock)
+        ++ "\n\tNewChain length: " ++ show newLength
+        ++ "\n\tNew chain is valid? " ++ show headersAreValid
       if newLength > context^.lastBlock
-         && verifyHeaders (connectionHeader:headers)
+         && headersAreValid
         then replaceChain headers connectionIndex
         else addRejected headers
       

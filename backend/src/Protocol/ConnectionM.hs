@@ -105,4 +105,4 @@ displayLogs f ls = unlines
                    . map formatLog
                    . filter (f . _logLevel) $ ls
   where
-    formatLog l = show (l^.logLevel) ++  " " ++ show (l^.logStr)
+    formatLog l = show (l^.logLevel) ++  " " ++ (l^.logStr)
