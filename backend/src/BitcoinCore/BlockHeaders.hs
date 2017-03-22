@@ -19,7 +19,6 @@ import Control.Monad (replicateM)
 import Test.QuickCheck.Arbitrary (Arbitrary(..))
 import Test.QuickCheck.Gen (choose, vectorOf, Gen, sized)
 import qualified Data.ByteString as BS
-import qualified Data.ByteString.Char8 as Char8
 
 data BlockHeader = BlockHeader
   { _blockVersion :: BlockVersion
@@ -224,7 +223,7 @@ genesisBlock MainNet = BlockHeader
   (MerkleHash . fst . decode $ "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b")
   (Timestamp . fromIntegral $ 1231006505)
   (Difficulty . fst . decode $ "FFFF001D")
-  (Nonce . fst . decode . Char8.pack $ "1DAC2B7C")
+  (Nonce . fst . decode $ "1DAC2B7C")
 
 genesisBlock TestNet3 = BlockHeader
   (BlockVersion 1)
