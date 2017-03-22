@@ -133,10 +133,10 @@ interpretConnTest ic conn =  case conn of
           Nothing -> Nothing
           Just i -> Just (BlockIndex i, headers !! i)
     interpretConnTest ic (f mBlockHeader)
-  Free (DeleteBlockHeaders (BlockIndex inx) n) -> do
-    let newIC = handlers.mockDB.blockHeaders %~ (take inx)
-          $ context.lastBlock .~ blockHeaderCount $ ic
-    interpretConnTest newIC n
+  Free (DeleteBlockHeaders bi@(BlockIndex inx) n) -> do
+    let ic'  = handlers.mockDB.blockHeaders %~ (take inx) $ ic
+        ic'' = context.lastBlock .~ (bi - 1) $ ic'
+    interpretConnTest ic'' n
   Free (NHeadersSinceKey n (BlockIndex i) f) -> do
     let headers = ic^.handlers.mockDB.blockHeaders
         nHeaders = (drop i . take n) $ headers
