@@ -8,13 +8,19 @@ import BitcoinCore.Transaction.Transactions
 import Protocol.Persistence
 import Protocol.Util (BlockIndex(..))
 
-import Database.Persist.Sqlite (createSqlitePool, runMigrationSilent)
+import Database.Persist.Sqlite ( createSqlitePool
+                               , runMigrationSilent
+                               , withSqliteConn)
 import Database.Persist.Sql ( ConnectionPool
-                            , runSqlPool)
+                            , runSqlPool
+                            , SqlBackend)
 import Control.Monad.Logger ( runStdoutLoggingT
                             , filterLogger
-                            , LogLevel(..))
+                            , LogLevel(..)
+                            , LoggingT)
 import Test.QuickCheck (ioProperty, Property)
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.Reader (runReaderT)
 
 createTestDbPool :: IO ConnectionPool
 createTestDbPool = do
@@ -24,21 +30,42 @@ createTestDbPool = do
   runSqlPool (runMigrationSilent migrateTables) pool
   return pool
 
-persistAndRetrieveBlockHeader = buildTest $ do
-  pool <- createTestDbPool
-  return $ testProperty
-    "It should be possible to persist and retrieve a block header"
-    (prop_persistAndRetrieveBlockHeader pool)
+loggingIOProperty :: (SqlBackend -> LoggingT IO Bool) -> Property
+loggingIOProperty f = ioProperty . runStdoutLoggingT . filterLogger logFilter $
+  withSqliteConn ":memory:" f
+  where
+    logFilter _ level = level == LevelError
 
-prop_persistAndRetrieveBlockHeader :: ConnectionPool -> BlockHeader -> Property
-prop_persistAndRetrieveBlockHeader pool header = ioProperty $ do
+prop_persistAndRetrieveBlockHeader :: BlockHeader -> SqlBackend -> LoggingT IO Bool
+prop_persistAndRetrieveBlockHeader header = (fmap lift) . runReaderT $ do
+  runMigrationSilent migrateTables
   let hash = hashBlock header
-  persistHeader pool header
-  mHeader' <- getBlockHeaderFromHash pool hash
+  persistHeaderNonPool header
+  mHeader' <- getBlockHeaderFromHashNonPool hash
   case mHeader' of
     Nothing -> return False
     Just (_, header') ->
       return (hashBlock header' == hash)
+
+persistAndRetrieveBlockHeader = buildTest . return $ testProperty
+  "It should be possible to persist and retrieve a block header"
+  (loggingIOProperty . prop_persistAndRetrieveBlockHeader)
+
+-- persistAndRetrieveBlockHeader = buildTest $ do
+--   pool <- createTestDbPool
+--   return $ testProperty
+--     "It should be possible to persist and retrieve a block header"
+--     (prop_persistAndRetrieveBlockHeader pool)
+
+-- prop_persistAndRetrieveBlockHeader :: ConnectionPool -> BlockHeader -> Property
+-- prop_persistAndRetrieveBlockHeader pool header = ioProperty $ do
+--   let hash = hashBlock header
+--   persistHeader pool header
+--   mHeader' <- getBlockHeaderFromHash pool hash
+--   case mHeader' of
+--     Nothing -> return False
+--     Just (_, header') ->
+--       return (hashBlock header' == hash)
 
 persistAndRetrieveTransaction = buildTest $ do
   pool <- createTestDbPool

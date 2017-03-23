@@ -28,12 +28,14 @@ import Database.Persist.Sql ( insertMany_
                             , selectList
                             , (==.)
                             , (>=.)
-                            , ConnectionPool)
+                            , ConnectionPool
+                            , SqlBackend)
 import qualified Database.Persist.Sql as DB
 import Database.Persist.Types (SelectOpt(..))
 import Control.Lens ((^.))
 import Control.Monad (when)
 import Data.List.Split (chunksOf)
+import Control.Monad.Trans.Reader (ReaderT)
 
 -- Return the index for the most recent persisted block
 getLastBlock :: ConnectionPool -> IO BlockIndex
@@ -49,9 +51,16 @@ persistGenesisBlock config = do
   when (lastBlock' == BlockIndex 0) $
     runSqlPool (insert_ . encodeBlockHeader . genesisBlock $ (config^.network)) (config^.pool)
 
+persistHeaderNonPool :: BlockHeader -> ReaderT SqlBackend IO ()
+persistHeaderNonPool = insert_ . encodeBlockHeader
+
 persistHeader :: ConnectionPool -> BlockHeader -> IO ()
 persistHeader pool header = do
-  runSqlPool (insert_ $ encodeBlockHeader header) pool
+  runSqlPool (persistHeaderNonPool header) pool
+
+-- persistHeader :: ConnectionPool -> BlockHeader -> IO ()
+-- persistHeader pool header = do
+--   runSqlPool (insert_ $ encodeBlockHeader header) pool
 
 persistHeaders :: ConnectionPool -> [BlockHeader] -> IO ()
 persistHeaders pool headers = do
@@ -67,18 +76,32 @@ deleteHeaders pool inx = do
   lastBlock <- getLastBlock pool
   let inxs = enumFromTo inx lastBlock
   runSqlPool (mapM_ (DB.delete . toDbKey) inxs) pool
-  
-getBlockHeaderFromHash :: ConnectionPool -> BlockHash -> IO (Maybe (BlockIndex, BlockHeader))
-getBlockHeaderFromHash pool (Hash hash') = do
-  matches <- runSqlPool (selectList [PersistentBlockHeaderHash ==. hash'] []) pool
+
+getBlockHeaderFromHashNonPool :: BlockHash -> ReaderT SqlBackend IO (Maybe (BlockIndex, BlockHeader))
+getBlockHeaderFromHashNonPool (Hash hash') = do
+  matches <- selectList [PersistentBlockHeaderHash ==. hash'] []
   case matches of
     []       -> return Nothing
     [header] -> do
       let DB.Entity persistentKey persistentHeader = header
           key = fromDbKey $ persistentKey
           blockHeader = decodeBlockHeader persistentHeader
-      return . Just $ (key , blockHeader) 
+      return . Just $ (key, blockHeader)
     _        -> fail "Multiple blocks found with same hash."
+
+getBlockHeaderFromHash :: ConnectionPool -> BlockHash -> IO (Maybe (BlockIndex, BlockHeader))
+getBlockHeaderFromHash pool hash = runSqlPool (getBlockHeaderFromHashNonPool hash) pool  
+-- getBlockHeaderFromHash :: ConnectionPool -> BlockHash -> IO (Maybe (BlockIndex, BlockHeader))
+-- getBlockHeaderFromHash pool (Hash hash') = do
+--   matches <- runSqlPool (selectList [PersistentBlockHeaderHash ==. hash'] []) pool
+--   case matches of
+--     []       -> return Nothing
+--     [header] -> do
+--       let DB.Entity persistentKey persistentHeader = header
+--           key = fromDbKey $ persistentKey
+--           blockHeader = decodeBlockHeader persistentHeader
+--       return . Just $ (key , blockHeader) 
+--     _        -> fail "Multiple blocks found with same hash."
 
 getTransactionFromHash :: ConnectionPool -> TxHash -> IO (Maybe Integer)
 getTransactionFromHash pool (Hash hash') = do
