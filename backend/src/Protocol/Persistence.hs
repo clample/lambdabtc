@@ -60,7 +60,7 @@ getLastBlock pool = do
 persistGenesisBlock :: Config -> IO ()
 persistGenesisBlock config = do
   lastBlock' <- getLastBlock (config^.pool)
-  when (lastBlock' == BlockIndex 0) $
+  when (lastBlock' < BlockIndex 0) $
     runSqlPool (insert_ . encodeBlockHeader . genesisBlock $ (config^.network)) (config^.pool)
 
 persistHeader :: ConnectionPool -> BlockHeader -> IO ()
@@ -136,7 +136,7 @@ persistUTXOs pool utxos = runSqlPool (insertMany_ utxos) pool
 
 getUnspentUTXOs :: ConnectionPool -> IO [DB.Entity PersistentUTXO]
 getUnspentUTXOs pool = do
-  let unspentUTXOFilter = undefined
+  let unspentUTXOFilter = [ PersistentUTXOIsSpent ==. False]
   runSqlPool (selectList unspentUTXOFilter []) pool
 
 setUtxoSpent :: ConnectionPool -> DB.Key PersistentUTXO -> IO ()
