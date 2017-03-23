@@ -11,13 +11,19 @@ import General.Types (HasPool(..))
 
 import Data.Text (Text)
 import Database.Persist.Sqlite (runMigration)
-import Database.Persist.TH (mkPersist, mkMigrate, persistLowerCase,
-                            share, sqlSettings)
-import Database.Persist.Sql ( SqlPersistT
-                            , ConnectionPool
-                            , runSqlPool
-                            , runSqlPersistMPool
-                            )
+import Database.Persist.TH
+  ( mkPersist
+  , mkMigrate
+  , persistLowerCase
+  , share
+  , sqlSettings
+  )
+import Database.Persist.Sql
+  ( SqlPersistT
+  , ConnectionPool
+  , runSqlPool
+  , runSqlPersistMPool
+  )
 import Control.Monad.IO.Class (liftIO, MonadIO)
 import Control.Monad.Trans.Class (MonadTrans, lift)
 import Control.Monad.Reader (ask)
