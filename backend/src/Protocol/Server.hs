@@ -423,7 +423,7 @@ handleResponse' (Message (TxMessageBody message) _) = do
         Nothing -> False
         Just _  -> True
 
-handleResponse' message = error $
+handleResponse' message = logError' $
   "We are not yet able to handle message" ++ show message
 
 writeMessageWithBody' :: MessageBody -> Connection' ()
@@ -545,7 +545,6 @@ synchronizeHeaders' lastBlockPeer = do
       mResponse <- readMessage'
       case mResponse of
         Nothing -> fail "unable to read message"
-        -- TODO: handleResponse' will fail for a lot of message types
         -- TODO: can we simplify this logic?
         --       Why handle headers messages differently?
         Just response@(Message (HeadersMessageBody _) _) ->
@@ -674,3 +673,6 @@ writeUiUpdaterMessage chan message =
 
 logDebug' :: String -> Connection' ()
 logDebug' = log' . LogEntry Debug
+
+logError' :: String -> Connection' ()
+logError' = log' . LogEntry Error
