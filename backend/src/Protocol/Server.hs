@@ -527,9 +527,11 @@ getMostRecentHeader' = do
 
 synchronizeHeaders' :: BlockIndex -> Connection' ()
 synchronizeHeaders' lastBlockPeer = do
+  logDebug' "Synchronizing headers"
   context <- getContext'
   newSync <- isNewSync'
-  when (outOfSync' context) $
+  when (outOfSync' context) $ do
+    logDebug' "We are out of sync with our peer"
     if newSync
     then do
       getHeaders'
@@ -541,13 +543,16 @@ synchronizeHeaders' lastBlockPeer = do
       synchronizeHeaders' lastBlockPeer
   where
     outOfSync' context = context^.mutableContext.lastBlock < lastBlockPeer
+
+    -- Handle all incoming messages recursively until we recieve more headers.
+    -- When we recieve more headers, we can continue synchronizing.
     handleMessages' = do
       mResponse <- readMessage'
       case mResponse of
         Nothing -> fail "unable to read message"
-        -- TODO: can we simplify this logic?
-        --       Why handle headers messages differently?
         Just response@(Message (HeadersMessageBody _) _) ->
+          handleResponse' response
+        Just response@(Message (MerkleblockMessageBody _) _) ->
           handleResponse' response
         Just response -> handleResponse' response >> handleMessages'
     
