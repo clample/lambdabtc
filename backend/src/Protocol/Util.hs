@@ -18,8 +18,11 @@ import BitcoinCore.BlockHeaders
 import BitcoinCore.MerkleTrees (MerkleHash(..))
 import BitcoinCore.Transaction.Transactions
   ( Transaction(..)
+  , Value(..)
   , outputScripts
   , hashTransaction
+  , value
+  , outputs
   )
 import BitcoinCore.Transaction.Script
   ( Script(..)
@@ -36,7 +39,7 @@ import Data.Binary (Binary(..))
 import Data.Binary.Put (runPut, Put, putWord32le)
 import Data.Binary.Get (Get, getWord32le)
 import qualified Database.Persist.Sql as DB
-import Control.Lens (Lens')
+import Control.Lens (Lens', (^.))
 
 import Test.QuickCheck.Arbitrary (Arbitrary(..))
 import Test.QuickCheck.Gen (elements, choose)
@@ -124,11 +127,14 @@ isRelevantScript pubkeyHash (Script components) =
         isRelevantComponent (OP _) = False
 
 getPersistentUTXO :: Transaction -> Int -> Script -> Int -> PersistentUTXO
-getPersistentUTXO tx outIndex script = PersistentUTXO
-  hash' outIndex scriptBS
+getPersistentUTXO tx outIndex script keySetId' = PersistentUTXO
+  hash' outIndex scriptBS keySetId' val' isSpent'
   where
     hash' = hash . hashTransaction $ tx
     scriptBS = toStrict . runPut $ putScript script
+    Satoshis val' = ((tx^.outputs) !! outIndex)^.value
+    isSpent' = False
+      -- When creating a new UTXO, we assume it hasn't been spent yet
 
 instance Arbitrary CCode where
   arbitrary = elements . map fst $ ccodeTable

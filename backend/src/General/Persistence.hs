@@ -10,7 +10,10 @@ import General.Config (ConfigM)
 import General.Types (HasPool(..))
 
 import Data.Text (Text)
-import Database.Persist.Sqlite (runMigration)
+import Database.Persist.Sqlite
+  ( runMigration
+  , runMigrationUnsafe
+  )
 import Database.Persist.TH
   ( mkPersist
   , mkMigrate
@@ -55,6 +58,8 @@ PersistentUTXO
     outIndex Int
     script ByteString
     keySetId Int
+    value Int
+    isSpent Bool
 PersistentTransaction
     hash ByteString
 |]
@@ -62,7 +67,7 @@ PersistentTransaction
 
 migrateSchema :: ConnectionPool -> IO ()
 migrateSchema =
-  runSqlPersistMPool (runMigration migrateTables)
+  runSqlPersistMPool (runMigrationUnsafe migrateTables)
 
 
 runDB :: (MonadTrans t, MonadIO (t ConfigM)) =>

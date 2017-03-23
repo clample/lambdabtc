@@ -37,7 +37,9 @@ import Database.Persist.Sql
   , Filter
   , insert_
   , selectList
+  , update
   , (==.)
+  , (=.)
   , (>=.)
   , ConnectionPool
   )
@@ -131,3 +133,12 @@ getAllAddresses pool = do
 
 persistUTXOs :: ConnectionPool -> [PersistentUTXO] -> IO ()
 persistUTXOs pool utxos = runSqlPool (insertMany_ utxos) pool
+
+getUnspentUTXOs :: ConnectionPool -> IO [DB.Entity PersistentUTXO]
+getUnspentUTXOs pool = do
+  let unspentUTXOFilter = undefined
+  runSqlPool (selectList unspentUTXOFilter []) pool
+
+setUtxoSpent :: ConnectionPool -> DB.Key PersistentUTXO -> IO ()
+setUtxoSpent pool key =
+  runSqlPool (update key [PersistentUTXOIsSpent =. True]) pool

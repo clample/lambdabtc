@@ -23,9 +23,13 @@ import BitcoinCore.Transaction.Script (payToPubkeyHash, getScript, Script(..))
 import General.InternalMessaging (InternalMessage(..))
 import General.Persistence
 import General.Config
-import General.Types (HasNetwork(..), Network(..))
+import General.Types (HasNetwork(..), Network(..), HasPool(..))
 import General.Util (maybeRead)
 import General.Hash (Hash(..))
+import Protocol.Persistence
+  ( getUnspentUTXOs
+  , setUtxoSpent
+  )
 
 import Crypto.PubKey.ECC.ECDSA (PrivateKey(..), PublicKey(..))
 import qualified Network.HTTP.Types.Status as Status
@@ -52,6 +56,7 @@ import Control.Concurrent.STM.TBMChan (writeTBMChan)
 import GHC.Conc (atomically)
 import Data.Binary.Get (runGet)
 import Network.WebSockets (Connection, sendTextData)
+import qualified Database.Persist.Sql as DB
 
 defaultH :: Environment -> Error -> Action
 defaultH e x = do
@@ -145,17 +150,18 @@ buildTransaction txRaw = do
       outputs' = [TxOutput
                   { _value = val
                   , _outputScript = payToPubkeyHash . addressToPubKeyHash $ address}]
-  (utxo', keys', oldInputScript) <- getUTXOAndKeys 
+  (utxo', keys', oldInputScript) <- getUTXOAndKeys val
   return $ signedTransaction utxo' oldInputScript keys' outputs'
 
--- TODO: Improve getting UTXO's
---       We currently only get 1 hardcoded UTXO
-getUTXOAndKeys :: ActionT Error ConfigM (UTXO, (PublicKey, PrivateKey), Script)
-getUTXOAndKeys = do
-  mpUTXO <- runDB $ get (PersistentUTXOKey 1)
-  let putxo = fromMaybe
-        (error "There are no utxo's in the db")
-        mpUTXO
+getUTXOAndKeys :: TX.Value
+               -> ActionT Error ConfigM (UTXO, (PublicKey, PrivateKey), Script)
+getUTXOAndKeys (TX.Satoshis val) = do
+  config <- lift ask
+  putxos <- liftIO $ getUnspentUTXOs $ config^.pool
+  let candidateUtxos = filter (\(DB.Entity _ putxo') -> (persistentUTXOValue putxo') > val) putxos
+      (DB.Entity idPutxo putxo) = case candidateUtxos of
+                [] -> error "Unable to find utxo with enough value"
+                (putxo':putxos') -> putxo'
 
       -- TODO: Create a function `decodeUtxo :: PersistentUTXO -> UTXO`
       utxo = UTXO {_outTxHash = Hash . persistentUTXOOutTxHash $ putxo
@@ -170,6 +176,7 @@ getUTXOAndKeys = do
         mpKeySet
       privKey = getPrivateKeyFromWIF . WIF $ privKeyT
       keySet = (getPubKey privKey, privKey)
+  liftIO $ setUtxoSpent (config^.pool) idPutxo
   return (utxo, keySet, oldInputScript)
   
 buildValue :: String -> Maybe TX.Value
