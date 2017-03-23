@@ -407,7 +407,10 @@ handleResponse' (Message (InvMessageBody message) _) = do
 handleResponse' (Message (TxMessageBody message) _) = do
   isHandled <- isTransactionHandled'
   unless isHandled $ do
+    logDebug' $ "Transaction was not previously handled. Handling now."
     addUTXOs
+    -- TODO: modify writeUiUpdaterMessage' to send the correct
+    --       utxo value
     writeUiUpdaterMessage' . IncomingFunds . Satoshis $ 1000
     persistTransaction' (message^.transaction)
   where
