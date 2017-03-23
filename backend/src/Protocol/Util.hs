@@ -2,21 +2,30 @@
 
 module Protocol.Util where
 
-import General.Persistence ( PersistentBlockHeader(..)
-                           , PersistentUTXO(..))
+import General.Persistence
+  ( PersistentBlockHeader(..)
+  , PersistentUTXO(..)
+  )
 import General.Hash (Hash(..))
-import BitcoinCore.BlockHeaders  ( BlockHeader(..)
-                                 , BlockVersion(..)
-                                 , Difficulty(..)
-                                 , Nonce(..)
-                                 , Timestamp(..)
-                                 , hashBlock
-                                 )
+import BitcoinCore.BlockHeaders
+  ( BlockHeader(..)
+  , BlockVersion(..)
+  , Difficulty(..)
+  , Nonce(..)
+  , Timestamp(..)
+  , hashBlock
+  )
 import BitcoinCore.MerkleTrees (MerkleHash(..))
-import BitcoinCore.Transaction.Transactions ( Transaction(..)
-                                            , outputScripts
-                                            , hashTransaction)
-import BitcoinCore.Transaction.Script (Script(..), ScriptComponent(..), putScript)
+import BitcoinCore.Transaction.Transactions
+  ( Transaction(..)
+  , outputScripts
+  , hashTransaction
+  )
+import BitcoinCore.Transaction.Script
+  ( Script(..)
+  , ScriptComponent(..)
+  , putScript
+  )
 
 import Data.Maybe (fromJust)
 import Data.Tuple (swap)
