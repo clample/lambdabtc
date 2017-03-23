@@ -1,34 +1,46 @@
 module Protocol.Persistence where
 
 import General.Config (Config(..))
-import General.Persistence ( PersistentBlockHeader(..)
-                           , KeySet(..)
-                           , EntityField(..)
-                           , PersistentUTXO
-                           , PersistentTransaction(..))
+import General.Persistence
+  ( PersistentBlockHeader(..)
+  , KeySet(..)
+  , EntityField(..)
+  , PersistentUTXO
+  , PersistentTransaction(..)
+  )
 import General.Types (HasNetwork(..), HasPool(..))
 import General.Hash (Hash(..))
 import BitcoinCore.Keys (Address(..))
-import BitcoinCore.BlockHeaders (genesisBlock, BlockHeader(..), BlockHash(..))
-import BitcoinCore.Transaction.Transactions ( Transaction(..)
-                                            , TxHash
-                                            , hashTransaction) 
-import Protocol.Util ( encodeBlockHeader
-                     , decodeBlockHeader
-                     , BlockIndex(..)
-                     , toDbKey
-                     , fromDbKey)
+import BitcoinCore.BlockHeaders
+  ( genesisBlock
+  , BlockHeader(..)
+  , BlockHash(..)
+  )
+import BitcoinCore.Transaction.Transactions
+  ( Transaction(..)
+  , TxHash
+  , hashTransaction
+  ) 
+import Protocol.Util
+  ( encodeBlockHeader
+  , decodeBlockHeader
+  , BlockIndex(..)
+  , toDbKey
+  , fromDbKey
+  )
 
-import Database.Persist.Sql ( insertMany_
-                            , insert_
-                            , count
-                            , runSqlPool
-                            , Filter
-                            , insert_
-                            , selectList
-                            , (==.)
-                            , (>=.)
-                            , ConnectionPool)
+import Database.Persist.Sql
+  ( insertMany_
+  , insert_
+  , count
+  , runSqlPool
+  , Filter
+  , insert_
+  , selectList
+  , (==.)
+  , (>=.)
+  , ConnectionPool
+  )
 import qualified Database.Persist.Sql as DB
 import Database.Persist.Types (SelectOpt(..))
 import Control.Lens ((^.))
