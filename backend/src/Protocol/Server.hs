@@ -510,7 +510,7 @@ constructChain headers = do
       persistHeaders' newChain
 
 
--- returns the leftmose header that we are currently persisting
+-- returns the leftmost header that we are currently persisting
 firstHeaderMatch' :: [BlockHash] -> Connection' BlockIndex
 firstHeaderMatch' [] = fail "No matching hash was found"
 firstHeaderMatch' (hash:hashes) = do
