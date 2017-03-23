@@ -38,12 +38,21 @@ import Data.List.Split (chunksOf)
 import Control.Monad.Trans.Reader (ReaderT)
 
 -- Return the index for the most recent persisted block
-getLastBlock :: ConnectionPool -> IO BlockIndex
-getLastBlock pool = do
-  blockCount <-  runSqlPool lastBlockQuery pool
+getLastBlockNonPool :: ReaderT SqlBackend IO BlockIndex
+getLastBlockNonPool = do
+  blockCount <- count ([] :: [Filter PersistentBlockHeader])
   return . BlockIndex $ blockCount - 1
-  where lastBlockQuery = count allBlocksFilter
-        allBlocksFilter = [] :: [Filter PersistentBlockHeader]
+
+getLastBlock :: ConnectionPool -> IO BlockIndex
+getLastBlock = runSqlPool getLastBlockNonPool
+
+-- Return the index for the most recent persisted block
+-- getLastBlock :: ConnectionPool -> IO BlockIndex
+-- getLastBlock pool = do
+--   blockCount <-  runSqlPool lastBlockQuery pool
+--   return . BlockIndex $ blockCount - 1
+--   where lastBlockQuery = count allBlocksFilter
+--         allBlocksFilter = [] :: [Filter PersistentBlockHeader]
 
 persistGenesisBlock :: Config -> IO ()
 persistGenesisBlock config = do
@@ -62,13 +71,22 @@ persistHeader pool header = do
 -- persistHeader pool header = do
 --   runSqlPool (insert_ $ encodeBlockHeader header) pool
 
-persistHeaders :: ConnectionPool -> [BlockHeader] -> IO ()
-persistHeaders pool headers = do
+persistHeadersNonPool :: [BlockHeader] -> ReaderT SqlBackend IO ()
+persistHeadersNonPool headers = do
   let persistentHeaders = map encodeBlockHeader headers
       chunkedPersistentHeaders = chunksOf 100 persistentHeaders
-      -- Headers are inserted in chunks
-      -- sqlite rejects if we insert all at once
-  runSqlPool (mapM_ insertMany_ chunkedPersistentHeaders) pool
+  mapM_ insertMany_ chunkedPersistentHeaders
+
+persistHeaders :: ConnectionPool -> [BlockHeader] -> IO ()
+persistHeaders pool headers = runSqlPool (persistHeadersNonPool headers) pool
+
+-- persistHeaders :: ConnectionPool -> [BlockHeader] -> IO ()
+-- persistHeaders pool headers = do
+--   let persistentHeaders = map encodeBlockHeader headers
+--       chunkedPersistentHeaders = chunksOf 100 persistentHeaders
+--       -- Headers are inserted in chunks
+--       -- sqlite rejects if we insert all at once
+--   runSqlPool (mapM_ insertMany_ chunkedPersistentHeaders) pool
 
 -- | deletes all headers with index >= inx.
 deleteHeaders :: ConnectionPool -> BlockIndex -> IO ()
@@ -103,9 +121,9 @@ getBlockHeaderFromHash pool hash = runSqlPool (getBlockHeaderFromHashNonPool has
 --       return . Just $ (key , blockHeader) 
 --     _        -> fail "Multiple blocks found with same hash."
 
-getTransactionFromHash :: ConnectionPool -> TxHash -> IO (Maybe Integer)
-getTransactionFromHash pool (Hash hash') = do
-  matches <- runSqlPool (selectList [PersistentTransactionHash ==. hash'] []) pool
+getTransactionFromHashNonPool :: TxHash -> ReaderT SqlBackend IO (Maybe Integer)
+getTransactionFromHashNonPool (Hash hash') = do
+  matches <- selectList [PersistentTransactionHash ==. hash'] []
   case matches of
     [] -> return Nothing
     [tx] -> do
@@ -114,15 +132,47 @@ getTransactionFromHash pool (Hash hash') = do
       return . Just $ key
     _ -> fail "Multiple transactions found with same hash."
 
+getTransactionFromHash :: ConnectionPool -> TxHash -> IO (Maybe Integer)
+getTransactionFromHash pool h =
+  runSqlPool (getTransactionFromHashNonPool h) pool
+
+-- getTransactionFromHash :: ConnectionPool -> TxHash -> IO (Maybe Integer)
+-- getTransactionFromHash pool (Hash hash') = do
+--   matches <- runSqlPool (selectList [PersistentTransactionHash ==. hash'] []) pool
+--   case matches of
+--     [] -> return Nothing
+--     [tx] -> do
+--       let DB.Entity persistentKey _ = tx
+--           key = fromIntegral . DB.fromSqlKey $ persistentKey
+--       return . Just $ key
+--     _ -> fail "Multiple transactions found with same hash."
+
+persistTransactionNonPool :: Transaction -> ReaderT SqlBackend IO ()
+persistTransactionNonPool transaction = insert_ persistentTransaction
+  where
+    persistentTransaction = PersistentTransaction hash'
+    hash' = hash . hashTransaction $ transaction
+
 persistTransaction :: ConnectionPool -> Transaction -> IO ()
-persistTransaction pool transaction =
-  runSqlPool (insert_ persistentTransaction) pool
-  where persistentTransaction = PersistentTransaction hash'
-        hash' = hash . hashTransaction $ transaction
+persistTransaction pool transaction = 
+  runSqlPool (persistTransactionNonPool transaction) pool 
+-- persistTransaction :: ConnectionPool -> Transaction -> IO ()
+-- persistTransaction pool transaction =
+--   runSqlPool (insert_ persistentTransaction) pool
+--   where persistentTransaction = PersistentTransaction hash'
+--         hash' = hash . hashTransaction $ transaction
+
+getBlockWithIndexNonPool :: BlockIndex 
+                         -> ReaderT SqlBackend IO (Maybe BlockHeader)
+getBlockWithIndexNonPool i = (fmap . fmap) decodeBlockHeader
+                           . DB.get . toDbKey $ i
 
 getBlockWithIndex :: ConnectionPool -> BlockIndex -> IO (Maybe BlockHeader)
-getBlockWithIndex pool i = (fmap . fmap) decodeBlockHeader $
-  runSqlPool (DB.get . toDbKey $ i) pool
+getBlockWithIndex pool i = runSqlPool (getBlockWithIndexNonPool i) pool
+
+-- getBlockWithIndex :: ConnectionPool -> BlockIndex -> IO (Maybe BlockHeader)
+-- getBlockWithIndex pool i = (fmap . fmap) decodeBlockHeader $
+--   runSqlPool (DB.get . toDbKey $ i) pool
   
 nHeadersSinceKey :: ConnectionPool -> Int -> BlockIndex -> IO [BlockHeader]
 nHeadersSinceKey pool n key = do
