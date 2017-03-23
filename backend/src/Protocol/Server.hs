@@ -21,7 +21,7 @@ import Protocol.ConnectionM
   , logLevel
   , logStr
   , ioHandlers
-  , logs
+  , logFilter
   , context
   , peerSocket
   , myAddr
@@ -30,6 +30,7 @@ import Protocol.ConnectionM
   , randGen
   , rejectedBlocks
   , mutableContext
+  , displayLogs
   )
 import BitcoinCore.BlockHeaders
   ( BlockHash(..)
@@ -132,10 +133,11 @@ getConnectionContext config = do
         , _ioHandlersUIUpdaterChan = config^.uiUpdaterChan
         , _ioHandlersAppChan = config^.appChan
         , _ioHandlersPool = config^.pool}
+      logAll _ = True
       ic = InterpreterContext
         { _ioHandlers = ioHandlers'
         , _context = connectionContext
-        , _logs = [] }
+        , _logFilter = logAll }
   return ic
   
 listener :: TBMChan Message -> Socket -> IO ()
@@ -362,8 +364,8 @@ interpretConnProd ic conn = case conn of
     Persistence.persistUTXOs (ic^.ioHandlers.pool) utxos
     interpretConnProd ic n
   Free (Log le n) -> do
-    let newIC = logs %~ (++ [le]) $ ic
-    interpretConnProd newIC n
+    putStrLn $ displayLogs (ic^.logFilter) [le]
+    interpretConnProd ic n
   Pure r -> return r
 
 -- Logic for handling response in free monad

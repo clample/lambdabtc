@@ -84,9 +84,9 @@ instance HasNetwork ConnectionContext where
   network = connectionContextNetwork
 
 data InterpreterContext = InterpreterContext
-  { _ioHandlers :: IOHandlers
-  , _context    :: ConnectionContext
-  , _logs :: [LogEntry]
+  { _ioHandlers  :: IOHandlers
+  , _context     :: ConnectionContext
+  , _logFilter   :: LogFilter
   }
 
 data LogEntry = LogEntry
@@ -97,10 +97,12 @@ data LogEntry = LogEntry
 data LogLevel = Debug | Error
   deriving (Show, Eq)
 
+type LogFilter = LogLevel -> Bool
+
 makeLenses ''InterpreterContext
 makeLenses ''LogEntry
 
-displayLogs :: (LogLevel -> Bool) -> [LogEntry] -> String
+displayLogs :: LogFilter -> [LogEntry] -> String
 displayLogs f ls = unlines
                    . map formatLog
                    . filter (f . _logLevel) $ ls
