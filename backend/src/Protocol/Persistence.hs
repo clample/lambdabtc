@@ -46,11 +46,15 @@ getLastBlockNonPool = do
 getLastBlock :: ConnectionPool -> IO BlockIndex
 getLastBlock = runSqlPool getLastBlockNonPool
 
-persistGenesisBlock :: Config -> IO ()
-persistGenesisBlock config = do
-  lastBlock' <- getLastBlock (config^.pool)
+persistGenesisBlockNonPool :: Config -> ReaderT SqlBackend IO ()
+persistGenesisBlockNonPool config = do
+  lastBlock' <- getLastBlockNonPool
   when (lastBlock' == BlockIndex 0) $
-    runSqlPool (insert_ . encodeBlockHeader . genesisBlock $ (config^.network)) (config^.pool)
+    insert_ . encodeBlockHeader . genesisBlock $ config^.network
+
+persistGenesisBlock :: Config -> IO ()
+persistGenesisBlock config = 
+  runSqlPool (persistGenesisBlockNonPool config) (config^.pool)
 
 persistHeaderNonPool :: BlockHeader -> ReaderT SqlBackend IO ()
 persistHeaderNonPool = insert_ . encodeBlockHeader
@@ -69,13 +73,17 @@ persistHeaders :: ConnectionPool -> [BlockHeader] -> IO ()
 persistHeaders pool headers = runSqlPool (persistHeadersNonPool headers) pool
 
 -- | deletes all headers with index >= inx.
-deleteHeaders :: ConnectionPool -> BlockIndex -> IO ()
-deleteHeaders pool inx = do
-  lastBlock <- getLastBlock pool
+deleteHeadersNonPool :: BlockIndex -> ReaderT SqlBackend IO ()
+deleteHeadersNonPool inx = do
+  lastBlock <- getLastBlockNonPool
   let inxs = enumFromTo inx lastBlock
-  runSqlPool (mapM_ (DB.delete . toDbKey) inxs) pool
+  mapM_ (DB.delete . toDbKey) inxs
 
-getBlockHeaderFromHashNonPool :: BlockHash -> ReaderT SqlBackend IO (Maybe (BlockIndex, BlockHeader))
+deleteHeaders :: ConnectionPool -> BlockIndex -> IO ()
+deleteHeaders pool inx = runSqlPool (deleteHeadersNonPool inx) pool
+
+getBlockHeaderFromHashNonPool :: BlockHash 
+  -> ReaderT SqlBackend IO (Maybe (BlockIndex, BlockHeader))
 getBlockHeaderFromHashNonPool (Hash hash') = do
   matches <- selectList [PersistentBlockHeaderHash ==. hash'] []
   case matches of
@@ -123,21 +131,29 @@ getBlockWithIndexNonPool i = (fmap . fmap) decodeBlockHeader
 getBlockWithIndex :: ConnectionPool -> BlockIndex -> IO (Maybe BlockHeader)
 getBlockWithIndex pool i = runSqlPool (getBlockWithIndexNonPool i) pool
   
-nHeadersSinceKey :: ConnectionPool -> Int -> BlockIndex -> IO [BlockHeader]
-nHeadersSinceKey pool n key = do
-  let key' = toDbKey $ key
-  persistentHeaders <- runSqlPool (selectList [ PersistentBlockHeaderId >=. key'] [LimitTo n]) pool
+nHeadersSinceKeyNonPool :: Int -> BlockIndex 
+                        -> ReaderT SqlBackend IO [BlockHeader]
+nHeadersSinceKeyNonPool n key = do
+  let key' = toDbKey key
+  persistentHeaders <- selectList [PersistentBlockHeaderId >=. key'] [LimitTo n]
   return $ map getHeaderFromEntity persistentHeaders
+
+nHeadersSinceKey :: ConnectionPool -> Int -> BlockIndex -> IO [BlockHeader]
+nHeadersSinceKey pool n key = 
+  runSqlPool (nHeadersSinceKeyNonPool n key) pool
 
 getHeaderFromEntity :: DB.Entity PersistentBlockHeader -> BlockHeader
 getHeaderFromEntity (DB.Entity _ persistentHeader) = decodeBlockHeader persistentHeader
 
-getAllAddresses :: ConnectionPool -> IO [Address]
-getAllAddresses pool = do
+getAllAddressesNonPool :: ReaderT SqlBackend IO [Address]
+getAllAddressesNonPool = do
   let allAddressFilter = [] :: [Filter KeySet]
-  keySetEntities <- runSqlPool (selectList allAddressFilter []) pool
+  keySetEntities <- selectList allAddressFilter []
   let getAddress (DB.Entity _ keySet) = Address . keySetAddress $ keySet
   return $ map getAddress keySetEntities
+
+getAllAddresses :: ConnectionPool -> IO [Address]
+getAllAddresses pool = runSqlPool getAllAddressesNonPool pool
 
 persistUTXOs :: ConnectionPool -> [PersistentUTXO] -> IO ()
 persistUTXOs pool utxos = runSqlPool (insertMany_ utxos) pool
