@@ -6,14 +6,27 @@ import BitcoinCore.Keys
 import General.Types (Network(..))
 import General.Hash (Hash(..))
 
-import Crypto.PubKey.ECC.ECDSA (PrivateKey(..), PublicKey(..))
-import Crypto.PubKey.ECC.Types (ecc_n, common_curve, getCurveByName, CurveName(SEC_p256k1))
+import Crypto.PubKey.ECC.ECDSA
+  ( PrivateKey(..)
+  , PublicKey(..)
+  )
+import Crypto.PubKey.ECC.Types
+  ( ecc_n
+  , common_curve
+  , getCurveByName
+  , CurveName(SEC_p256k1)
+  )
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
-import Data.Base58String.Bitcoin (fromText, toBytes)
+import Data.Base58String.Bitcoin
+  ( fromText
+  , toText
+  , b58String
+  , toBytes
+  )
 import qualified Data.Binary as BIN
 import Data.ByteString.Base16 (decode)
-import Data.Base58String.Bitcoin (toText, b58String)
+import Control.Lens ((^.))
 
 instance Arbitrary PrivateKey where
   arbitrary = do
@@ -81,8 +94,11 @@ prop_addressLength :: PublicKeyRep -> Network -> Bool
 prop_addressLength pubKeyRep network =
   addressLength == 25
   where
-    (Address b58) = getAddress pubKeyRep network
-    addressLength = (BS.length . toBytes . fromText) b58
+    address = getAddress pubKeyRep network
+    addressLength = BS.length
+                    . toBytes
+                    . fromText
+                    $ address^.addrTxt
 
 pubKeyHashTest = testCase "Hash public key correctly" pubKeyHashAssert
 

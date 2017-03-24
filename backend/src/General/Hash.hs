@@ -22,7 +22,7 @@ import Data.ByteArray (convert)
 import Test.QuickCheck.Arbitrary (Arbitrary(..))
 import Test.QuickCheck.Gen (vectorOf)
 
-data Hash a = Hash
+newtype Hash a = Hash
   { hash :: ByteString }
   deriving (Eq)
 
@@ -35,7 +35,7 @@ instance Binary (Hash a) where
 
 putHash :: Hash a -> Put
 putHash (Hash hash') =
-  putByteString $ hash'
+  putByteString hash'
 
 getHash :: Get (Hash a)
 getHash =

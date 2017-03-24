@@ -1,35 +1,50 @@
 module Protocol.Persistence where
 
 import General.Config (Config(..))
-import General.Persistence ( PersistentBlockHeader(..)
-                           , KeySet(..)
-                           , EntityField(..)
-                           , PersistentUTXO
-                           , PersistentTransaction(..))
+import General.Persistence
+  ( PersistentBlockHeader(..)
+  , KeySet(..)
+  , EntityField(..)
+  , PersistentUTXO
+  , PersistentTransaction(..)
+  )
 import General.Types (HasNetwork(..), HasPool(..))
 import General.Hash (Hash(..))
 import BitcoinCore.Keys (Address(..))
-import BitcoinCore.BlockHeaders (genesisBlock, BlockHeader(..), BlockHash(..))
-import BitcoinCore.Transaction.Transactions ( Transaction(..)
-                                            , TxHash
-                                            , hashTransaction) 
-import Protocol.Util ( encodeBlockHeader
-                     , decodeBlockHeader
-                     , BlockIndex(..)
-                     , toDbKey
-                     , fromDbKey)
+import BitcoinCore.BlockHeaders
+  ( genesisBlock
+  , BlockHeader(..)
+  , BlockHash(..)
+  )
+import BitcoinCore.Transaction.Transactions
+  ( Transaction(..)
+  , TxHash
+  , hashTransaction
+  ) 
+import Protocol.Util
+  ( encodeBlockHeader
+  , decodeBlockHeader
+  , BlockIndex(..)
+  , toDbKey
+  , fromDbKey
+  )
 
-import Database.Persist.Sql ( insertMany_
-                            , insert_
-                            , count
-                            , runSqlPool
-                            , Filter
-                            , insert_
-                            , selectList
-                            , (==.)
-                            , (>=.)
-                            , ConnectionPool
-                            , SqlBackend)
+import Database.Persist.Sql
+  ( insertMany_
+  , insert_
+  , count
+  , runSqlPool
+  , Filter
+  , insert_
+  , selectList
+  , update
+  , (==.)
+  , (=.)
+  , (>=.)
+  , ConnectionPool
+  , SqlBackend
+  )
+
 import qualified Database.Persist.Sql as DB
 import Database.Persist.Types (SelectOpt(..))
 import Control.Lens ((^.))
@@ -49,7 +64,7 @@ getLastBlock = runSqlPool getLastBlockNonPool
 persistGenesisBlock :: Config -> IO ()
 persistGenesisBlock config = do
   lastBlock' <- getLastBlock (config^.pool)
-  when (lastBlock' == BlockIndex 0) $
+  when (lastBlock' < BlockIndex 0) $
     runSqlPool (insert_ . encodeBlockHeader . genesisBlock $ (config^.network)) (config^.pool)
 
 persistHeaderNonPool :: BlockHeader -> ReaderT SqlBackend IO ()
@@ -82,7 +97,7 @@ getBlockHeaderFromHashNonPool (Hash hash') = do
     []       -> return Nothing
     [header] -> do
       let DB.Entity persistentKey persistentHeader = header
-          key = fromDbKey $ persistentKey
+          key = fromDbKey persistentKey
           blockHeader = decodeBlockHeader persistentHeader
       return . Just $ (key, blockHeader)
     _        -> fail "Multiple blocks found with same hash."
@@ -125,7 +140,7 @@ getBlockWithIndex pool i = runSqlPool (getBlockWithIndexNonPool i) pool
   
 nHeadersSinceKey :: ConnectionPool -> Int -> BlockIndex -> IO [BlockHeader]
 nHeadersSinceKey pool n key = do
-  let key' = toDbKey $ key
+  let key' = toDbKey key
   persistentHeaders <- runSqlPool (selectList [ PersistentBlockHeaderId >=. key'] [LimitTo n]) pool
   return $ map getHeaderFromEntity persistentHeaders
 
@@ -141,3 +156,12 @@ getAllAddresses pool = do
 
 persistUTXOs :: ConnectionPool -> [PersistentUTXO] -> IO ()
 persistUTXOs pool utxos = runSqlPool (insertMany_ utxos) pool
+
+getUnspentUTXOs :: ConnectionPool -> IO [DB.Entity PersistentUTXO]
+getUnspentUTXOs pool = do
+  let unspentUTXOFilter = [ PersistentUTXOIsSpent ==. False]
+  runSqlPool (selectList unspentUTXOFilter []) pool
+
+setUtxoSpent :: ConnectionPool -> DB.Key PersistentUTXO -> IO ()
+setUtxoSpent pool key =
+  runSqlPool (update key [PersistentUTXOIsSpent =. True]) pool

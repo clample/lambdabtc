@@ -1,56 +1,71 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Protocol.Server where
 
-import Protocol.Messages (parseMessage, Message(..), MessageBody(..), MessageContext(..))
+import Protocol.Messages
+  ( parseMessage
+  , Message(..)
+  , MessageBody(..)
+  , MessageContext(..)
+  )
 import Protocol.MessageBodies 
 import Protocol.Network (connectToPeer, sock, addr)
 import Protocol.Util (getUTXOS, HasLastBlock(..), BlockIndex(..))
-import Protocol.Persistence ( getLastBlock
-                            , persistGenesisBlock
-                            , persistHeaders
-                            , persistHeader
-                            , getBlockWithIndex
-                            , getAllAddresses
-                            , persistUTXOs
-                            , persistTransaction
-                            , getBlockHeaderFromHash
-                            , nHeadersSinceKey
-                            , getTransactionFromHash
-                            , deleteHeaders)
-import Protocol.ConnectionM ( ConnectionContext(..)
-                            , IOHandlers(..)
-                            , peerSocket
-                            , myAddr
-                            , writerChan
-                            , listenChan
-                            , randGen
-                            , rejectedBlocks)
-import BitcoinCore.BlockHeaders ( BlockHash(..)
-                                , BlockHeader(..)
-                                , verifyHeaders
-                                , prevBlockHash
-                                , hashBlock
-                                )
-import BitcoinCore.BloomFilter ( NFlags(..)
-                               , defaultFilterWithElements)
+import qualified Protocol.Persistence as Persistence
+import Protocol.ConnectionM
+  ( ConnectionContext(..)
+  , IOHandlers(..)
+  , MutableConnectionContext(..)
+  , InterpreterContext(..)
+  , LogEntry(..)
+  , LogLevel(..)
+  , logLevel
+  , logStr
+  , ioHandlers
+  , logFilter
+  , context
+  , peerSocket
+  , myAddr
+  , writerChan
+  , listenChan
+  , randGen
+  , rejectedBlocks
+  , mutableContext
+  , displayLogs
+  )
+import BitcoinCore.BlockHeaders
+  ( BlockHash(..)
+  , BlockHeader(..)
+  , verifyHeaders
+  , prevBlockHash
+  , hashBlock
+  , showBlocks
+  )
+import BitcoinCore.BloomFilter
+  ( NFlags(..)
+  , defaultFilterWithElements
+  )
 import BitcoinCore.Keys (addressToPubKeyHash, Address(..))
 import BitcoinCore.Inventory (InventoryVector(..), ObjectType(..))
-import BitcoinCore.Transaction.Transactions ( Value(..)
-                                            , Transaction(..)
-                                            , TxHash
-                                            , hashTransaction
-                                            )
-import General.Config ( Config(..)
-                      , HasAppChan(..)
-                      , HasUIUpdaterChan(..)
-                      )
+import BitcoinCore.Transaction.Transactions
+  ( Value(..)
+  , Transaction(..)
+  , TxHash
+  , hashTransaction
+  )
+import General.Config
+  ( Config(..)
+  , HasAppChan(..)
+  , HasUIUpdaterChan(..)
+  )
 import General.Persistence (PersistentUTXO(..))
-import General.Types ( HasNetwork(..)
-                     , HasVersion(..)
-                     , HasRelay(..)
-                     , HasTime(..)
-                     , HasPeerAddr(..)
-                     , HasPool(..))
+import General.Types
+  ( HasNetwork(..)
+  , HasVersion(..)
+  , HasRelay(..)
+  , HasTime(..)
+  , HasPeerAddr(..)
+  , HasPool(..)
+  )
 import General.InternalMessaging (InternalMessage(..), UIUpdaterMessage(..))
 import General.Util (Addr(..))
 import General.Hash (Hash(..))
@@ -58,18 +73,20 @@ import General.Hash (Hash(..))
 import Network.Socket (Socket)
 import Data.Time.Clock.POSIX (getPOSIXTime)
 import Control.Monad.State.Lazy (liftIO)
-import Control.Monad (when, filterM)
+import Control.Monad (when, filterM, unless)
 import System.Random (randomR, getStdGen)
 import Conduit (runConduit, (.|), mapC, mapMC, Conduit)
 import Data.Conduit.Network (sourceSocket, sinkSocket)
 import Data.Conduit.Serialization.Binary (conduitGet, conduitPut)
-import Data.Conduit.TMChan ( sourceTBMChan
-                           , sinkTBMChan
-                           , newTBMChan
-                           , TBMChan
-                           , writeTBMChan
-                           , readTBMChan
-                           , tryReadTBMChan)
+import Data.Conduit.TMChan
+  ( sourceTBMChan
+  , sinkTBMChan
+  , newTBMChan
+  , TBMChan
+  , writeTBMChan
+  , readTBMChan
+  , tryReadTBMChan
+  )
 import Control.Concurrent.STM (atomically)
 import Control.Concurrent (forkIO)
 import Data.Binary (Binary(..))
@@ -80,40 +97,48 @@ import Data.Maybe (catMaybes)
 
 connectTestnet :: Config -> IO () 
 connectTestnet config = do
-  persistGenesisBlock config
-  (context, ioHandlers) <- getConnectionContext config
-  forkIO $ listener (ioHandlers^.listenChan) (ioHandlers^.peerSocket)
-  forkIO $ writer (ioHandlers^.writerChan) (ioHandlers^.peerSocket)
-  connection ioHandlers context
+  Persistence.persistGenesisBlock config
+  ic <- getConnectionContext config
+  forkIO $ listener (ic^.ioHandlers.listenChan) (ic^.ioHandlers.peerSocket)
+  forkIO $ writer (ic^.ioHandlers.writerChan) (ic^.ioHandlers.peerSocket)
+  connection ic
   return ()
 
-getConnectionContext :: Config -> IO (ConnectionContext, IOHandlers)
+getConnectionContext :: Config -> IO InterpreterContext
 getConnectionContext config = do
   peer' <- connectToPeer 1 config
   writerChan' <- atomically $ newTBMChan 16
   listenChan' <- atomically $ newTBMChan 16
   time' <- getPOSIXTime
   randGen' <- getStdGen
-  lastBlock' <- getLastBlock (config^.pool)
+  lastBlock' <- Persistence.getLastBlock (config^.pool)
   let connectionContext = ConnectionContext
         { _connectionContextVersion = 60002
-        , _connectionContextLastBlock = lastBlock'
         , _myAddr = Addr (0, 0, 0, 0) 18333 
         , _connectionContextPeerAddr = peer'^.addr
         , _connectionContextRelay = False 
         , _connectionContextTime = time'
-        , _randGen = randGen'
         , _connectionContextNetwork = config^.network
-        , _rejectedBlocks = [] 
+        , _mutableContext = mutableContext'
         }
-      ioHandlers = IOHandlers
+      mutableContext' = MutableConnectionContext
+        { _randGen = randGen'
+        , _rejectedBlocks = []
+        , _connectionContextLastBlock = lastBlock'
+        }
+      ioHandlers' = IOHandlers
         { _peerSocket = peer'^.sock
         , _writerChan = writerChan'
         , _listenChan = listenChan'
         , _ioHandlersUIUpdaterChan = config^.uiUpdaterChan
         , _ioHandlersAppChan = config^.appChan
         , _ioHandlersPool = config^.pool}
-  return (connectionContext, ioHandlers)
+      logAll _ = True
+      ic = InterpreterContext
+        { _ioHandlers = ioHandlers'
+        , _context = connectionContext
+        , _logFilter = logAll }
+  return ic
   
 listener :: TBMChan Message -> Socket -> IO ()
 listener chan socket = runConduit
@@ -139,35 +164,31 @@ logMessages context =
           putStrLn $ context ++ " " ++ show message
           return message
 
-connection :: IOHandlers -> ConnectionContext -> IO ()
-connection ioHandlers context = do
-  interpretConnProd ioHandlers context sendVersion'
-  interpretConnProd ioHandlers context setFilter'
-  connectionLoop ioHandlers context
-
-connectionLoop :: IOHandlers -> ConnectionContext -> IO ()
-connectionLoop ioHandlers context = do
-  mmResponse <-  liftIO . atomically . tryReadTBMChan $ (ioHandlers^.listenChan)
+connection :: InterpreterContext -> IO ()
+connection ic = do
+  interpretConnProd ic sendVersion'
+  interpretConnProd ic setFilter'
+  connectionLoop ic
+  
+connectionLoop :: InterpreterContext -> IO ()
+connectionLoop ic = do
+  let readChan = liftIO . atomically . tryReadTBMChan
+  mmResponse <-  readChan $ (ic^.ioHandlers.listenChan)
   case mmResponse of
     Nothing -> fail "listenChan is closed and empty"
     Just Nothing -> return () -- chan is empty
-    Just (Just response) -> interpretConnProd ioHandlers context (handleResponse' response)
-  mmInternalMessage <- liftIO . atomically . tryReadTBMChan $ (ioHandlers^.appChan)
+    Just (Just response) -> interpretConnProd ic (handleResponse' response)
+  mmInternalMessage <- readChan $ (ic^.ioHandlers.appChan)
   case mmInternalMessage of
     Nothing -> fail "appChan is closed and empty"
     Just Nothing -> return () -- chan is empty
     Just (Just internalMessage) ->
-      interpretConnProd ioHandlers context (handleInternalMessage' internalMessage)
-  connectionLoop ioHandlers context
-
-----------
--- type KeyId = Integer
-  -- KeyId is 1 based
+      interpretConnProd ic (handleInternalMessage' internalMessage)
+  connectionLoop ic
 
 data ConnectionInteraction next
   = GetContext (ConnectionContext -> next)
-  | SetContext ConnectionContext next
-  | IncrementLastBlock Int next
+  | SetContext MutableConnectionContext next
   | ReadMessage (Maybe Message -> next)
   | WriteMessage Message next
   | WriteUIUpdaterMessage UIUpdaterMessage next
@@ -182,11 +203,11 @@ data ConnectionInteraction next
   | GetTransactionFromHash TxHash (Maybe Integer -> next)
   | GetAllAddresses ([Address] -> next)
   | PersistUTXOs [PersistentUTXO] next
+  | Log LogEntry next
 
 instance Functor ConnectionInteraction where
   fmap f (GetContext                g) = GetContext                (f . g)
   fmap f (SetContext              c x) = SetContext              c (f x)
-  fmap f (IncrementLastBlock      i x) = IncrementLastBlock      i (f x)
   fmap f (ReadMessage               g) = ReadMessage               (f . g)
   fmap f (WriteMessage            m x) = WriteMessage            m (f x)
   fmap f (WriteUIUpdaterMessage   m x) = WriteUIUpdaterMessage   m (f x)
@@ -197,10 +218,11 @@ instance Functor ConnectionInteraction where
   fmap f (GetBlockHeaderFromHash  h g) = GetBlockHeaderFromHash  h (f . g)
   fmap f (DeleteBlockHeaders      i x) = DeleteBlockHeaders      i (f x)
   fmap f (PersistTransaction      t x) = PersistTransaction      t (f x)
-  fmap f (NHeadersSinceKey        n i g) = NHeadersSinceKey         n i (f . g)
+  fmap f (NHeadersSinceKey        n i g) = NHeadersSinceKey    n i (f . g)
   fmap f (GetTransactionFromHash  h g) = GetTransactionFromHash  h (f . g)
   fmap f (GetAllAddresses           g) = GetAllAddresses           (f . g)
   fmap f (PersistUTXOs            u x) = PersistUTXOs            u (f x)
+  fmap f (Log                    le x) = Log                    le (f x)
 
 type Connection' = Free ConnectionInteraction
 
@@ -208,12 +230,8 @@ type Connection' = Free ConnectionInteraction
 getContext' :: Connection' ConnectionContext
 getContext' = liftF (GetContext id)
 
-setContext' :: ConnectionContext -> Connection' ()
-setContext' c = liftF (SetContext c ())
--- TODO: Can we move this out of the interpreter and into our free monad
---       and just expose a generic way to update the state?
-incrementLastBlock' :: Int -> Connection' ()
-incrementLastBlock' i = liftF (IncrementLastBlock i ())
+setContext' :: MutableConnectionContext -> Connection' ()
+setContext' mc = liftF (SetContext mc ())
 
 readMessage' :: Connection' (Maybe Message)
 readMessage' = liftF (ReadMessage id)
@@ -231,16 +249,38 @@ blockHeaderCount' :: Connection' BlockIndex
 blockHeaderCount' = liftF (BlockHeaderCount id)
 
 persistHeaders' :: [BlockHeader] -> Connection' ()
-persistHeaders' headers = liftF (PersistBlockHeaders headers ())
+persistHeaders' headers = do
+  contextOld <- getContext'
+  liftF (PersistBlockHeaders headers ())
+  incrementLastBlock' $ length headers
+  contextNew <- getContext'
+  logDebug' $
+    "Adding blocks to main chain: " ++ showBlocks headers
+    ++ "\n\t`lastBlock` changed from "
+    ++ show (contextOld^.mutableContext.lastBlock)
+    ++ " to " ++ show (contextNew^.mutableContext.lastBlock)
+  
 
 persistHeader' :: BlockHeader -> Connection' ()
-persistHeader' header = liftF (PersistBlockHeader header ())
+persistHeader' header = do
+  liftF (PersistBlockHeader header ())
+  incrementLastBlock' 1
 
-getBlockHeaderFromHash' :: BlockHash -> Connection' (Maybe (BlockIndex, BlockHeader))
+getBlockHeaderFromHash' :: BlockHash
+                        -> Connection' (Maybe (BlockIndex, BlockHeader))
 getBlockHeaderFromHash' hash = liftF (GetBlockHeaderFromHash hash id)
 
 deleteBlockHeaders' :: BlockIndex -> Connection' ()
-deleteBlockHeaders' inx = liftF (DeleteBlockHeaders inx ())
+deleteBlockHeaders' inx = do
+  contextOld <- getContext'
+  liftF (DeleteBlockHeaders inx ())
+  setLastBlock' (inx - 1)
+  contextNew <- getContext'
+  logDebug' $
+    "Deleting all blocks all blocks with index >= " ++ show inx
+    ++ "\n\t`lastBlock` changed from "
+    ++ show (contextOld^.mutableContext.lastBlock)
+    ++ " to " ++ show (contextNew^.mutableContext.lastBlock)
 
 persistTransaction' :: Transaction -> Connection' ()
 persistTransaction' tx = liftF (PersistTransaction tx ())
@@ -257,57 +297,75 @@ getAllAddresses' = liftF (GetAllAddresses id)
 persistUTXOs' :: [PersistentUTXO] -> Connection' ()
 persistUTXOs' persistentUTXOs = liftF (PersistUTXOs persistentUTXOs ())
 
-interpretConnProd :: IOHandlers -> ConnectionContext -> Connection' r -> IO r
-interpretConnProd ioHandlers context conn = case conn of
-  Free (GetContext f) -> do
-    interpretConnProd ioHandlers context (f context)
-  Free (SetContext c n) -> do
-    interpretConnProd ioHandlers c n
-  Free (IncrementLastBlock i n) -> do
-    let newContext = lastBlock %~ (\(BlockIndex old) -> BlockIndex (old + i)) $ context
-    interpretConnProd ioHandlers newContext n
+log' :: LogEntry -> Connection' ()
+log' le = liftF (Log le ())
+
+incrementLastBlock' :: Int -> Connection' ()
+incrementLastBlock' i = do
+  context <- getContext'
+  let newContext = mutableContext.lastBlock
+                   %~ (\(BlockIndex bi) -> (BlockIndex (bi + i)))
+                   $ context
+  setContext' $ newContext^.mutableContext
+  
+setLastBlock' :: BlockIndex -> Connection' ()
+setLastBlock' i = do
+  context <- getContext'
+  let newContext = mutableContext.lastBlock .~ i $ context
+  setContext' $ newContext^.mutableContext
+
+interpretConnProd :: InterpreterContext -> Connection' r -> IO r
+interpretConnProd ic conn = case conn of
+  Free (GetContext f) -> 
+    interpretConnProd ic (f $ ic^.context)
+  Free (SetContext mc n) -> do
+    let newIC = context.mutableContext .~ mc $ ic
+    interpretConnProd newIC n
   Free (ReadMessage f) -> do
-    mMessage <- liftIO . atomically . readTBMChan $ (ioHandlers^.listenChan)
-    interpretConnProd ioHandlers context (f mMessage)
+    mMessage <- liftIO . atomically . readTBMChan $ (ic^.ioHandlers.listenChan)
+    interpretConnProd ic (f mMessage)
   Free (WriteMessage m n) -> do
-    writeMessage (ioHandlers^.writerChan) m 
-    interpretConnProd ioHandlers context n
+    writeMessage (ic^.ioHandlers.writerChan) m 
+    interpretConnProd ic n
   Free (WriteUIUpdaterMessage m n) -> do
-    writeUiUpdaterMessage (ioHandlers^.uiUpdaterChan) m
-    interpretConnProd ioHandlers context n
+    writeUiUpdaterMessage (ic^.ioHandlers.uiUpdaterChan) m
+    interpretConnProd ic n
   Free (GetBlockHeader i f) -> do
-    mBlock <- getBlockWithIndex (ioHandlers^.pool) i
-    interpretConnProd ioHandlers context (f mBlock)
+    mBlock <- Persistence.getBlockWithIndex (ic^.ioHandlers.pool) i
+    interpretConnProd ic (f mBlock)
   Free (BlockHeaderCount f) -> do
-    blockHeaderCount <- getLastBlock $ ioHandlers^.pool
-    interpretConnProd ioHandlers context (f blockHeaderCount)
+    blockHeaderCount <- Persistence.getLastBlock $ ic^.ioHandlers.pool
+    interpretConnProd ic (f blockHeaderCount)
   Free (PersistBlockHeaders headers n) -> do
-    persistHeaders (ioHandlers^.pool) headers
-    interpretConnProd ioHandlers context n
+    Persistence.persistHeaders (ic^.ioHandlers.pool) headers
+    interpretConnProd ic n
   Free (PersistBlockHeader header n) -> do
-    persistHeader (ioHandlers^.pool) header
-    interpretConnProd ioHandlers context n
+    Persistence.persistHeader (ic^.ioHandlers.pool) header
+    interpretConnProd ic n
   Free (GetBlockHeaderFromHash hash f) -> do
-    mBlock <- getBlockHeaderFromHash (ioHandlers^.pool) hash
-    interpretConnProd ioHandlers context (f mBlock)
+    mBlock <- Persistence.getBlockHeaderFromHash (ic^.ioHandlers.pool) hash
+    interpretConnProd ic (f mBlock)
   Free (DeleteBlockHeaders inx n) -> do
-    deleteHeaders (ioHandlers^.pool) inx
-    interpretConnProd ioHandlers context n
+    Persistence.deleteHeaders (ic^.ioHandlers.pool) inx
+    interpretConnProd ic n
   Free (NHeadersSinceKey n keyId f) -> do
-    headers <- nHeadersSinceKey (ioHandlers^.pool) n keyId
-    interpretConnProd ioHandlers context (f headers)
+    headers <- Persistence.nHeadersSinceKey (ic^.ioHandlers.pool) n keyId
+    interpretConnProd ic (f headers)
   Free (PersistTransaction tx n) -> do
-    persistTransaction (ioHandlers^.pool) tx
-    interpretConnProd ioHandlers context n
+    Persistence.persistTransaction (ic^.ioHandlers.pool) tx
+    interpretConnProd ic n
   Free (GetTransactionFromHash hash f) -> do
-    mTx <- getTransactionFromHash (ioHandlers^.pool) hash
-    interpretConnProd ioHandlers context (f mTx)
+    mTx <- Persistence.getTransactionFromHash (ic^.ioHandlers.pool) hash
+    interpretConnProd ic (f mTx)
   Free (GetAllAddresses f) -> do
-    addresses <- getAllAddresses (ioHandlers^.pool)
-    interpretConnProd ioHandlers context (f addresses)
+    addresses <- Persistence.getAllAddresses (ic^.ioHandlers.pool)
+    interpretConnProd ic (f addresses)
   Free (PersistUTXOs utxos n) -> do
-    persistUTXOs (ioHandlers^.pool) utxos
-    interpretConnProd ioHandlers context n
+    Persistence.persistUTXOs (ic^.ioHandlers.pool) utxos
+    interpretConnProd ic n
+  Free (Log le n) -> do
+    putStrLn $ displayLogs (ic^.logFilter) [le]
+    interpretConnProd ic n
   Pure r -> return r
 
 -- Logic for handling response in free monad
@@ -320,66 +378,27 @@ handleResponse' (Message (VersionMessageBody body) _) = do
   let lastBlockPeer = body^.lastBlock
   synchronizeHeaders' lastBlockPeer
 
-handleResponse' (Message (HeadersMessageBody (HeadersMessage headers)) _) = do
-  mostRecentHeader <- getMostRecentHeader'
-  let isValid = verifyHeaders (mostRecentHeader:headers)
-      newHeadersN = fromIntegral . length $ headers
-  if isValid
-    then do
-      persistHeaders' headers
-      incrementLastBlock' newHeadersN
-    else constructChain headers
-  where
-    constructChain :: [BlockHeader] -> Connection' ()
-    constructChain headers = do  
-      let prev = (head headers)^.prevBlockHash
-      context <- getContext'
-      let rejectedBlocks' = context^.rejectedBlocks
-      connectingBlock <- getBlockHeaderFromHash' prev
-      case connectingBlock of
-        Nothing -> do let newPrev = filter (\header -> hashBlock header == prev) rejectedBlocks'
-                      case newPrev of 
-                        [] -> addRejected headers 
-                        (x:xs) -> constructChain (x:headers)
-        Just (index, header) -> do let newLength = index + BlockIndex (length headers)
-                                   if ( newLength > context^.lastBlock 
-                                       && verifyHeaders (header:headers))
-                                     then do
-                                        let inxs = enumFromTo (index + 1) (context^.lastBlock)
-                                        newRejected <- mapM getBlockHeader' inxs
-                                        -- also remove inxs headers from rejected
-                                        addRejected $ catMaybes newRejected
-                                        deleteBlockHeaders' (index + 1)
-                                        persistHeaders' headers
-                                        setContext' (lastBlock .~ newLength $ context)
-                                     else addRejected headers                                
-    addRejected :: [BlockHeader] -> Connection' ()
-    addRejected headers = do
-      prevContext <- getContext' 
-      setContext' $ rejectedBlocks %~ (++ headers) $ prevContext
+handleResponse' (Message (HeadersMessageBody (HeadersMessage headers)) _) =
+  handleNewHeaders headers
 
-handleResponse' (Message (MerkleblockMessageBody (message)) _) = do
-  mostRecentHeader <- getMostRecentHeader'
-  let isValid = verifyHeaders [mostRecentHeader, (message^.blockHeader)]
-  if isValid
-    then do
-      persistHeader' $ message^.blockHeader
-      incrementLastBlock' 1
-    else fail "We recieved invalid header"
-      -- todo: does `fail` actually make sense here?
+handleResponse' (Message (MerkleblockMessageBody message) _) =
+  handleNewHeaders [message^.blockHeader]
 
 handleResponse' (Message (GetHeadersMessageBody message) _) = do
   match <- firstHeaderMatch' (message^.blockLocatorHashes)
   matchingHeaders <- 2000 `nHeadersSinceKey'` match
-  writeMessageWithBody' . HeadersMessageBody $ HeadersMessage {_blockHeaders = matchingHeaders }
+  writeMessageWithBody'
+    . HeadersMessageBody
+    $ HeadersMessage {_blockHeaders = matchingHeaders }
  
 handleResponse' (Message (InvMessageBody message) _) = do
-  desiredInvs <- map toFilteredBlock <$> filterM (desiredData) (message^.invVectors)
+  let desiredData = message^.invVectors
+      desiredInvs = map toFilteredBlock desiredData
   writeMessageWithBody' . GetDataMessageBody $ GetDataMessage desiredInvs
   where
-    -- TODO: query db, etc to see if we actually need the data
-    desiredData _ = return True
-    toFilteredBlock (InventoryVector MSG_BLOCK hash) = InventoryVector MSG_FILTERED_BLOCK hash
+    toFilteredBlock (InventoryVector MSG_BLOCK hash) = InventoryVector
+                                                       MSG_FILTERED_BLOCK
+                                                       hash
     toFilteredBlock invVector = invVector
 
 -- TODO: If this is not atomic, then there is a race condition
@@ -387,8 +406,11 @@ handleResponse' (Message (InvMessageBody message) _) = do
 --       and then proceed to persist duplicate UTXOs
 handleResponse' (Message (TxMessageBody message) _) = do
   isHandled <- isTransactionHandled'
-  when (not isHandled) $ do
+  unless isHandled $ do
+    logDebug' $ "Transaction was not previously handled. Handling now."
     addUTXOs
+    -- TODO: modify writeUiUpdaterMessage' to send the correct
+    --       utxo value
     writeUiUpdaterMessage' . IncomingFunds . Satoshis $ 1000
     persistTransaction' (message^.transaction)
   where
@@ -404,8 +426,8 @@ handleResponse' (Message (TxMessageBody message) _) = do
         Nothing -> False
         Just _  -> True
 
-handleResponse' message = error $
-  "We are not yet able to handle message" ++ (show message)
+handleResponse' message = logError' $
+  "We are not yet able to handle message" ++ show message
 
 writeMessageWithBody' :: MessageBody -> Connection' ()
 writeMessageWithBody' body = do
@@ -413,7 +435,82 @@ writeMessageWithBody' body = do
   let message = Message body (MessageContext (context^.network))
   writeMessage' message
 
--- returns the leftmose header that we are currently persisting
+handleNewHeaders :: [BlockHeader] -> Connection' ()
+handleNewHeaders newHeaders = do
+  mostRecentHeader <- getMostRecentHeader'
+  let isValid = verifyHeaders (mostRecentHeader:newHeaders)
+  if isValid
+    then persistHeaders' newHeaders
+    else constructChain newHeaders
+
+-- Try to construct a new blockchain using `headers`
+-- if we can construct a new blockchain and it's longer than the active chain,
+-- then we replace the active chain. Otherwise,
+-- we store `headers` in rejectedBlocks
+-- in case we are able to construct a longer chain later on.
+constructChain :: [BlockHeader] -> Connection' ()
+constructChain headers = do  
+  let connectingBlockHash = (head headers)^.prevBlockHash
+  logDebug' $ "Constructing Chain with headers "
+    ++ showBlocks headers
+  connectingBlock <- getBlockHeaderFromHash' connectingBlockHash
+  case connectingBlock of
+    
+    -- `headers` does not connect to the active chain
+    Nothing -> constructChainFromRejectedBlocks connectingBlockHash
+    
+    -- `headers` does connect to the active chain
+    Just (index, header) -> do
+      logDebug' $
+        "Constructing chain. Found block connecting to main chain at: "
+        ++ show index
+      replaceChainIfLonger header index
+  where
+    constructChainFromRejectedBlocks connectingBlockHash = do
+      context <- getContext'
+      let rejectedBlocks' = context^.mutableContext.rejectedBlocks
+          blockMatches header = hashBlock header == connectingBlockHash
+          newConnectingBlockHash = filter blockMatches rejectedBlocks'
+      case newConnectingBlockHash of 
+        [] -> addRejected headers
+          -- we can't add any blocks from `rejectedBlocks`
+          -- to our candidate chain
+        (x:xs) -> constructChain (x:headers)
+          -- we can add `x` from `rejectedBlocks`
+          -- to our candidate chain and try again
+
+    addRejected headers = do
+      prevContext <- getContext' 
+      setContext' $ rejectedBlocks %~ (++ headers) $ prevContext^.mutableContext
+
+    replaceChainIfLonger connectionHeader connectionIndex = do
+      context <- getContext'
+      let newLength = connectionIndex + BlockIndex (length headers)
+          headersAreValid = verifyHeaders (connectionHeader:headers)
+      logDebug' $ "Checking if we should replace the chain."
+        ++ "\n\tActiveChain length: "
+        ++ show (context^.mutableContext.lastBlock)
+        ++ "\n\tNewChain length: " ++ show newLength
+        ++ "\n\tNew chain is valid? " ++ show headersAreValid
+      if newLength > context^.mutableContext.lastBlock
+         && headersAreValid
+        then replaceChain headers connectionIndex
+        else addRejected headers
+      
+    replaceChain newChain connectionIndex = do
+      logDebug' "Replacing main chain"
+      context <- getContext'
+      let inxs = enumFromTo
+                 (connectionIndex + 1)
+                 (context^.mutableContext.lastBlock)
+      newRejected <- mapM getBlockHeader' inxs
+      -- TODO: also remove inxs headers from rejected
+      addRejected $ catMaybes newRejected
+      deleteBlockHeaders' (connectionIndex + 1)
+      persistHeaders' newChain
+
+
+-- returns the leftmost header that we are currently persisting
 firstHeaderMatch' :: [BlockHash] -> Connection' BlockIndex
 firstHeaderMatch' [] = fail "No matching hash was found"
 firstHeaderMatch' (hash:hashes) = do
@@ -427,14 +524,17 @@ getMostRecentHeader' = do
   blockHeaderCount <- blockHeaderCount'
   mLastBlockHeader <- getBlockHeader' blockHeaderCount
   case mLastBlockHeader of
-    Nothing -> fail "Unable to get most recent block header. This should never happen"
+    Nothing -> fail
+      "Unable to get most recent block header. This should never happen"
     Just lastBlockHeader -> return lastBlockHeader
 
 synchronizeHeaders' :: BlockIndex -> Connection' ()
 synchronizeHeaders' lastBlockPeer = do
+  logDebug' "Synchronizing headers"
   context <- getContext'
   newSync <- isNewSync'
-  when (outOfSync' context) $
+  when (outOfSync' context) $ do
+    logDebug' "We are out of sync with our peer"
     if newSync
     then do
       getHeaders'
@@ -445,15 +545,20 @@ synchronizeHeaders' lastBlockPeer = do
       handleMessages'
       synchronizeHeaders' lastBlockPeer
   where
-    outOfSync' context = context^.lastBlock < lastBlockPeer
+    outOfSync' context = context^.mutableContext.lastBlock < lastBlockPeer
+
+    -- Handle all incoming messages recursively until we recieve more headers.
+    -- When we recieve more headers, we can continue synchronizing.
     handleMessages' = do
       mResponse <- readMessage'
       case mResponse of
         Nothing -> fail "unable to read message"
-        -- TODO: handleResponse' will fail for a lot of message types
-        Just response@(Message (HeadersMessageBody _) _) -> handleResponse' response
+        Just response@(Message (HeadersMessageBody _) _) ->
+          handleResponse' response
+        Just response@(Message (MerkleblockMessageBody _) _) ->
+          handleResponse' response
         Just response -> handleResponse' response >> handleMessages'
-
+    
 getHeaders' :: Connection' ()
 getHeaders' = getHeadersOrBlocksMessage' GetHeadersMessageBody GetHeadersMessage
 
@@ -468,14 +573,15 @@ getHeadersOrBlocksMessage' :: (a -> MessageBody)
                            -> Connection' ()
 getHeadersOrBlocksMessage' bodyConstructor messageConstructor = do
   context <- getContext'
-  let getHeadersMessage' lastBlock' = do
-        blockLocatorHashes' <- queryBlockLocatorHashes' lastBlock'
-        return $ Message
-          (bodyConstructor (messageConstructor (context^.version) blockLocatorHashes'
-           (Hash . fst . decode $
-            "0000000000000000000000000000000000000000000000000000000000000000")))
-          (MessageContext (context^.network))
-  message <- getHeadersMessage' (context^.lastBlock)
+  let lastBlock' = context^.mutableContext.lastBlock
+  blockLocatorHashes' <- queryBlockLocatorHashes' lastBlock'
+  let allBlocksHashStop = Hash . fst . decode $
+        "0000000000000000000000000000000000000000000000000000000000000000"
+      body = bodyConstructor $ messageConstructor
+             (context^.version)
+             blockLocatorHashes'
+             allBlocksHashStop
+      message = Message body (MessageContext (context^.network))
   writeMessage' message
 
 -- returns a list of some of the block hashes for headers we've persisted
@@ -497,18 +603,20 @@ isNewSync' = (== []) <$> getAllAddresses'
 sendVersion' :: Connection' ()
 sendVersion' = do
   context <- getContext'
-  let nonce' = Nonce64 . fst $ randomR (0, 0xffffffffffffffff) (context^.randGen)
+  let nonce' = Nonce64 . fst $ randomR (0, maxNonce) randGen'
                -- TODO: We need to update the randGen after calling randomR
       versionMessage = Message
         (VersionMessageBody (VersionMessage
           (context^.version)
           nonce'
-          (context^.lastBlock)
+          (context^.mutableContext.lastBlock)
           (context^.peerAddr)
           (context^.myAddr)
           (context^.relay)
           (context^.time)))
         (MessageContext (context^.network))
+      maxNonce = 0xffffffffffffffff -- 8 bytes
+      randGen' = context^.mutableContext.randGen
   writeMessage' versionMessage
 
 setFilter' :: Connection' ()
@@ -518,7 +626,8 @@ setFilter' = do
   let
     (filter', filterContext') = defaultFilterWithElements pubKeyHashes
     filterloadMessage = Message
-      (FilterloadMessageBody (FilterloadMessage filter' filterContext' BLOOM_UPDATE_NONE))
+      (FilterloadMessageBody
+        (FilterloadMessage filter' filterContext' BLOOM_UPDATE_NONE))
       (MessageContext (context^.network))
   writeMessage' filterloadMessage
 
@@ -542,17 +651,25 @@ handleInternalMessage' (AddAddress address) = do
   writeMessage' filterAddMessage
 
 blockLocatorIndices :: BlockIndex -> [BlockIndex]
-blockLocatorIndices lastBlock' = reverse . addGenesisIndiceIfNeeded $ blockLocatorIndicesStep 10 1 [lastBlock']
+blockLocatorIndices lastBlock' = reverse
+                                 . addGenesisIndiceIfNeeded
+                                 $ blockLocatorIndicesStep 10 1 [lastBlock']
   where addGenesisIndiceIfNeeded indices@((BlockIndex 0):xs) = indices
         addGenesisIndiceIfNeeded xs   = (BlockIndex 0):xs
 
 blockLocatorIndicesStep :: Int -> Int -> [BlockIndex] -> [BlockIndex]
 blockLocatorIndicesStep c step indices@((BlockIndex i):is)
-  | c > 0 && i > 0 = blockLocatorIndicesStep (c - 1) step ((BlockIndex $ i - 1):indices)
-  | i - step > 0 = blockLocatorIndicesStep c (step * 2) ((BlockIndex $ i - step):indices)
+  | c > 0 && i > 0 = blockLocatorIndicesStep
+                     (c - 1)
+                     step
+                     ((BlockIndex $ i - 1):indices)
+  | i - step > 0 = blockLocatorIndicesStep
+                   c
+                   (step * 2)
+                   ((BlockIndex $ i - step):indices)
   | otherwise = indices
-blockLocatorIndicesStep _ _ [] =
-  error "blockLocatorIndicesStep must be called with a nonempty accummulator array "
+blockLocatorIndicesStep _ _ [] = error
+  "blockLocatorIndicesStep must be called with a nonempty accummulator array"
 
 writeMessage :: TBMChan Message -> Message -> IO ()
 writeMessage chan message = 
@@ -561,3 +678,9 @@ writeMessage chan message =
 writeUiUpdaterMessage :: TBMChan UIUpdaterMessage -> UIUpdaterMessage -> IO ()
 writeUiUpdaterMessage chan message =
   liftIO . atomically $ writeTBMChan chan message
+
+logDebug' :: String -> Connection' ()
+logDebug' = log' . LogEntry Debug
+
+logError' :: String -> Connection' ()
+logError' = log' . LogEntry Error

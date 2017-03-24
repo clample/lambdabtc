@@ -154,7 +154,7 @@ blankFilter nElements p = (bloomFilter, context)
         tweak' = hardcodedTweak
 
 serializeFilter :: Filter -> ByteString
-serializeFilter f = (unroll LE  (f^.filterValue)) `B.append` paddingNullBytes
+serializeFilter f = unroll LE  (f^.filterValue) `B.append` paddingNullBytes
   where filterBase = unroll LE  (f^.filterValue)
         paddingNullBytes = B.replicate ((f^.filterLengthBytes) - B.length filterBase) 0
 

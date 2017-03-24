@@ -1,6 +1,3 @@
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Protocol.Network where
@@ -9,31 +6,34 @@ import General.Config (Config(..), configNetwork)
 import General.Types (Network(..))
 import General.Util (Addr(..))
 
-import Network.Socket ( socket
-                      , SocketType(..)
-                      , defaultProtocol
-                      , connect
-                      , getAddrInfo
-                      , AddrInfo(..)
-                      , setSocketOption
-                      , SocketOption(..)
-                      , Socket
-                      , SockAddr(..)
-                      , hostAddressToTuple
-                      , Family(..)
-                      )
-import Control.Lens (makeFields, (^.))
+import Network.Socket
+  ( socket
+  , SocketType(..)
+  , defaultProtocol
+  , connect
+  , getAddrInfo
+  , AddrInfo(..)
+  , setSocketOption
+  , SocketOption(..)
+  , Socket
+  , SockAddr(..)
+  , hostAddressToTuple
+  , Family(..)
+  )
+import Control.Lens (makeLenses, (^.))
 import Data.Binary (Binary(..))
-import Data.Binary.Get (Get, getWord64be, getWord16be, getByteString, getWord8)
-import Data.Binary.Put (Put, putByteString, putWord8, putWord16be,  putWord64le)
+import Data.Binary.Get (Get)
+import qualified Data.Binary.Get as Get
+import Data.Binary.Put (Put)
+import qualified Data.Binary.Put as Put
 import Data.ByteString.Base16 (decode)
 
 data Peer = Peer
-  { _peerSock :: Socket
-  , _peerAddr :: Addr
+  { _sock :: Socket
+  , _addr :: Addr
   } deriving (Show, Eq)
 
-makeFields ''Peer
+makeLenses ''Peer
 
 connectToPeer :: Int -> Config -> IO Peer
 connectToPeer n config = do
@@ -69,31 +69,31 @@ instance Binary Addr where
 
 getAddr :: Get Addr
 getAddr = do
-  getWord64be -- services
-  getByteString 12 -- parse magic string
+  Get.getWord64be -- services
+  Get.getByteString 12 -- parse magic string
   a <- parseIpComponent
   b <- parseIpComponent
   c <- parseIpComponent
   d <- parseIpComponent
-  port <- fromIntegral <$> getWord16be
+  port <- fromIntegral <$> Get.getWord16be
   return $ Addr (a, b, c, d) port
   where
-    parseIpComponent = fromIntegral <$> getWord8
+    parseIpComponent = fromIntegral <$> Get.getWord8
 
 putAddr :: Addr -> Put
 putAddr (Addr (a, b, c, d) port) = do
   putServices
-  putByteString ipAddressMagicStr
-  putWord8 . fromIntegral $ a
-  putWord8 . fromIntegral $ b
-  putWord8 . fromIntegral $ c
-  putWord8 . fromIntegral $ d
-  putWord16be . fromIntegral $ port
+  Put.putByteString ipAddressMagicStr
+  Put.putWord8 . fromIntegral $ a
+  Put.putWord8 . fromIntegral $ b
+  Put.putWord8 . fromIntegral $ c
+  Put.putWord8 . fromIntegral $ d
+  Put.putWord16be . fromIntegral $ port
   where
     ipAddressMagicStr = fst . decode $ "00000000000000000000FFFF"
 
 putServices :: Put
-putServices = putWord64le 1
+putServices = Put.putWord64le 1
 
 seed :: Network -> String
 seed TestNet3 = "testnet-seed.bitcoin.petertodd.org"

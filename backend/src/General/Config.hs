@@ -71,7 +71,7 @@ developmentConfig = do
     createSqlitePool (dbFile network') (getConnectionSize env)
   chan <- atomically $ newTBMChan 16
   uiUpdaterChan' <- atomically $ newTBMChan 16
-  return $ Config
+  return Config
     { _environment = Development
     , _port = 49535
     , _websocketPort = 49536
@@ -100,17 +100,16 @@ type Action = ActionT Error ConfigM ()
 
 getOptions :: Config -> Options
 getOptions config =
-  def { settings = getSettings
-      , verbose = case (config^.environment) of
+  def { settings = getSettings (config^.port)
+      , verbose = case config^.environment of
                     Development -> 1
                     Production -> 0
                     Test -> 0
       }
   
--- TODO: Port is duplicated between here and developmentConfig
-getSettings :: Settings
-getSettings = 
-  setPort 49535 defaultSettings
+getSettings :: Int -> Settings
+getSettings port' = 
+  setPort port' defaultSettings
 
 loggingM :: Environment -> Middleware
 loggingM Development = logStdoutDev

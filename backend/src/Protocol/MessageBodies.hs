@@ -95,7 +95,7 @@ putVersionMessage versionMessage = do
   let Nonce64 nonce' = versionMessage^.nonce64
   putWord64be nonce'
   putWord8 0
-  put $ (versionMessage^.lastBlock)
+  put (versionMessage^.lastBlock)
   put (versionMessage^.relay)
 
 getVersionMessage :: Get VersionMessage
@@ -125,7 +125,7 @@ data AddrMessage = AddrMessage
   deriving (Show, Eq)
 
 -----------------------------
-data TxMessage = TxMessage
+newtype TxMessage = TxMessage
   {_transaction :: Transaction }
   deriving (Show, Eq)
 
@@ -176,7 +176,7 @@ getRejectMessage = do
   
 ---------------------------
 
-data PingMessage = PingMessage
+newtype PingMessage = PingMessage
   { _pingNonce64 :: Nonce64 }
   deriving (Show, Eq)
 makeLenses ''PingMessage
@@ -197,7 +197,7 @@ getPingMessage :: Get PingMessage
 getPingMessage =
   PingMessage . Nonce64 <$> getWord64be
 
-data PongMessage = PongMessage
+newtype PongMessage = PongMessage
   { _pongNonce64 :: Nonce64 }
   deriving (Show, Eq)
 makeLenses ''PongMessage
@@ -219,11 +219,11 @@ getPongMessage =
   PongMessage . Nonce64 <$> getWord64be
 
 ----------------------------
-data InvMessage = InvMessage
+newtype InvMessage = InvMessage
   { _invMessageInvVectors :: [InventoryVector]}
   deriving (Show, Eq)
 
-data GetDataMessage = GetDataMessage
+newtype GetDataMessage = GetDataMessage
   { _getDataInvVectors :: [InventoryVector]}
   deriving (Show, Eq)
 
@@ -357,7 +357,7 @@ putMerkleblockMessage message = do
   putByteString flagsBS
 
 ------------------------
-data HeadersMessage = HeadersMessage
+newtype HeadersMessage = HeadersMessage
   { _blockHeaders :: [BlockHeader]}
   deriving (Show, Eq)
 
@@ -439,7 +439,7 @@ getFilterloadMessage = do
 ------------------------
   
 
-data FilteraddMessage = FilteraddMessage
+newtype FilteraddMessage = FilteraddMessage
   { _filteraddData :: ByteString }
   deriving (Show, Eq)
 

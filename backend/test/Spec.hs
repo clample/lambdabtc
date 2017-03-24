@@ -54,13 +54,15 @@ tests =
       persistAndRetrieveBlockHeader,
       persistAndRetrieveTransaction,
       persistAndGetLastBlock,
-      getBlockWithIndexAndHash
+      getBlockWithIndexAndHash,
+      deleteAndGetBlocksTest
       ],
     testGroup "Protocol Server Tests" [
       pingAndPong,
       -- versionAndVerack,
       -- expected failure. See test case for details
-      longerChain
+      longerChain,
+      longerChain'
       ],
     testGroup "Protocol Util Tests" [
       persistentBlockHeaderInvertible

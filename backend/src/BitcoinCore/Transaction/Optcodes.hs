@@ -2,6 +2,7 @@ module BitcoinCore.Transaction.Optcodes (OPCODE(..), opcodeTable) where
 
 import Data.Tuple (swap)
 import Data.List (lookup)
+import Data.Maybe (fromMaybe)
 
 import Test.QuickCheck.Arbitrary (Arbitrary(..))
 import Test.QuickCheck.Gen (elements)
@@ -110,12 +111,12 @@ data OPCODE
   deriving (Eq, Show)
 
 instance Enum OPCODE where
-  fromEnum opcode = case flip lookup opcodeTable opcode of
-                    Just i -> i
-                    Nothing -> error $ "Unable to lookup opcode " ++ show opcode
-  toEnum i = case flip lookup (map swap opcodeTable) i of
-               Just opcode -> opcode
-               Nothing -> error $ "Unable to lookup opcode with i " ++ show i
+  fromEnum opcode = fromMaybe
+    (error $ "Unable to lookup opcode " ++ show opcode)
+    (lookup opcode opcodeTable)
+  toEnum i = fromMaybe
+    (error $ "Unable to lookup opcode with i " ++ show i)
+    (lookup i $ map swap opcodeTable)
 
 opcodeTable :: [(OPCODE, Int)]
 opcodeTable =

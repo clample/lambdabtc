@@ -17,7 +17,7 @@ import Data.List (reverse)
 import Test.QuickCheck.Arbitrary (Arbitrary(..))
 import Test.QuickCheck.Gen (listOf, oneof, choose, vectorOf)
 
-data Script = Script [ ScriptComponent ]
+newtype Script = Script [ ScriptComponent ]
   deriving (Eq, Show)
 
 data ScriptComponent
@@ -55,7 +55,7 @@ getScript lengthBytes = isolate lengthBytes $
   Script . reverse <$> getScriptStep []
   where getScriptStep acc = do
           bytesRead' <- bytesRead
-          if  bytesRead' < (fromIntegral lengthBytes)
+          if  bytesRead' < fromIntegral lengthBytes
           then do
             comp <- get
             getScriptStep (comp:acc)

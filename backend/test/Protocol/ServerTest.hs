@@ -9,23 +9,43 @@ import Protocol.Messages ( Message(..)
                          , arbitraryVersionMessage)
 import Protocol.MessageBodies ( HeadersMessage( HeadersMessage))
 import Protocol.Server
-import Protocol.ConnectionM ( ConnectionContext(..))
+import Protocol.ConnectionM ( ConnectionContext(..)
+                            , MutableConnectionContext(..)
+                            , mutableContext
+                            , LogEntry
+                            , displayLogs
+                            , LogLevel(..))
 import General.InternalMessaging ( UIUpdaterMessage(..)
                                  , InternalMessage(..))
 import BitcoinCore.Transaction.Transactions (TxHash, hashTransaction)
-import BitcoinCore.BlockHeaders (BlockHeader(..), hashBlock, ValidHeaders(..))
+import BitcoinCore.BlockHeaders ( BlockHeader(..)
+                                , hashBlock
+                                , ValidHeaders(..)
+                                , ValidBlockTree(..)
+                                , verifyHeaders
+                                , showBlocks)
 import BitcoinCore.Keys (Address(..))
 import General.Types (Network(..))
 import General.Persistence (PersistentUTXO(..))
-import General.Util (Addr(..), IP(..), Port(..))
+import General.Util ( Addr(..)
+                    , IP(..)
+                    , Port(..)
+                    , getBranch
+                    , Tree(..)
+                    , node
+                    , subTree
+                    , branches)
 import Protocol.Util (HasLastBlock(..), BlockIndex(..))
 
 import Control.Lens (makeLenses, (^.), (%~), (.~))
 import Control.Monad.Free (Free(..))
-import Data.List (findIndex, any)
+import Data.List (findIndex, any, maximumBy)
+import Data.Function (on)
 import Control.Monad.Identity (Identity(..), runIdentity)
 import System.Random (mkStdGen)
 import Test.QuickCheck.Gen (generate)
+import Test.QuickCheck (ioProperty, Property)
+import Test.QuickCheck.Property (counterexample)
 
 newtype ArbPingMessage = ArbPingMessage Message
   deriving (Show, Eq)
@@ -56,76 +76,87 @@ data MockDB = MockDB
   , _utxos        :: [PersistentUTXO]
   }
 
+data TestInterpreterContext = TestInterpreterContext
+  { _context  :: ConnectionContext
+  , _handlers :: MockHandles
+  , _logs :: [LogEntry]
+  }
+
 makeLenses ''MockHandles
 makeLenses ''MockDB
+makeLenses ''TestInterpreterContext
 
-interpretConnTest :: MockHandles -> ConnectionContext -> Connection' r -> Identity (MockHandles, r)
-interpretConnTest mockHandles context conn =  case conn of
+interpretConnTest :: TestInterpreterContext
+                  -> Connection' r
+                  -> Identity (TestInterpreterContext, r)
+interpretConnTest ic conn =  case conn of
   Free (GetContext f) -> do
-    interpretConnTest mockHandles context (f context)
-  Free (SetContext c n) -> do
-    interpretConnTest mockHandles c n 
-  Free (IncrementLastBlock i n) -> do
-    let newContext = lastBlock %~ (\(BlockIndex old) -> BlockIndex (old + i)) $ context
-    interpretConnTest mockHandles newContext n
+    interpretConnTest ic (f $ ic^.context)
+  Free (SetContext mc n) -> do
+    let newIC = context.mutableContext .~ mc $ ic
+    interpretConnTest newIC n 
   Free (ReadMessage f) -> do
-    case mockHandles^.incomingMessageList of
+    case ic^.handlers.incomingMessageList of
       [] ->
-        interpretConnTest mockHandles context (f Nothing)
+        interpretConnTest ic (f Nothing)
       m:ms -> do
-        let newMockHandles = incomingMessageList .~ ms $ mockHandles
-        interpretConnTest newMockHandles context (f (Just m))
+        let newIC = handlers.incomingMessageList .~ ms $ ic
+        interpretConnTest newIC (f (Just m))
   Free (WriteMessage m n) -> do
-    let newMockHandles = outgoingMessageList %~ (m:) $ mockHandles
-    interpretConnTest newMockHandles context n
+    let newIC = handlers.outgoingMessageList %~ (m:) $ ic
+    interpretConnTest newIC n
   Free (WriteUIUpdaterMessage m n) -> do
-    let newMockHandles = outgoingUIUpdaterMessages %~ (m:) $ mockHandles
-    interpretConnTest newMockHandles context n
+    let newIC = handlers.outgoingUIUpdaterMessages %~ (m:) $ ic
+    interpretConnTest newIC n
   Free (GetBlockHeader i f) -> do
     if (blockHeaderCount < i)
       then
-        interpretConnTest mockHandles context (f Nothing)
+        interpretConnTest ic (f Nothing)
       else do
         let (BlockIndex i') = i
-            blockHeader = Just $ (mockHandles^.mockDB.blockHeaders) !! i'
-        interpretConnTest mockHandles context (f blockHeader)
+            blockHeader = Just $ (ic^.handlers.mockDB.blockHeaders) !! i'
+        interpretConnTest ic (f blockHeader)
   Free (BlockHeaderCount f) -> do
-    interpretConnTest mockHandles context (f blockHeaderCount)
+    interpretConnTest ic (f blockHeaderCount)
   Free (PersistBlockHeaders headers n) -> do
-    let newMockHandles = mockDB.blockHeaders %~ (++ headers) $ mockHandles
-    interpretConnTest newMockHandles context n
+    let newIC = handlers.mockDB.blockHeaders %~ (++ headers) $ ic
+    interpretConnTest newIC n
   Free (PersistBlockHeader header n) -> do
-    let newMockHandles = mockDB.blockHeaders %~ (++ [header]) $ mockHandles
-    interpretConnTest newMockHandles context n
+    let newIC = handlers.mockDB.blockHeaders %~ (++ [header]) $ ic
+    interpretConnTest newIC n
   Free (GetBlockHeaderFromHash hash f) -> do
-    let headers = mockHandles^.mockDB.blockHeaders
+    let headers = ic^.handlers.mockDB.blockHeaders
         mIndex = findIndex (\header -> hashBlock header == hash) headers
         mBlockHeader = case mIndex of
           Nothing -> Nothing
           Just i -> Just (BlockIndex i, headers !! i)
-    interpretConnTest mockHandles context (f mBlockHeader)
-  Free (DeleteBlockHeaders (BlockIndex inx) n) -> do
-    let newMockHandles = mockDB.blockHeaders %~ (take inx) $ mockHandles 
-    interpretConnTest newMockHandles context n
+    interpretConnTest ic (f mBlockHeader)
+  Free (DeleteBlockHeaders bi@(BlockIndex inx) n) -> do
+    let newIC  = handlers.mockDB.blockHeaders %~ (take inx) $ ic
+    interpretConnTest newIC n
   Free (NHeadersSinceKey n (BlockIndex i) f) -> do
-    let headers = mockHandles^.mockDB.blockHeaders
+    let headers = ic^.handlers.mockDB.blockHeaders
         nHeaders = (drop i . take n) $ headers
-    interpretConnTest mockHandles context (f nHeaders)
+    interpretConnTest ic (f nHeaders)
   Free (PersistTransaction tx n) -> do
-    let newMockHandles = mockDB.transactions %~ (++ [hashTransaction tx]) $ mockHandles
-    interpretConnTest newMockHandles context n
+    let newIC = handlers.mockDB.transactions %~ (++ [hashTransaction tx]) $ ic
+    interpretConnTest newIC n
   Free (GetTransactionFromHash hash f) -> do
-    let txs = mockHandles^.mockDB.transactions
+    let txs = ic^.handlers.mockDB.transactions
         mIndex = (fromIntegral . (1 +)) <$> findIndex (== hash) txs
-    interpretConnTest mockHandles context (f mIndex)
+    interpretConnTest ic (f mIndex)
   Free (GetAllAddresses f) -> do
-    let allAddresses = mockHandles^.mockDB.addresses
-    interpretConnTest mockHandles context (f allAddresses)
+    let allAddresses = ic^.handlers.mockDB.addresses
+    interpretConnTest ic (f allAddresses)
   Free (PersistUTXOs newUtxos n) -> do
-    let newMockHandles = mockDB.utxos %~ (++ newUtxos) $ mockHandles
-    interpretConnTest newMockHandles context n
-  Pure r -> return (mockHandles, r)
-  where blockHeaderCount = BlockIndex $ (length $ mockHandles^.mockDB.blockHeaders) - 1
+    let newIC = handlers.mockDB.utxos %~ (++ newUtxos) $ ic
+    interpretConnTest newIC n
+  Free (Log le n) -> do
+    let newIC = logs %~ (++ [le]) $ ic
+    interpretConnTest newIC n
+  Pure r -> return (ic, r)
+  where
+    blockHeaderCount = BlockIndex $ (length $ ic^.handlers.mockDB.blockHeaders) - 1
 
 pingAndPong = testCase
   "We should respond to a single ping message with a single pong message"
@@ -135,12 +166,12 @@ pingAndPong = testCase
 
 prop_pingAndPong :: ArbPingMessage -> Bool
 prop_pingAndPong (ArbPingMessage message) =
-  case result^.outgoingMessageList of
+  case result^.handlers.outgoingMessageList of
     [Message (PongMessageBody messageBody) _] -> True
     _ -> False
   where
     (result, ()) = runIdentity $
-      interpretConnTest blankMockHandles genericConnectionContext (handleResponse' message)
+      interpretConnTest defaultIC (handleResponse' message)
 
 -- Currently, handleResponse' VersionMessage causes us to call synchronizeHeaders
 -- this test case currently doesn't handle this
@@ -152,10 +183,10 @@ versionAndVerack = testCase
 
 prop_versionAndVerack :: ArbVersionMessage -> Bool
 prop_versionAndVerack (ArbVersionMessage message) =
-  any isVerack (result^.outgoingMessageList)
+  any isVerack (result^.handlers.outgoingMessageList)
   where
     (result, ()) = runIdentity $
-      interpretConnTest blankMockHandles genericConnectionContext (handleResponse' message)
+      interpretConnTest defaultIC (handleResponse' message)
     isVerack message = case message of
       (Message (VerackMessageBody _) _) -> True
       _                                  -> False
@@ -165,14 +196,44 @@ longerChain = testProperty
 
 prop_longerChain :: ValidHeaders -> MessageContext -> Bool
 prop_longerChain (ValidHeaders (h1:h2:hs)) msgContext = 
-  resultHandle^.mockDB.blockHeaders == (h1:h2:hs)   
+  resultHandle^.handlers.mockDB.blockHeaders == (h1:h2:hs)   
   where
-    mockHandle = (mockDB . blockHeaders .~ [h1,h2]) 
-               $ blankMockHandles
+    ic = (handlers.mockDB.blockHeaders .~ [h1,h2]) 
+               $ defaultIC
     headersMessage = (Message (HeadersMessageBody (HeadersMessage (h2:hs))) msgContext)
-    (resultHandle, _) = runIdentity $ interpretConnTest mockHandle 
-        genericConnectionContext (handleResponse' headersMessage)
+    (resultHandle, _) = runIdentity
+                        $ interpretConnTest ic (handleResponse' headersMessage)
 
+longerChain' = testProperty
+  "We should use the correct active chain"
+  prop_longerChain'
+
+prop_longerChain' :: ValidBlockTree -> MessageContext -> Property
+prop_longerChain' (ValidBlockTree tree) msgContext = counterexample
+  debugString
+  (length activeChain == length longestBranch)
+  where
+    ic = (handlers.mockDB.blockHeaders .~ [genesisBlock]) defaultIC
+    genesisBlock = tree^.node
+    toHeadersMessage hs = (Message (HeadersMessageBody (HeadersMessage hs)) msgContext)
+    branches' = filter (/= []) . map (drop 1) . branches $ tree
+    longestBranch = maximumBy (compare `on` length) . branches $ tree
+    activeChain = resultHandle^.handlers.mockDB.blockHeaders
+    (resultHandle, _) = runIdentity $ interpretConnTest ic $
+      mapM (handleResponse' . toHeadersMessage) branches'
+    logAll _ = True
+    debugString = unlines
+      [ displayLogs logAll $ resultHandle^.logs
+      , "Active chain: " ++ showBlocks activeChain
+      , "Actual longest chain: " ++ showBlocks longestBranch
+      ]
+
+defaultIC :: TestInterpreterContext
+defaultIC = TestInterpreterContext
+  { _context = genericConnectionContext
+  , _handlers = blankMockHandles
+  , _logs = []
+  }
 
 blankMockHandles :: MockHandles
 blankMockHandles = MockHandles
@@ -191,12 +252,14 @@ blankMockHandles = MockHandles
 genericConnectionContext :: ConnectionContext
 genericConnectionContext = ConnectionContext
   { _connectionContextVersion = 100
-  , _connectionContextLastBlock = BlockIndex 0
   , _myAddr = Addr (0, 0, 0, 0) 80
   , _connectionContextPeerAddr = Addr (0, 0, 0, 1) 80
   , _connectionContextRelay = True
   , _connectionContextTime = fromInteger 10000
-  , _randGen = mkStdGen 1
   , _connectionContextNetwork = TestNet3
-  , _rejectedBlocks = []
+  , _mutableContext = MutableConnectionContext
+    { _randGen = mkStdGen 1
+    , _rejectedBlocks = []
+    , _connectionContextLastBlock = BlockIndex 0
+    }
   }

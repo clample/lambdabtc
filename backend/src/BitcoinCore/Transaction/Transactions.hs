@@ -4,7 +4,7 @@ module BitcoinCore.Transaction.Transactions where
 
 import General.Util
 import BitcoinCore.Transaction.Script
-import BitcoinCore.Keys (serializePublicKeyRep, PublicKeyRep(..), PubKeyFormat(..))
+import BitcoinCore.Keys (PublicKeyRep(..), PubKeyFormat(..))
 import General.Hash (Hash(..), hashObject, doubleSHA)
 
 import Prelude hiding (concat, reverse, sequence)
@@ -12,18 +12,26 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 
-import Crypto.PubKey.ECC.ECDSA (signWith, Signature(..), PrivateKey(..), PublicKey(..))
+import Crypto.PubKey.ECC.ECDSA
+  ( signWith
+  , Signature(..)
+  , PrivateKey(..)
+  , PublicKey(..)
+  )
 import Crypto.Hash.Algorithms (SHA256(..))
 
 import Control.Lens (makeLenses, (^.), mapped, set)
 import qualified Data.Binary as BIN
-import Data.Binary.Put (Put, putWord8, putWord32le, putWord64le, putByteString, runPut)
-import Data.Binary.Get (Get, getWord32le, getByteString, getWord64le, getWord8)
+import qualified Data.Binary.Put as Put
+import Data.Binary.Put (Put)
+import qualified Data.Binary.Get as Get
+import Data.Binary.Get (Get)
 import Data.Binary (Binary(..), Word32)
 import Control.Monad (replicateM)
 import Data.Bits ((.&.))
 import Crypto.Hash (hashWith)
 import Data.ByteArray (convert)
+import Data.Maybe (fromMaybe)
 
 import Test.QuickCheck.Arbitrary (Arbitrary(..))
 import Test.QuickCheck.Gen (choose, suchThat)
@@ -51,7 +59,7 @@ data UTXO = UTXO
   , _outIndex :: TxIndex
   } deriving (Eq, Show)
 
-data Value = Satoshis Int
+newtype Value = Satoshis Int
   deriving (Eq, Show)
 
 newtype TxVersion = TxVersion Int
@@ -82,7 +90,7 @@ outputScripts transaction = map (^.outputScript) (transaction^.outputs)
 -------------------- Transaction signing
 signedTransaction :: UTXO -> Script -> (PublicKey, PrivateKey) -> [TxOutput] -> Transaction
 signedTransaction utxo' oldInputScript keys outputs'  = 
-  (set (inputs.mapped.signatureScript) newInputScript transaction)
+  set (inputs.mapped.signatureScript) newInputScript transaction
   where
     newInputScript = scriptSig (signedHash oldInputScript (snd keys) transaction) (fst keys)
     
@@ -98,18 +106,17 @@ signedTransaction utxo' oldInputScript keys outputs'  =
 -- behaviour by performing one SHA in `intermediateHash`
 -- and allowing `signWith` to perform the second hash
 signedHash :: Script -> PrivateKey -> Transaction -> Signature
-signedHash oldInputScript privateKey intermediateTransaction =
-  case signWith 100 privateKey SHA256 intermediateHash' of
-    Nothing -> error "Unable to sign hash"
-    Just sig -> sig
+signedHash oldInputScript privateKey intermediateTransaction = fromMaybe
+  (error "Unable to sign hash")
+  (signWith 100 privateKey SHA256 intermediateHash')
   where intermediateHash' = intermediateHash intermediateTransaction oldInputScript
 
 intermediateHash :: Transaction -> Script -> ByteString
 intermediateHash intermediateTransaction oldInputScript =
-  convert . (hashWith SHA256) $ bs
-  where bs = BL.toStrict . runPut $ do
+  convert . hashWith SHA256 $ bs
+  where bs = BL.toStrict . Put.runPut $ do
           put (set (inputs.mapped.signatureScript) oldInputScript intermediateTransaction)
-          putWord32le sighashAll
+          Put.putWord32le sighashAll
 
 sighashAll :: Word32
 sighashAll = 0x00000001
@@ -190,12 +197,12 @@ putOutPoint :: UTXO -> Put
 putOutPoint utxo' = do
   put (utxo'^.outTxHash)
   let TxIndex i = utxo'^.outIndex
-  putWord32le . fromIntegral $ i
+  Put.putWord32le . fromIntegral $ i
 
 getOutPoint :: Get UTXO
 getOutPoint = UTXO
   <$> get
-  <*> (TxIndex . fromIntegral <$> getWord32le)
+  <*> (TxIndex . fromIntegral <$> Get.getWord32le)
 
 instance Binary Value where
   put = putTxValue
@@ -203,15 +210,15 @@ instance Binary Value where
 
 putTxValue :: Value -> Put
 putTxValue (Satoshis i) =
-  putWord64le . fromIntegral $ i
+  Put.putWord64le . fromIntegral $ i
 
 getTxValue :: Get Value
 getTxValue =
-  Satoshis . fromIntegral <$> getWord64le
+  Satoshis . fromIntegral <$> Get.getWord64le
 
 scriptSig :: Signature -> PublicKey -> Script
 scriptSig signature pubKey = Script [Txt der, Txt compressedPubkey]
-  where der = (BL.toStrict . runPut $ putDerSignature signature)
+  where der = BL.toStrict . Put.runPut $ putDerSignature signature
         compressedPubkey = BL.toStrict . BIN.encode
           $ PublicKeyRep Compressed pubKey
           -- TODO: This scriptSig will only be valid for
@@ -222,23 +229,23 @@ scriptSig signature pubKey = Script [Txt der, Txt compressedPubkey]
 -- for a description of requiered der format
 putDerSignature :: Signature -> Put
 putDerSignature signature = do
-  putWord8 0x30
+  Put.putWord8 0x30
   putWithLength (putDERContents signature)
-  putWord8 0x01 -- one byte hashcode type
+  Put.putWord8 0x01 -- one byte hashcode type
 
 putDERInt :: Integer -> Put
 putDERInt int = do
   let intBS = unroll BE int
       headByte = BS.head intBS
-  if (headByte .&. 0x80 == 0x80)
-    then putByteString $ 0x00 `BS.cons` intBS
-    else putByteString intBS
+  if headByte .&. 0x80 == 0x80
+    then Put.putByteString $ 0x00 `BS.cons` intBS
+    else Put.putByteString intBS
     
 putDERContents signature = do
-  putWord8 0x02
+  Put.putWord8 0x02
   putWithLength
     (putDERInt . sign_r $ signature)
-  putWord8 0x02
+  Put.putWord8 0x02
   putWithLength
     (putDERInt . getLowS . sign_s $ signature)
     
@@ -254,14 +261,14 @@ getLowS s = if s <= maxS
 
 getDerSignature :: Get Signature
 getDerSignature = do
-  sequenceCode <- getWord8
-  derLength <- fromIntegral <$> getWord8
-  getWord8
-  xLength <- fromIntegral <$> getWord8
-  x <- roll BE <$> getByteString xLength
-  getWord8
-  yLength <- fromIntegral <$> getWord8
-  y <- roll BE <$> getByteString yLength
+  sequenceCode <- Get.getWord8
+  derLength <- fromIntegral <$> Get.getWord8
+  Get.getWord8
+  xLength <- fromIntegral <$> Get.getWord8
+  x <- roll BE <$> Get.getByteString xLength
+  Get.getWord8
+  yLength <- fromIntegral <$> Get.getWord8
+  y <- roll BE <$> Get.getByteString yLength
   return $
     Signature x y
 
@@ -271,11 +278,11 @@ instance Binary TxVersion where
 
 putTxVersion :: TxVersion -> Put
 putTxVersion (TxVersion v) =
-  putWord32le . fromIntegral $ v
+  Put.putWord32le . fromIntegral $ v
 
 getTxVersion :: Get TxVersion
-getTxVersion = do
-  TxVersion . fromIntegral <$> getWord32le
+getTxVersion =
+  TxVersion . fromIntegral <$> Get.getWord32le
 
 defaultVersion :: TxVersion 
 defaultVersion = TxVersion 1
@@ -289,10 +296,10 @@ instance Binary Sequence where
 
 putSequence :: Sequence -> Put
 putSequence (Sequence sequence') =
-  putWord32le sequence'
+  Put.putWord32le sequence'
 
 getSequence :: Get Sequence
-getSequence = Sequence <$> getWord32le
+getSequence = Sequence <$> Get.getWord32le
 
 defaultLockTime :: LockTime
 defaultLockTime = LockTime 0x00000000
@@ -303,14 +310,14 @@ instance Binary LockTime where
 
 putBlockLockTime :: LockTime -> Put
 putBlockLockTime (LockTime locktime') =
-  putWord32le locktime'
+  Put.putWord32le locktime'
 
 getBlockLockTime :: Get LockTime
-getBlockLockTime = LockTime <$> getWord32le
+getBlockLockTime = LockTime <$> Get.getWord32le
 
 putSighashAll :: Put
 putSighashAll =
-  putWord8 1
+  Put.putWord8 1
 
 instance Arbitrary Transaction where
   arbitrary = do

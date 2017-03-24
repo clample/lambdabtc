@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module General.Util
   ( Payload(..)
@@ -16,7 +17,12 @@ module General.Util
   , Endian(..)
   , Addr(..)
   , IP(..)
-  , Port(..)) where
+  , Port(..)
+  , Tree(..)
+  , node
+  , subTree
+  , getBranch
+  , branches) where
 
 import Prelude hiding (take)
 
@@ -25,26 +31,28 @@ import General.Hash (CheckSum(..), checksum)
 import Data.Maybe (listToMaybe)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as BL
-import Data.ByteString.Base16 (decode, encode)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as Char8
 import qualified Data.Text as T
 import Data.Base58String.Bitcoin (fromBytes, toBytes, toText, fromText)
 import Data.Binary (Binary(..), Word8)
-import Data.Binary.Get(Get, getWord8, getWord16le, getWord32le, getWord64le, runGet, getByteString)
-import Data.Binary.Put (Put, putWord8, putWord16le, putWord32le, putWord64le, runPut, putByteString)
+import Data.Binary.Get (Get)
+import qualified Data.Binary.Get as Get
+import Data.Binary.Put (Put)
+import qualified Data.Binary.Put as Put
 import Data.Bits (shiftR, shiftL, (.|.))
 import Data.List (unfoldr)
 import Data.Tuple (swap)
+import Control.Lens (makeLenses, (^.))
 
 import Test.QuickCheck.Arbitrary (Arbitrary(..))
 import Test.QuickCheck.Gen (choose, elements)
 
-data Payload = Payload ByteString
+newtype Payload = Payload ByteString
   deriving (Show, Eq)
 
 putPayload :: Payload -> Put
-putPayload (Payload bs) = putByteString bs
+putPayload (Payload bs) = Put.putByteString bs
 
 newtype Prefix = Prefix Word8
   deriving (Show, Eq)
@@ -54,10 +62,10 @@ instance Binary Prefix where
   put = putPrefix
 
 getPrefix :: Get Prefix
-getPrefix = Prefix <$> getWord8
+getPrefix = Prefix <$> Get.getWord8
 
 putPrefix :: Prefix -> Put
-putPrefix (Prefix w8) = putWord8 w8
+putPrefix (Prefix w8) = Put.putWord8 w8
 
 maybeRead :: Read a => String -> Maybe a
 maybeRead = fmap fst . listToMaybe . reads
@@ -65,7 +73,7 @@ maybeRead = fmap fst . listToMaybe . reads
 -- https://github.com/bitcoinbook/bitcoinbook/blob/first_edition/ch04.asciidoc#base58-and-base58check-encoding
 encodeBase58Check :: Prefix -> Payload -> T.Text
 encodeBase58Check prefix payload =
-  toText . fromBytes . BL.toStrict .runPut $ do
+  toText . fromBytes . BL.toStrict . Put.runPut $ do
     put prefix
     putPayload payload
     put $ checksum' prefix payload
@@ -74,9 +82,9 @@ encodeBase58Check prefix payload =
 
 -- all components are binary encoded rather than hex
 decodeBase58Check :: T.Text -> (Prefix, Payload, CheckSum)
-decodeBase58Check b58 = flip runGet content $ do
+decodeBase58Check b58 = flip Get.runGet content $ do
       prefix <- get
-      payload <- Payload <$> getByteString (fromIntegral $ BL.length content - nNonPayloadBytes)
+      payload <- Payload <$> Get.getByteString (fromIntegral $ BL.length content - nNonPayloadBytes)
       checksum <- get
       return (prefix, payload, checksum)
   where content = BL.fromChunks [(toBytes . fromText) b58]
@@ -84,9 +92,9 @@ decodeBase58Check b58 = flip runGet content $ do
 
 putWithLength :: Put -> Put
 putWithLength putM = do
-  let payload = BL.toStrict . runPut $ putM
+  let payload = BL.toStrict . Put.runPut $ putM
   put . VarInt . BS.length $ payload
-  putByteString payload
+  Put.putByteString payload
 
 showBool :: Bool -> ByteString
 showBool True  = "01"
@@ -101,29 +109,29 @@ instance Binary VarInt where
 
 getVarInt :: Get VarInt
 getVarInt = do
-  firstByte <- fromIntegral <$> getWord8
+  firstByte <- fromIntegral <$> Get.getWord8
   VarInt <$> varInt firstByte
   where
     varInt firstByte
       | firstByte < 0xFD  = return firstByte
-      | firstByte == 0xFD = fromIntegral <$> getWord16le
-      | firstByte == 0xFE = fromIntegral <$> getWord32le 
-      | firstByte == 0xFF = fromIntegral <$> getWord64le
+      | firstByte == 0xFD = fromIntegral <$> Get.getWord16le
+      | firstByte == 0xFE = fromIntegral <$> Get.getWord32le 
+      | firstByte == 0xFF = fromIntegral <$> Get.getWord64le
       | otherwise = error "Unable to parse VarInd. This should not happen"
 
 putVarInt :: VarInt -> Put
 putVarInt (VarInt i)
   | i < 0xFD =
-      putWord8 . fromIntegral $ i
+      Put.putWord8 . fromIntegral $ i
   | i <= 0xFFFF =  do
-      putWord8 0xFD
-      putWord16le . fromIntegral $ i
+      Put.putWord8 0xFD
+      Put.putWord16le . fromIntegral $ i
   | i <= 0xFFFFFFFF = do
-      putWord8 0xFE
-      putWord32le . fromIntegral $ i
+      Put.putWord8 0xFE
+      Put.putWord32le . fromIntegral $ i
   | otherwise = do
-      putWord8 0xFF
-      putWord64le . fromIntegral $ i
+      Put.putWord8 0xFF
+      Put.putWord64le . fromIntegral $ i
 
 data Endian = BE | LE
   deriving (Show, Eq)
@@ -188,3 +196,29 @@ instance Arbitrary Payload where
   arbitrary = do
     str <- arbitrary
     return (Payload $ Char8.pack str)
+
+data Tree a = Tree
+  { _node    :: a
+  , _subTree :: [Tree a]
+  } deriving (Show, Eq)
+
+makeLenses ''Tree
+
+getBranch :: [Int] -> Tree a -> Maybe [a]
+getBranch is tree = reverse <$> getBranchStep [] is tree
+
+getBranchStep :: [a] -> [Int] -> Tree a -> Maybe [a]
+getBranchStep acc (i:is) tree = do
+  let val = tree^.node
+  subTree' <- getSubTree i tree
+  getBranchStep (val:acc) is subTree'
+
+getSubTree :: Int -> Tree a -> Maybe (Tree a)
+getSubTree i tree =
+  if i < 0 || length (tree^.subTree) <= i 
+  then Just $ (tree^.subTree) !! i
+  else Nothing
+
+branches :: Tree a -> [[a]]
+branches (Tree a []) = [[a]]
+branches (Tree a ts) = concat $ map (\t -> map (a:) (branches t)) ts

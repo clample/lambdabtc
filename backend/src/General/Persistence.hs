@@ -10,14 +10,23 @@ import General.Config (ConfigM)
 import General.Types (HasPool(..))
 
 import Data.Text (Text)
-import Database.Persist.Sqlite (runMigration)
-import Database.Persist.TH (mkPersist, mkMigrate, persistLowerCase,
-                            share, sqlSettings)
-import Database.Persist.Sql ( SqlPersistT
-                            , ConnectionPool
-                            , runSqlPool
-                            , runSqlPersistMPool
-                            )
+import Database.Persist.Sqlite
+  ( runMigration
+  , runMigrationUnsafe
+  )
+import Database.Persist.TH
+  ( mkPersist
+  , mkMigrate
+  , persistLowerCase
+  , share
+  , sqlSettings
+  )
+import Database.Persist.Sql
+  ( SqlPersistT
+  , ConnectionPool
+  , runSqlPool
+  , runSqlPersistMPool
+  )
 import Control.Monad.IO.Class (liftIO, MonadIO)
 import Control.Monad.Trans.Class (MonadTrans, lift)
 import Control.Monad.Reader (ask)
@@ -49,14 +58,16 @@ PersistentUTXO
     outIndex Int
     script ByteString
     keySetId Int
+    value Int
+    isSpent Bool
 PersistentTransaction
     hash ByteString
 |]
 
 
 migrateSchema :: ConnectionPool -> IO ()
-migrateSchema pool =
-  runSqlPersistMPool (runMigration migrateTables) pool
+migrateSchema =
+  runSqlPersistMPool (runMigrationUnsafe migrateTables)
 
 
 runDB :: (MonadTrans t, MonadIO (t ConfigM)) =>

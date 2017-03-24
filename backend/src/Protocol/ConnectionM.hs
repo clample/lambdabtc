@@ -17,26 +17,33 @@ import Protocol.Util (HasLastBlock(..), BlockIndex(..))
 import Data.Conduit.TMChan (TBMChan)
 import Data.Time.Clock.POSIX (POSIXTime)
 import System.Random (StdGen)
-import Control.Lens (makeLenses)
+import Control.Lens (makeLenses, (^.))
 import Network.Socket (Socket)
 import Database.Persist.Sql (ConnectionPool)
 import BitcoinCore.BlockHeaders (BlockHeader)
 
+
+-- Only elements of `mutableContext` will be exposed for updates in the Connection' monad
 data ConnectionContext = ConnectionContext
   { _connectionContextVersion :: Int
-  , _connectionContextLastBlock :: BlockIndex
   , _myAddr :: Addr
   , _connectionContextPeerAddr :: Addr
   , _connectionContextRelay :: Bool
     -- https://github.com/bitcoin/bips/blob/master/bip-0037.mediawiki#extensions-to-existing-messages
     -- Relay should be set to False when functioning as an SPV node
   , _connectionContextTime :: POSIXTime
-  , _randGen :: StdGen
   , _connectionContextNetwork :: Network
-  , _rejectedBlocks :: [BlockHeader]  
-  } 
+  , _mutableContext :: MutableConnectionContext
+  }
+
+data MutableConnectionContext = MutableConnectionContext
+  { _randGen :: StdGen
+  , _rejectedBlocks :: [BlockHeader]
+  , _connectionContextLastBlock :: BlockIndex
+  }
 
 makeLenses ''ConnectionContext
+makeLenses ''MutableConnectionContext
 
 data IOHandlers = IOHandlers
   { _peerSocket :: Socket
@@ -67,7 +74,7 @@ instance HasRelay ConnectionContext where
 instance HasTime ConnectionContext where
   time = connectionContextTime
 
-instance HasLastBlock ConnectionContext where
+instance HasLastBlock MutableConnectionContext where
   lastBlock = connectionContextLastBlock
 
 instance HasPeerAddr ConnectionContext where
@@ -75,3 +82,29 @@ instance HasPeerAddr ConnectionContext where
 
 instance HasNetwork ConnectionContext where
   network = connectionContextNetwork
+
+data InterpreterContext = InterpreterContext
+  { _ioHandlers  :: IOHandlers
+  , _context     :: ConnectionContext
+  , _logFilter   :: LogFilter
+  }
+
+data LogEntry = LogEntry
+  { _logLevel :: LogLevel
+  , _logStr   :: String
+  } deriving (Show, Eq)
+
+data LogLevel = Debug | Error
+  deriving (Show, Eq)
+
+type LogFilter = LogLevel -> Bool
+
+makeLenses ''InterpreterContext
+makeLenses ''LogEntry
+
+displayLogs :: LogFilter -> [LogEntry] -> String
+displayLogs f ls = unlines
+                   . map formatLog
+                   . filter (f . _logLevel) $ ls
+  where
+    formatLog l = show (l^.logLevel) ++  " " ++ (l^.logStr)
