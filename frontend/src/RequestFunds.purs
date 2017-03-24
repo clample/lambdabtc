@@ -39,8 +39,8 @@ messageRaw = lens _.messageRaw (_ { messageRaw = _})
 _FundRequestRaw :: Lens' FundRequestRaw FundRequestRawRec
 _FundRequestRaw = lens (\(FundRequestRaw rec) -> rec) (\_ -> FundRequestRaw)
 
-n :: FundRequestRawRec
-n = view ( fundRequest <<< _FundRequestRaw ) (initialState unit)
+--n :: FundRequestRawRec
+--n = view ( fundRequest <<< _FundRequestRaw ) (initialState unit)
 
 type RequestFundsState =
   { on :: Boolean
@@ -84,8 +84,8 @@ instance decodeJsonFundRequest :: DecodeJson FundRequest where
       , address: address
       , requestURI: requestURI}
 
-initialState :: Unit -> RequestFundsState
-initialState _ =
+initialState :: Array FundRequest -> RequestFundsState
+initialState fundRequests =
   { on: false
   , fundRequest:
     FundRequestRaw
@@ -93,24 +93,24 @@ initialState _ =
     , amountRaw: ""
     , messageRaw: "" }
   , maybeError: Nothing
-  , fundRequestList: [] }
+  , fundRequestList: fundRequests }
 
 data RequestFundsQuery a
   = UpdateLabel String a
   | UpdateAmount String a
   | UpdateMessage String a
   | SubmitFundRequest a
-  | GetRequestFundsState (Boolean -> a)
+  | GetRequestFundsState (Array FundRequest -> a)
 
 data RequestFundsSlot = RequestFundsSlot
 derive instance eqRequestFundsSlot :: Eq RequestFundsSlot
 derive instance ordRequestFundsSlot :: Ord RequestFundsSlot
 
-requestFundsComponent :: forall eff. H.Component HH.HTML RequestFundsQuery Unit Void (Aff (Effects eff))
+requestFundsComponent :: forall eff. H.Component HH.HTML RequestFundsQuery (Array FundRequest) Void (Aff (Effects eff))
 requestFundsComponent = H.component { render, eval, initialState, receiver }
   where
 
-  receiver :: forall a. Unit -> Maybe a
+  receiver :: Array FundRequest -> Maybe (RequestFundsQuery Unit)
   receiver _ = Nothing
 
   render :: RequestFundsState -> H.ComponentHTML RequestFundsQuery
@@ -137,7 +137,7 @@ requestFundsComponent = H.component { render, eval, initialState, receiver }
     H.modify (appendFundRequestOrError response)
     pure next
   eval (GetRequestFundsState reply) = do
-    b <- H.gets (\state -> state.on)
+    b <- H.gets (\state -> state.fundRequestList)
     pure (reply b)
 
 renderFundRequestForm :: RequestFundsState -> H.ComponentHTML RequestFundsQuery
