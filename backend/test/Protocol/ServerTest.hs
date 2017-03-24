@@ -142,6 +142,8 @@ prop_pingAndPong (ArbPingMessage message) =
     (result, ()) = runIdentity $
       interpretConnTest blankMockHandles genericConnectionContext (handleResponse' message)
 
+-- Currently, handleResponse' VersionMessage causes us to call synchronizeHeaders
+-- this test case currently doesn't handle this
 versionAndVerack = testCase
   "We should respond to a version message with a verack message"
   $ do
@@ -155,7 +157,7 @@ prop_versionAndVerack (ArbVersionMessage message) =
     (result, ()) = runIdentity $
       interpretConnTest blankMockHandles genericConnectionContext (handleResponse' message)
     isVerack message = case message of
-      (Message (VersionMessageBody _) _) -> True
+      (Message (VerackMessageBody _) _) -> True
       _                                  -> False
 
 longerChain = testProperty
