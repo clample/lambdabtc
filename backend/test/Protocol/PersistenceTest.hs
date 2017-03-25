@@ -7,7 +7,6 @@ import BitcoinCore.BlockHeaders
 import BitcoinCore.Transaction.Transactions
 import Protocol.Persistence
 import Protocol.Util (BlockIndex(..))
-
 import Database.Persist.Sqlite (createSqlitePool, runMigrationSilent)
 import Database.Persist.Sql ( ConnectionPool
                             , runSqlPool)
@@ -15,10 +14,14 @@ import Control.Monad.Logger ( runStdoutLoggingT
                             , filterLogger
                             , LogLevel(..))
 import Test.QuickCheck (ioProperty, Property)
+import Data.Text (append, pack)
+
+testDBFile :: String
+testDBFile = "resources/testdb.db"
 
 createTestDbPool :: IO ConnectionPool
 createTestDbPool = do
-  let newPool = createSqlitePool ":memory:" 1
+  let newPool = createSqlitePool ("file:" `append` pack testDBFile) 1
       logFilter _ level = level == LevelError 
   pool <- runStdoutLoggingT . filterLogger logFilter $ newPool
   runSqlPool (runMigrationSilent migrateTables) pool
@@ -58,7 +61,8 @@ prop_persistAndRetrieveTransaction pool tx = ioProperty $ do
 persistAndGetLastBlock = buildTest $ do
   pool <- createTestDbPool
   return $ testProperty
-    "It should be possible to persist blocks and get the correct index from `getLastBlock`"
+    "It should be possible to persist blocks and get the correct index \
+      \from `getLastBlock`"
     (prop_persistAndGetLastBlock pool)
 
 prop_persistAndGetLastBlock :: ConnectionPool -> [BlockHeader] -> Property
