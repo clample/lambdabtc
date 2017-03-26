@@ -17,6 +17,14 @@ import Test.QuickCheck (ioProperty, Property, Testable)
 import Data.Text (append, unpack, Text)
 import System.Directory (removeFile)
 
+testDbs :: [Text]
+testDbs = [ "resources/persistandretrieveblockheader.db"
+          , "resources/persistandretrievetransaction.db"
+          , "resources/persistandgetlastblock.db"
+          , "resources/getblockwithindexandhash.db"
+          , "resources/deleteandgetblocks.db"
+          ]
+
 createTestDbPool :: Text -> IO ConnectionPool
 createTestDbPool testDBFile = do
   let newPool = createSqlitePool ("file:" `append` testDBFile) 1
@@ -29,13 +37,12 @@ cleanupTestDb :: Text -> IO ()
 cleanupTestDb = removeFile . unpack 
 
 buildDBTest :: Testable a => Text -> String -> (ConnectionPool -> a) -> Test
-buildDBTest dbFile testStr testcase = buildTestBracketed $ do
+buildDBTest dbFile testStr testcase = buildTest $ do
   pool <- createTestDbPool dbFile
-  let test = testProperty testStr $ testcase pool
-  return (test, cleanupTestDb dbFile)
+  return $ testProperty testStr $ testcase pool
 
 persistAndRetrieveBlockHeader = buildDBTest
-  "resources/persistandretrieveblockheader.db"
+  (testDbs !! 0)
   "It should be possible to persist and retrieve a block header"
   prop_persistAndRetrieveBlockHeader
 
@@ -50,7 +57,7 @@ prop_persistAndRetrieveBlockHeader pool header = ioProperty $ do
       return (hashBlock header' == hash)
 
 persistAndRetrieveTransaction = buildDBTest
-  "resources/persistandretrievetransaction.db"
+  (testDbs !! 1)
   "It should be possible to persist and retrieve a transaction"
   prop_persistAndRetrieveTransaction
 
@@ -64,7 +71,7 @@ prop_persistAndRetrieveTransaction pool tx = ioProperty $ do
     Just _ -> return True
 
 persistAndGetLastBlock = buildDBTest
-  "resources/persistandgetlastblock.db"
+  (testDbs !! 2)
   "It should be possible to persist blocks and get the correct index \
      \from `getLastBlock`"
   prop_persistAndGetLastBlock
@@ -77,7 +84,7 @@ prop_persistAndGetLastBlock pool headers = ioProperty $ do
   return $ lastBlockFinal - lastBlockInitial == length headers
 
 getBlockWithIndexAndHash = buildDBTest
-  "resources/getblockwithindexandhash.db"
+  (testDbs !! 3)
   "We should obtain the same block whether querying by index or hash"
   prop_getBlockWithIndexAndHash
 
@@ -96,7 +103,7 @@ prop_getBlockWithIndexAndHash pool header = ioProperty $ do
           (headerFromIndex == headerFromHash)
 
 deleteAndGetBlocksTest = buildDBTest
-  "resources/deleteandgetblocks.db"
+  (testDbs !! 4)
   "Deleting blocks should not mess up indices when persisting new blocks"
   prop_deleteAndGetBlocksTest
 
