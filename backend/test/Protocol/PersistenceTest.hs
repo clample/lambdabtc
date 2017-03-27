@@ -18,11 +18,11 @@ import Data.Text (append, unpack, Text)
 import System.Directory (removeFile)
 
 testDbs :: [Text]
-testDbs = [ "resources/persistandretrieveblockheader.db"
-          , "resources/persistandretrievetransaction.db"
-          , "resources/persistandgetlastblock.db"
-          , "resources/getblockwithindexandhash.db"
-          , "resources/deleteandgetblocks.db"
+testDbs = [ "test_resources/persistandretrieveblockheader.db"
+          , "test_resources/persistandretrievetransaction.db"
+          , "test_resources/persistandgetlastblock.db"
+          , "test_resources/getblockwithindexandhash.db"
+          , "test_resources/deleteandgetblocks.db"
           ]
 
 createTestDbPool :: Text -> IO ConnectionPool

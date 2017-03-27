@@ -58,7 +58,12 @@ tests =
       persistAndGetLastBlock,
       getBlockWithIndexAndHash,
       deleteAndGetBlocksTest
-      ], listDirectory "resources" >>= (mapM_ removeFile . map ("resources/" ++))),
+      ], listDirectory "test_resources" >>=
+        (mapM_ removeFile
+             . map ("test_resources/" ++)
+             . filter ((/= '.') . head)
+             )
+      ),
     testGroup "Protocol Server Tests" [
       pingAndPong,
       -- versionAndVerack,
