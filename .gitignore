@@ -2,6 +2,7 @@
 node_modules
 /frontend/resources/*
 /backend/resources/*
+/backend/test_resources/*
 !.gitkeep
 .DS_STORE
 .psc-ide-port
