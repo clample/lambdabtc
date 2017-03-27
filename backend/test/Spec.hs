@@ -12,6 +12,7 @@ import Protocol.ServerTest
 import Protocol.UtilTest
 import General.TypesTest
 import General.UtilTest
+import System.Directory (listDirectory, removeFile)
 
 import Data.Text (append)
 import Test.Framework (defaultMain, testGroup, buildTestBracketed)
@@ -57,7 +58,7 @@ tests =
       persistAndGetLastBlock,
       getBlockWithIndexAndHash,
       deleteAndGetBlocksTest
-      ], mapM_ cleanupTestDb (append <$> testDbs <*> ["", "-shm", "-wal"])),
+      ], listDirectory "resources" >>= (mapM_ removeFile . map ("resources/" ++))),
     testGroup "Protocol Server Tests" [
       pingAndPong,
       -- versionAndVerack,
