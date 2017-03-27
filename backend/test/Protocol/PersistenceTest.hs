@@ -7,44 +7,28 @@ import BitcoinCore.BlockHeaders
 import BitcoinCore.Transaction.Transactions
 import Protocol.Persistence
 import Protocol.Util (BlockIndex(..))
+
 import Database.Persist.Sqlite (createSqlitePool, runMigrationSilent)
 import Database.Persist.Sql ( ConnectionPool
                             , runSqlPool)
 import Control.Monad.Logger ( runStdoutLoggingT
                             , filterLogger
                             , LogLevel(..))
-import Test.QuickCheck (ioProperty, Property, Testable)
-import Data.Text (append, unpack, Text)
-import System.Directory (removeFile)
+import Test.QuickCheck (ioProperty, Property)
 
-testDbs :: [Text]
-testDbs = [ "resources/persistandretrieveblockheader.db"
-          , "resources/persistandretrievetransaction.db"
-          , "resources/persistandgetlastblock.db"
-          , "resources/getblockwithindexandhash.db"
-          , "resources/deleteandgetblocks.db"
-          ]
-
-createTestDbPool :: Text -> IO ConnectionPool
-createTestDbPool testDBFile = do
-  let newPool = createSqlitePool ("file:" `append` testDBFile) 1
+createTestDbPool :: IO ConnectionPool
+createTestDbPool = do
+  let newPool = createSqlitePool ":memory:" 1
       logFilter _ level = level == LevelError 
   pool <- runStdoutLoggingT . filterLogger logFilter $ newPool
   runSqlPool (runMigrationSilent migrateTables) pool
   return pool
 
-cleanupTestDb :: Text -> IO ()
-cleanupTestDb = removeFile . unpack 
-
-buildDBTest :: Testable a => Text -> String -> (ConnectionPool -> a) -> Test
-buildDBTest dbFile testStr testcase = buildTest $ do
-  pool <- createTestDbPool dbFile
-  return $ testProperty testStr $ testcase pool
-
-persistAndRetrieveBlockHeader = buildDBTest
-  (testDbs !! 0)
-  "It should be possible to persist and retrieve a block header"
-  prop_persistAndRetrieveBlockHeader
+persistAndRetrieveBlockHeader = buildTest $ do
+  pool <- createTestDbPool
+  return $ testProperty
+    "It should be possible to persist and retrieve a block header"
+    (prop_persistAndRetrieveBlockHeader pool)
 
 prop_persistAndRetrieveBlockHeader :: ConnectionPool -> BlockHeader -> Property
 prop_persistAndRetrieveBlockHeader pool header = ioProperty $ do
@@ -56,10 +40,11 @@ prop_persistAndRetrieveBlockHeader pool header = ioProperty $ do
     Just (_, header') ->
       return (hashBlock header' == hash)
 
-persistAndRetrieveTransaction = buildDBTest
-  (testDbs !! 1)
-  "It should be possible to persist and retrieve a transaction"
-  prop_persistAndRetrieveTransaction
+persistAndRetrieveTransaction = buildTest $ do
+  pool <- createTestDbPool
+  return $ testProperty
+    "It should be possible to persist and retrieve a transaction"
+    (prop_persistAndRetrieveTransaction pool)
 
 prop_persistAndRetrieveTransaction :: ConnectionPool -> Transaction -> Property
 prop_persistAndRetrieveTransaction pool tx = ioProperty $ do
@@ -70,12 +55,12 @@ prop_persistAndRetrieveTransaction pool tx = ioProperty $ do
     Nothing -> return False
     Just _ -> return True
 
-persistAndGetLastBlock = buildDBTest
-  (testDbs !! 2)
-  "It should be possible to persist blocks and get the correct index \
-     \from `getLastBlock`"
-  prop_persistAndGetLastBlock
-  
+persistAndGetLastBlock = buildTest $ do
+  pool <- createTestDbPool
+  return $ testProperty
+    "It should be possible to persist blocks and get the correct index from `getLastBlock`"
+    (prop_persistAndGetLastBlock pool)
+
 prop_persistAndGetLastBlock :: ConnectionPool -> [BlockHeader] -> Property
 prop_persistAndGetLastBlock pool headers = ioProperty $ do
   (BlockIndex lastBlockInitial) <- getLastBlock pool
@@ -83,10 +68,11 @@ prop_persistAndGetLastBlock pool headers = ioProperty $ do
   (BlockIndex lastBlockFinal) <- getLastBlock pool
   return $ lastBlockFinal - lastBlockInitial == length headers
 
-getBlockWithIndexAndHash = buildDBTest
-  (testDbs !! 3)
-  "We should obtain the same block whether querying by index or hash"
-  prop_getBlockWithIndexAndHash
+getBlockWithIndexAndHash = buildTest $ do
+  pool <- createTestDbPool
+  return $ testProperty
+    "We should obtain the same block whether querying by index or hash"
+    (prop_getBlockWithIndexAndHash pool)
 
 prop_getBlockWithIndexAndHash :: ConnectionPool -> BlockHeader -> Property
 prop_getBlockWithIndexAndHash pool header = ioProperty $ do
@@ -102,10 +88,11 @@ prop_getBlockWithIndexAndHash pool header = ioProperty $ do
         Just headerFromIndex -> return
           (headerFromIndex == headerFromHash)
 
-deleteAndGetBlocksTest = buildDBTest
-  (testDbs !! 4)
-  "Deleting blocks should not mess up indices when persisting new blocks"
-  prop_deleteAndGetBlocksTest
+deleteAndGetBlocksTest = buildTest $ do
+  pool <- createTestDbPool
+  return $ testProperty
+    "Deleting blocks should not mess up indices when persisting new blocks"
+    (prop_deleteAndGetBlocksTest pool)
 
 prop_deleteAndGetBlocksTest :: ConnectionPool -> [BlockHeader] -> BlockHeader -> Property
 prop_deleteAndGetBlocksTest pool initialHeaders newHeader = ioProperty $ do

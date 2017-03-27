@@ -18,10 +18,7 @@ module TestUtil
   , vector
   , buildTest
   , assertBool
-  , testPublicKeyRep
-  , buildTestBracketed
-  , Test
-  ) where
+  , testPublicKeyRep) where
 
 import BitcoinCore.Keys
 
@@ -29,7 +26,7 @@ import Test.Framework.Providers.QuickCheck2 (testProperty)
 import Test.QuickCheck.Arbitrary (Arbitrary(..), arbitraryBoundedEnum, vector)
 import Test.QuickCheck.Gen (choose, suchThat, vectorOf, elements, oneof, listOf, Gen)
 import Test.Framework.Providers.HUnit (testCase)
-import Test.Framework.Providers.API (buildTest, buildTestBracketed, Test)
+import Test.Framework.Providers.API (buildTest)
 import Test.HUnit (assertEqual, Assertion, assertBool)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as Char8
