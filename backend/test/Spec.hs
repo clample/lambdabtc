@@ -1,4 +1,4 @@
-{-# Language OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 import Prelude hiding (length)
 
@@ -12,8 +12,10 @@ import Protocol.ServerTest
 import Protocol.UtilTest
 import General.TypesTest
 import General.UtilTest
+import System.Directory (listDirectory, removeFile)
 
-import Test.Framework (defaultMain, testGroup)
+import Data.Text (append)
+import Test.Framework (defaultMain, testGroup, buildTestBracketed)
 import Test.Framework.Providers.HUnit (testCase)
 
 main :: IO ()
@@ -50,13 +52,13 @@ tests =
       testCase "Check genesis block hash" genesisBlockHash,
       testCase "Check genesis block testnet hash" genesisBlockTestnetHash
       ],
-    testGroup "Persistence Tests" [
+    buildTestBracketed . pure $ (testGroup "Persistence Tests" [
       persistAndRetrieveBlockHeader,
       persistAndRetrieveTransaction,
       persistAndGetLastBlock,
       getBlockWithIndexAndHash,
       deleteAndGetBlocksTest
-      ],
+      ], listDirectory "resources" >>= (mapM_ removeFile . map ("resources/" ++))),
     testGroup "Protocol Server Tests" [
       pingAndPong,
       -- versionAndVerack,
