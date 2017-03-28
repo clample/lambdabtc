@@ -44,6 +44,7 @@ import Data.Bits (shiftR, shiftL, (.|.))
 import Data.List (unfoldr)
 import Data.Tuple (swap)
 import Control.Lens (makeLenses, (^.))
+import Data.Word(Word64)
 
 import Test.QuickCheck.Arbitrary (Arbitrary(..))
 import Test.QuickCheck.Gen (choose, elements)
@@ -93,14 +94,14 @@ decodeBase58Check b58 = flip Get.runGet content $ do
 putWithLength :: Put -> Put
 putWithLength putM = do
   let payload = BL.toStrict . Put.runPut $ putM
-  put . VarInt . BS.length $ payload
+  put . VarInt . fromIntegral . BS.length $ payload
   Put.putByteString payload
 
 showBool :: Bool -> ByteString
 showBool True  = "01"
 showBool False = "00"
 
-newtype VarInt = VarInt Int
+newtype VarInt = VarInt Word64
   deriving (Eq, Show)
 
 instance Binary VarInt where
@@ -117,7 +118,7 @@ getVarInt = do
       | firstByte == 0xFD = fromIntegral <$> Get.getWord16le
       | firstByte == 0xFE = fromIntegral <$> Get.getWord32le 
       | firstByte == 0xFF = fromIntegral <$> Get.getWord64le
-      | otherwise = error "Unable to parse VarInd. This should not happen"
+      | otherwise = error "Unable to parse VarInt. This should not happen"
 
 putVarInt :: VarInt -> Put
 putVarInt (VarInt i)

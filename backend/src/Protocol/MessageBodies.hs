@@ -34,6 +34,7 @@ import Control.Monad (replicateM)
 import Foreign.Marshal.Utils (toBool)
 import Data.Word (Word64)
 
+
 import Test.QuickCheck.Arbitrary (Arbitrary(..))
 
 class HasBlockLocatorHashes t where
@@ -158,20 +159,20 @@ instance Binary RejectMessage where
 
 putRejectMessage :: RejectMessage -> Put
 putRejectMessage message = do
-  put . VarInt . length $ message^.rejectMessage
+  put . VarInt . fromIntegral . length $ message^.rejectMessage
   putByteString . Char8.pack $ message^.rejectMessage
   putWord8 . fromIntegral  . fromEnum $ message^.cCode
-  put . VarInt . length $ message^.reason
+  put . VarInt . fromIntegral . length $ message^.reason
   putByteString . Char8.pack $ message^.reason
   -- TODO: factor out var_str method
 
 getRejectMessage :: Get RejectMessage
 getRejectMessage = do
   VarInt msgLength <- get
-  rejectMessage' <- Char8.unpack <$> getByteString msgLength
+  rejectMessage' <- Char8.unpack <$> getByteString (fromIntegral msgLength)
   cCode' <- toEnum . fromIntegral <$> getWord8
   VarInt reasonLength' <- get
-  reason' <- Char8.unpack <$> getByteString reasonLength'
+  reason' <- Char8.unpack <$> getByteString (fromIntegral reasonLength')
   return $ RejectMessage rejectMessage' cCode' reason'
   
 ---------------------------
@@ -246,13 +247,13 @@ instance Binary GetDataMessage where
 
 putInvOrDataMessage :: HasInvVectors a => a -> Put
 putInvOrDataMessage message = do
-  put . VarInt . length $ message^.invVectors
+  put . VarInt . fromIntegral . length $ message^.invVectors
   mapM_ put (message^.invVectors)
 
 getInvOrDataMessage :: ([InventoryVector] -> a) -> Get a
 getInvOrDataMessage constructor = do
    VarInt count <- get
-   inventoryVectors <- replicateM count get
+   inventoryVectors <- replicateM (fromIntegral count) get
    return $ constructor inventoryVectors
    
 -----------------------------
@@ -306,15 +307,15 @@ putGetHeadersOrBlocksMessage :: (HasVersion a, HasBlockLocatorHashes a, HasHashS
                      => a -> Put
 putGetHeadersOrBlocksMessage message = do
   putWord32le . fromIntegral $ (message^.version)
-  put . VarInt . length $ (message^.blockLocatorHashes)
+  put . VarInt . fromIntegral . length $ (message^.blockLocatorHashes)
   mapM_ put (message^.blockLocatorHashes)
   put (message^.hashStop)
 
 getGetHeadersOrBlocksMessage :: (Int -> [BlockHash] -> BlockHash -> a) -> Get a
 getGetHeadersOrBlocksMessage constructor = do
   version'            <- fromIntegral <$> getWord32le
-  VarInt nHashes     <- get
-  blockLocatorHashes' <- replicateM nHashes get
+  VarInt nHashes      <- get
+  blockLocatorHashes' <- replicateM (fromIntegral nHashes) get
   hashStop'           <- get
   return $ constructor version' blockLocatorHashes' hashStop'
 --------------------------------
@@ -340,9 +341,9 @@ getMerkleblockMessage = do
   blockHeader' <- get
   txCount' <- fromIntegral <$> getWord32le
   VarInt nMerkleHashes <- get
-  merkleHashes' <- replicateM nMerkleHashes get
+  merkleHashes' <- replicateM (fromIntegral nMerkleHashes) get
   VarInt flagsLengthBytes <- get
-  flags' <- MerkleFlags <$> getByteString flagsLengthBytes
+  flags' <- MerkleFlags <$> getByteString (fromIntegral flagsLengthBytes)
   return $ MerkleblockMessage blockHeader' merkleHashes' flags'
   
 
@@ -350,10 +351,10 @@ putMerkleblockMessage :: MerkleblockMessage -> Put
 putMerkleblockMessage message = do
   put (message^.blockHeader)
   putWord32le 0
-  put . VarInt . length $ message^.merkleHashes
+  put . VarInt . fromIntegral . length $ message^.merkleHashes
   mapM_ put (message^.merkleHashes)
   let MerkleFlags flagsBS = message^.flags
-  put . VarInt . BS.length $ flagsBS
+  put . VarInt . fromIntegral . BS.length $ flagsBS
   putByteString flagsBS
 
 ------------------------
@@ -370,7 +371,7 @@ instance Binary HeadersMessage where
 getHeadersMessage :: Get HeadersMessage
 getHeadersMessage = do
   VarInt nHeaders <- get
-  blockHeaders'    <- replicateM nHeaders getHeaderAndTxCount
+  blockHeaders'    <- replicateM (fromIntegral nHeaders) getHeaderAndTxCount
   return $ HeadersMessage blockHeaders'
   where getHeaderAndTxCount = do
           header <- get
@@ -379,7 +380,7 @@ getHeadersMessage = do
 
 putHeadersMessage :: HeadersMessage -> Put
 putHeadersMessage message = do
-  put . VarInt . length $ (message^.blockHeaders)
+  put . VarInt . fromIntegral . length $ (message^.blockHeaders)
   mapM_ putHeaderAndTxCount (message^.blockHeaders)
   where putHeaderAndTxCount header = do
           put header
@@ -415,7 +416,7 @@ instance Binary FilterloadMessage where
 
 putFilterloadMessage :: FilterloadMessage -> Put
 putFilterloadMessage message = do
-  put . VarInt $ (message^.bloomFilter.filterLengthBytes)
+  put . VarInt $ (fromIntegral $ message^.bloomFilter.filterLengthBytes)
   putByteString . serializeFilter $ (message^.bloomFilter)
   putWord32le . fromIntegral $ (message^.filterContext.nHashFunctions)
   let Tweak t = message^.filterContext.tweak
@@ -427,7 +428,7 @@ putFilterloadMessage message = do
 getFilterloadMessage :: Get FilterloadMessage
 getFilterloadMessage = do
   VarInt lengthFilter <- get
-  filter' <- deserializeFilter <$> getByteString lengthFilter
+  filter' <- deserializeFilter <$> getByteString (fromIntegral lengthFilter)
   nHashFuncs' <- fromIntegral <$> getWord32le
   nTweak'     <- Tweak . fromIntegral <$> getWord32le
   nFlags' <- toEnum . fromIntegral <$> getWord8
@@ -451,13 +452,13 @@ instance Binary FilteraddMessage where
 
 putFilteraddMessage :: FilteraddMessage -> Put
 putFilteraddMessage message = do
-  put . VarInt . BS.length $ message^.filteraddData
+  put . VarInt . fromIntegral . BS.length $ message^.filteraddData
   putByteString $ message^.filteraddData
 
 getFilteraddMessage :: Get FilteraddMessage
 getFilteraddMessage = do
   VarInt lengthData <- get
-  filteraddData' <- getByteString lengthData
+  filteraddData' <- getByteString (fromIntegral lengthData)
   return $ FilteraddMessage filteraddData'
 
 ------------------------

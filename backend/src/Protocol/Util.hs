@@ -55,7 +55,7 @@ decodeBlockHeader
     difficulty
     nonce) =
   BlockHeader
-    (BlockVersion blockVersion)
+    (BlockVersion $ fromIntegral blockVersion)
     (Hash prevBlockHash)
     (MerkleHash merkleRoot)
     (Timestamp . fromIntegral $ timestamp)
@@ -72,7 +72,7 @@ encodeBlockHeader
     (Difficulty difficulty)
     (Nonce nonce)) =
   PersistentBlockHeader
-    blockVersion
+    (fromIntegral blockVersion)
     prevBlockHash
     (hash . hashBlock $ header)
     merkleRoot

@@ -15,6 +15,7 @@ import Data.Binary (Binary(..))
 import Data.ByteString.Base16 (decode, encode)
 import Control.Lens (makeLenses, (^.))
 import Control.Monad (replicateM)
+import Data.Word(Word32)
 -----------
 import Test.QuickCheck.Arbitrary (Arbitrary(..))
 import Test.QuickCheck.Gen (choose, vectorOf, Gen, sized)
@@ -29,7 +30,7 @@ data BlockHeader = BlockHeader
   , _nonce :: Nonce
   } deriving (Eq, Show)
 
-newtype BlockVersion = BlockVersion Int
+newtype BlockVersion = BlockVersion Word32
   deriving (Eq, Show)
 
 type PrevBlockHash = BlockHash
@@ -63,7 +64,6 @@ putBlockHeader blockHeader = do
   put $ blockHeader^.timestamp
   put $ blockHeader^.difficulty
   put $ blockHeader^.nonce
-
 
 getBlockHeader :: Get BlockHeader
 getBlockHeader = do

@@ -138,9 +138,9 @@ getTransaction :: Get Transaction
 getTransaction = do
   v <- get
   VarInt inputCount <- get
-  inputArray <- replicateM inputCount get
+  inputArray <- replicateM (fromIntegral inputCount) get
   VarInt outputCount <- get
-  outputArray <- replicateM outputCount get
+  outputArray <- replicateM (fromIntegral outputCount) get
   locktime' <- get
   return Transaction
     { _inputs = inputArray
@@ -163,7 +163,7 @@ getInput :: Get TxInput
 getInput = do
   outPoint <- get
   VarInt scriptLength <- get
-  script <- getScript scriptLength
+  script <- getScript (fromIntegral scriptLength)
   sequence' <- get
   return TxInput
     { _utxo = outPoint
@@ -184,7 +184,7 @@ getOutput :: Get TxOutput
 getOutput = do
   val <- get
   VarInt scriptLength <- get
-  script <- getScript scriptLength
+  script <- getScript (fromIntegral scriptLength)
   return TxOutput
     { _value = val
     , _outputScript = script }
