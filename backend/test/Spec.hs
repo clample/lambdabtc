@@ -13,8 +13,10 @@ import Protocol.UtilTest
 import General.TypesTest
 import General.UtilTest
 
-import Test.Framework (defaultMain, testGroup)
+import Test.Framework (defaultMain, testGroup, buildTestBracketed)
 import Test.Framework.Providers.HUnit (testCase)
+import Data.Text(unpack)
+import System.Directory (listDirectory, removeFile)
 
 main :: IO ()
 main = defaultMain tests
@@ -50,13 +52,19 @@ tests =
       testCase "Check genesis block hash" genesisBlockHash,
       testCase "Check genesis block testnet hash" genesisBlockTestnetHash
       ],
-    testGroup "Persistence Tests" [
-      persistAndRetrieveBlockHeader,
-      persistAndRetrieveTransaction,
-      persistAndGetLastBlock,
-      getBlockWithIndexAndHash,
-      deleteAndGetBlocksTest
-      ],
+    buildTestBracketed . pure $ (testGroup "Persistence Tests" 
+      [
+        persistAndRetrieveBlockHeader,
+        persistAndRetrieveTransaction,
+        persistAndGetLastBlock,
+        getBlockWithIndexAndHash,
+        deleteAndGetBlocksTest
+      ], listDirectory (unpack testDBDirectory) >>=
+        (mapM_ removeFile
+             . map ((unpack testDBDirectory ++ "/") ++)
+             . filter ((/= '.') . head)
+             )
+      ),
     testGroup "Protocol Server Tests" [
       pingAndPong,
       -- versionAndVerack,

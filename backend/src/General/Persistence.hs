@@ -10,6 +10,7 @@ import General.Config (ConfigM)
 import General.Types (HasPool(..))
 
 import Data.Text (Text)
+import Data.Word (Word32)
 import Database.Persist.Sqlite
   ( runMigration
   , runMigrationUnsafe
@@ -46,11 +47,11 @@ KeySet
     privateKey Text
     deriving Show
 PersistentBlockHeader
-    blockVersion Int
+    blockVersion Word32
     prevBlockHash ByteString
     hash ByteString
     merkleRoot ByteString
-    timestamp Int
+    timestamp Word32
     difficulty ByteString
     nonce ByteString
 PersistentUTXO
