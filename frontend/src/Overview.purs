@@ -12,8 +12,7 @@ initialState :: Unit -> OverviewState
 initialState = pure { totalFundsMessage: "no message recieved" }
 
 data OverviewQuery a
-  = GetOverviewState (Boolean -> a)
-  | IncomingFunds String a
+  = IncomingFunds String a
 
 data OverviewSlot = OverviewSlot
 derive instance eqOverviewSlot :: Eq OverviewSlot
@@ -32,9 +31,6 @@ overviewComponent = H.component { render, eval, initialState, receiver }
     , HH.p_ [ HH.text state.totalFundsMessage]]
 
   eval :: OverviewQuery ~> H.ComponentDSL OverviewState OverviewQuery Void m
-  eval (GetOverviewState reply) = do
-    s <- H.gets (\state -> true)
-    pure (reply s)
   eval (IncomingFunds msg next) = do
     H.modify (_ { totalFundsMessage = msg })
     pure next

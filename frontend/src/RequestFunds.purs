@@ -39,12 +39,8 @@ messageRaw = lens _.messageRaw (_ { messageRaw = _})
 _FundRequestRaw :: Lens' FundRequestRaw FundRequestRawRec
 _FundRequestRaw = lens (\(FundRequestRaw rec) -> rec) (\_ -> FundRequestRaw)
 
---n :: FundRequestRawRec
---n = view ( fundRequest <<< _FundRequestRaw ) (initialState unit)
-
 type RequestFundsState =
-  { on :: Boolean
-  , fundRequest :: FundRequestRaw
+  { fundRequest :: FundRequestRaw
   , maybeError :: Maybe String
   , fundRequestList :: Array FundRequest }
 
@@ -86,8 +82,7 @@ instance decodeJsonFundRequest :: DecodeJson FundRequest where
 
 initialState :: Array FundRequest -> RequestFundsState
 initialState fundRequests =
-  { on: false
-  , fundRequest:
+  { fundRequest:
     FundRequestRaw
     { labelRaw: ""
     , amountRaw: ""
