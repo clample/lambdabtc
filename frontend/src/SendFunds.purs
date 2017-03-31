@@ -6,11 +6,10 @@ import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Control.Monad.Aff (Aff)
-import Data.Argonaut (class EncodeJson, class DecodeJson, encodeJson, decodeJson, jsonEmptyObject, (~>), (:=))
-import Data.Argonaut (class EncodeJson)
+import Data.Argonaut (class EncodeJson, encodeJson, jsonEmptyObject, (~>), (:=))
 import Data.Lens (lens, set, view, Lens, Lens')
-import Network.HTTP.Affjax (Affjax, AffjaxResponse, post)
-import Network.HTTP.Affjax.Response (class Respondable, ResponseType(..))
+import Network.HTTP.Affjax (Affjax, post)
+import Network.HTTP.Affjax.Response (class Respondable)
 import Requests (Effects, server)
 import Data.Maybe(Maybe(..))
 
@@ -51,7 +50,6 @@ data SendFundsQuery a
   = UpdateAddress String a
   | UpdateAmount String a
   | SendFunds a
-  | GetSendFundsState (Boolean -> a)
 
 data SendFundsSlot = SendFundsSlot
 derive instance eqSendFundsSlot :: Eq SendFundsSlot
@@ -69,9 +67,6 @@ sendFundsComponent = H.component { render, eval, initialState, receiver }
     [ renderSendFundsForm state ]
 
   eval :: SendFundsQuery ~> H.ComponentDSL SendFundsState SendFundsQuery Void (Aff (Effects m))
-  eval (GetSendFundsState reply) = do
-    b <- H.gets (\(state) -> true)
-    pure (reply b)
   eval (UpdateAddress addr next) = do
     H.modify (set (sendFundsTx <<< _TransactionRaw <<< recieverAddressRaw) addr)
     pure next

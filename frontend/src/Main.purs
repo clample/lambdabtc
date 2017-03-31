@@ -2,7 +2,6 @@
 module Main where
 
 import Prelude
-import Control.Coroutine as CR
 import Halogen as H
 import Halogen.Aff as HA
 import Halogen.Component.ChildPath as CP
@@ -15,19 +14,17 @@ import Control.Monad.Aff (Aff)
 import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Class (liftEff)
 import Control.Monad.Eff.Var (($=))
-import DOM.HTML.HTMLElement (offsetHeight)
 import Data.Const (Const)
-import Data.Lazy (defer)
 import Data.Maybe (Maybe(..), fromMaybe)
 import Halogen.Aff.Util (runHalogenAff, awaitBody)
 import Halogen.Component.ChildPath (type (\/), type (<\/>))
 import Halogen.VDom.Driver (runUI)
-import Network.HTTP.Affjax (AJAX, AffjaxResponse, get)
+import Network.HTTP.Affjax (AffjaxResponse, get)
 import Network.HTTP.StatusCode (StatusCode(..))
 import Overview (OverviewSlot(..), overviewComponent)
-import RequestFunds (RequestFundsQuery(..), RequestFundsSlot(..), requestFundsComponent, FundRequest(..))
+import RequestFunds (RequestFundsQuery(..), RequestFundsSlot(..), requestFundsComponent, FundRequest)
 import Requests (Effects, server)
-import SendFunds (SendFundsQuery(..), SendFundsSlot(..), sendFundsComponent)
+import SendFunds (SendFundsQuery, SendFundsSlot(..), sendFundsComponent)
 
 
 messageListener :: forall eff
@@ -40,17 +37,13 @@ messageListener (WS.Connection socket) query =
     HA.runHalogenAff <<< query <<< H.action <<< IncomingFunds $ msg
 
 type State =
-  { overviewState :: Maybe Boolean
-  , requestFundsState :: Array FundRequest
-  , sendFundsState :: Maybe Boolean
+  { requestFundsState :: Array FundRequest
   , context :: Context
   }
 
 initialState :: Unit -> State
 initialState _ =
-  { overviewState: Nothing
-  , requestFundsState: []
-  , sendFundsState: Nothing
+  { requestFundsState: []
   , context: OverviewContext }
 
 data Context =
@@ -59,8 +52,7 @@ data Context =
   RequestFundsContext
 
 data Query a
-  = ReadStates a
-  | ToggleContext Context a
+  = ToggleContext Context a
   | IncomingFunds String a
 
 type ChildQuery = Overview.OverviewQuery <\/> RequestFundsQuery <\/> SendFundsQuery <\/> Const Void
@@ -93,26 +85,20 @@ ui = H.parentComponent { initialState, render, eval, receiver }
     ]
 
   eval :: Query ~> H.ParentDSL State Query ChildQuery ChildSlot Void (Aff (Effects eff))
-  eval (ReadStates next) = do
-    a <- H.query' CP.cp1 OverviewSlot (H.request Overview.GetOverviewState)
-    b <- fromMaybe [] <$> H.query' CP.cp2 RequestFundsSlot (H.request GetRequestFundsState)
-    c <- H.query' CP.cp3 SendFundsSlot (H.request GetSendFundsState)
-    H.modify (\state -> state { overviewState = a, requestFundsState = b, sendFundsState = c})
-    pure next
   eval (ToggleContext context next) = do
     state <- H.get
     case (state.context) of
       RequestFundsContext -> do
         fundRequests' <- H.query' CP.cp2 RequestFundsSlot (H.request GetRequestFundsState)
-        H.modify (\state -> state {requestFundsState = fromMaybe [] fundRequests' })
+        H.modify (\s -> s {requestFundsState = fromMaybe [] fundRequests' })
       _                   -> pure unit
-    H.modify (\state -> state {context = context})
+    H.modify (\s -> s {context = context})
     pure next
   eval (IncomingFunds msg next) = do
     H.query' CP.cp1 OverviewSlot (H.action $ Overview.IncomingFunds msg)
     pure next
 
-waitForServer :: forall eff. Aff (HA.HalogenEffects (Effects ())) Unit
+waitForServer :: Aff (HA.HalogenEffects (Effects ())) Unit
 waitForServer =  do
   (response :: AffjaxResponse String) <- get (server <> "/status")
   if (response.status /= StatusCode 200)
