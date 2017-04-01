@@ -39,7 +39,11 @@ connectToPeer :: Int -> Config -> IO Peer
 connectToPeer n config = do
   let seed' = Just . seed $ config^.configNetwork
       port' = Just . networkPort $ config^.configNetwork
-  addrInfo <- (!! n) <$> getAddrInfo Nothing seed' port'
+      isIPv4 addr = case addrAddress addr of
+                          SockAddrInet _ _ -> True
+                          _                -> False
+  addrInfos <- filter isIPv4 <$> getAddrInfo Nothing seed' port'
+  let addrInfo = addrInfos !! n
   peerSocket <- socket AF_INET Stream 0 
   -- peerSocket <- socket (addrFamily addrInfo) Stream defaultProtocol -- switch with previous line
     -- connect to local node: AF_INET Stream 0
