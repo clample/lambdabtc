@@ -2,39 +2,49 @@
 module Protocol.ServerTest where
 
 import TestUtil
-import Protocol.Messages ( Message(..)
-                         , MessageBody(..)
-                         , MessageContext(..)
-                         , arbitraryPingMessage
-                         , arbitraryVersionMessage)
+import Protocol.Messages
+  ( Message(..)
+  , MessageBody(..)
+  , MessageContext(..)
+  , arbitraryPingMessage
+  , arbitraryVersionMessage
+  )
 import Protocol.MessageBodies ( HeadersMessage( HeadersMessage))
 import Protocol.Server
-import Protocol.ConnectionM ( ConnectionContext(..)
-                            , MutableConnectionContext(..)
-                            , mutableContext
-                            , LogEntry
-                            , displayLogs
-                            , LogLevel(..))
-import General.InternalMessaging ( UIUpdaterMessage(..)
-                                 , InternalMessage(..))
+import Protocol.ConnectionM
+  ( ConnectionContext(..)
+  , MutableConnectionContext(..)
+  , mutableContext
+  , LogEntry
+  , displayLogs
+  , LogLevel(..)
+  )
+import General.InternalMessaging
+  ( UIUpdaterMessage(..)
+  , InternalMessage(..)
+  )
 import BitcoinCore.Transaction.Transactions (TxHash, hashTransaction)
-import BitcoinCore.BlockHeaders ( BlockHeader(..)
-                                , hashBlock
-                                , ValidHeaders(..)
-                                , ValidBlockTree(..)
-                                , verifyHeaders
-                                , showBlocks)
+import BitcoinCore.BlockHeaders
+  ( BlockHeader(..)
+  , hashBlock
+  , ValidHeaders(..)
+  , ValidBlockTree(..)
+  , verifyHeaders
+  , showBlocks
+  )
 import BitcoinCore.Keys (Address(..))
 import General.Types (Network(..))
 import General.Persistence (PersistentUTXO(..))
-import General.Util ( Addr(..)
-                    , IP(..)
-                    , Port(..)
-                    , getBranch
-                    , Tree(..)
-                    , node
-                    , subTree
-                    , branches)
+import General.Util
+  ( Addr(..)
+  , IP(..)
+  , Port(..)
+  , getBranch
+  , Tree(..)
+  , node
+  , subTree
+  , branches
+  )
 import Protocol.Util (HasLastBlock(..), BlockIndex(..))
 
 import Control.Lens (makeLenses, (^.), (%~), (.~))
