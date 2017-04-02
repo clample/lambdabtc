@@ -69,8 +69,7 @@ tests =
       pingAndPong,
       -- versionAndVerack,
       -- expected failure. See test case for details
-      longerChain,
-      longerChain'
+      longerChain
       ],
     testGroup "Protocol Util Tests" [
       persistentBlockHeaderInvertible

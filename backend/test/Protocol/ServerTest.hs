@@ -202,24 +202,11 @@ prop_versionAndVerack (ArbVersionMessage message) =
       _                                  -> False
 
 longerChain = testProperty
-  "Should switch to longer chain" prop_longerChain
-
-prop_longerChain :: ValidHeaders -> MessageContext -> Bool
-prop_longerChain (ValidHeaders (h1:h2:hs)) msgContext = 
-  resultHandle^.handlers.mockDB.blockHeaders == (h1:h2:hs)   
-  where
-    ic = (handlers.mockDB.blockHeaders .~ [h1,h2]) 
-               $ defaultIC
-    headersMessage = (Message (HeadersMessageBody (HeadersMessage (h2:hs))) msgContext)
-    (resultHandle, _) = runIdentity
-                        $ interpretConnTest ic (handleResponse' headersMessage)
-
-longerChain' = testProperty
   "We should use the correct active chain"
-  prop_longerChain'
+  prop_longerChain
 
-prop_longerChain' :: ValidBlockTree -> MessageContext -> Property
-prop_longerChain' (ValidBlockTree tree) msgContext = counterexample
+prop_longerChain :: ValidBlockTree -> MessageContext -> Property
+prop_longerChain (ValidBlockTree tree) msgContext = counterexample
   debugString
   (length activeChain == length longestBranch)
   where
