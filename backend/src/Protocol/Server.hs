@@ -408,16 +408,20 @@ handleResponse' (Message (TxMessageBody message) _) = do
   isHandled <- isTransactionHandled'
   unless isHandled $ do
     logDebug' $ "Transaction was not previously handled. Handling now."
-    addUTXOs
+    persistentUTXOs <- retrieveUTXOs
+    addUTXOs persistentUTXOs
+    let val = sum $ map (persistentUTXOValue) persistentUTXOs
     -- TODO: modify writeUiUpdaterMessage' to send the correct
     --       utxo value
-    writeUiUpdaterMessage' . IncomingFunds . Satoshis $ 1000
+    writeUiUpdaterMessage' . IncomingFunds . Satoshis $ val
     persistTransaction' (message^.transaction)
   where
-    addUTXOs = do
+    retrieveUTXOs = do
       pubKeyHashes <- map (hash . addressToPubKeyHash) <$> getAllAddresses'
       let indexedPubkeyHashes = zip [1..] pubKeyHashes
           persistentUTXOs = getUTXOS indexedPubkeyHashes (message^.transaction)
+      return persistentUTXOs
+    addUTXOs persistentUTXOs = do
       persistUTXOs' persistentUTXOs
     isTransactionHandled' = do
       let txHash = hashTransaction $ message^.transaction
