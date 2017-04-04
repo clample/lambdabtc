@@ -411,9 +411,7 @@ handleResponse' (Message (TxMessageBody message) _) = do
     persistentUTXOs <- retrieveUTXOs
     addUTXOs persistentUTXOs
     let val = sum $ map (persistentUTXOValue) persistentUTXOs
-    -- TODO: modify writeUiUpdaterMessage' to send the correct
-    --       utxo value
-    writeUiUpdaterMessage' . IncomingFunds . Satoshis $ val
+    if val > 0 then writeUiUpdaterMessage' . IncomingFunds . Satoshis $ val else return ()
     persistTransaction' (message^.transaction)
   where
     retrieveUTXOs = do

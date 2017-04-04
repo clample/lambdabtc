@@ -2,24 +2,57 @@ module Overview where
 
 import Prelude
 
+import Requests (Effects, server)
 import Halogen as H
 import Halogen.HTML as HH
+import Halogen.HTML.Events as HE
+import Halogen.HTML.Properties as HP
+import Network.HTTP.Affjax (Affjax, AffjaxResponse, get)
+import Network.HTTP.Affjax.Response (class Respondable)
+import Network.HTTP.StatusCode (StatusCode(..))
+import Control.Monad.Aff (Aff)
 import Data.Maybe (Maybe(..))
+import Data.Either (Either(..))
 import Data.Array (concatMap, cons)
+import Data.Argonaut ( jsonParser
+                     , class DecodeJson
+                     , decodeJson
+                     , (.?)
+                     )
 
-type OverviewState = { totalFundsMessages :: Array String }
+newtype UTXO = UTXO { keySetId :: Int
+                    , value :: Int
+                    , isSpent :: Boolean
+                    }
+
+instance decodeJsonUTXO :: DecodeJson UTXO where
+  decodeJson json = do
+    obj <- decodeJson json
+    keySetId <- obj .? "dispKeySetId"
+    value <- obj .? "dispValue"
+    isSpent <- obj .? "dispIsSpent"
+    pure $ UTXO { keySetId: keySetId
+                , value: value
+                , isSpent: isSpent
+                }
+
+type OverviewState = { totalFundsMessages :: Array String
+                     , utxoList :: Array UTXO 
+                     }
 
 initialState :: Array String -> OverviewState
-initialState msgs = { totalFundsMessages: msgs }
+initialState msgs = { totalFundsMessages: msgs
+                    , utxoList: [] }
 
 data OverviewQuery a
   = IncomingFunds String a
+  | UpdateUTXOs a
 
 data OverviewSlot = OverviewSlot
 derive instance eqOverviewSlot :: Eq OverviewSlot
 derive instance ordOverviewSlot :: Ord OverviewSlot
 
-overviewComponent :: forall m. H.Component HH.HTML OverviewQuery (Array String) Void m
+overviewComponent :: forall eff. H.Component HH.HTML OverviewQuery (Array String) Void (Aff (Effects eff))
 overviewComponent = H.component { render, eval, initialState, receiver }
   where
 
@@ -29,18 +62,33 @@ overviewComponent = H.component { render, eval, initialState, receiver }
   render :: OverviewState -> H.ComponentHTML OverviewQuery
   render (state) = HH.div_
     [ HH.h1_ [ HH.text "Overview" ]
+    , HH.button
+      [ HE.onClick (HE.input_ UpdateUTXOs)
+      , HP.classes [HH.ClassName "btn", HH.ClassName "btn-default"]]
+      [ HH.text "Refresh UTXOs" ]
+    , HH.table [HP.classes [HH.ClassName "table"]]
+      [ HH.caption_ [HH.text "UTXOs"]
+      , HH.thead_
+        [ HH.tr_
+          [ HH.th_ [HH.text "Key Set"]
+          , HH.th_ [HH.text "Value"]
+          , HH.th_ [HH.text "Is Spent"]
+          ]
+        ]
+      , HH.tbody_ (map renderUTXO state.utxoList)
+      ]
     , HH.p_ (renderMessages state.totalFundsMessages)
     ]
-    --, HH.p_ [ HH.text state.totalFundsMessage]]
 
-  eval :: OverviewQuery ~> H.ComponentDSL OverviewState OverviewQuery Void m
+  eval :: OverviewQuery ~> H.ComponentDSL OverviewState OverviewQuery Void (Aff (Effects eff))
   eval (IncomingFunds msg next) = do
     prevMessages <- H.gets (\s -> s.totalFundsMessages)
     H.modify (\s -> s {totalFundsMessages = (cons msg prevMessages) })
     pure next
-  -- eval (GetOverviewState reply) = do
-  --   b <- H.gets (\s -> s.totalFundsMessages)
-  --   pure (reply b)
+  eval (UpdateUTXOs next) = do
+    newUTXOs <- H.liftAff getUTXOUpdate
+    H.modify (updateUTXOs newUTXOs)
+    pure next
 
 renderMessages :: Array String -> Array (H.ComponentHTML OverviewQuery)
 renderMessages [] = [HH.text "No new messages."]
@@ -48,3 +96,20 @@ renderMessages xs = concatMap renderMessage xs
 
 renderMessage :: String -> Array (H.ComponentHTML OverviewQuery)
 renderMessage str = [HH.text str, HH.br_]
+
+renderUTXO :: UTXO -> H.ComponentHTML OverviewQuery
+renderUTXO (UTXO utxo) = HH.tr_
+  [ HH.td_ [HH.text $ show utxo.keySetId]
+  , HH.td_ [HH.text $ show utxo.value]
+  , HH.td_ [HH.text $ show utxo.isSpent]
+  ] 
+
+getUTXOUpdate :: forall e b. (Respondable b) => Affjax e b
+getUTXOUpdate = get (server <> "/utxos")
+
+updateUTXOs :: AffjaxResponse String -> OverviewState -> OverviewState
+updateUTXOs {status: StatusCode 200, response: utxoStr } s =
+  case (jsonParser utxoStr >>= decodeJson) of
+    Left error -> s
+    Right utxos -> s { utxoList = utxos }
+updateUTXOs _ s = s

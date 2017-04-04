@@ -217,6 +217,5 @@ appendFundRequestOrError response state =
   state { maybeError = Just "An unexpected error occurred"}
   -- The server should only return 200 or 400 responses
 
-
 postFundRequest :: forall e b. (Respondable b) => RequestFundsState -> Affjax e b
 postFundRequest state  = post (server <> "/fundrequests") (encodeJson state.fundRequest)
