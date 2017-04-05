@@ -38,6 +38,7 @@ import Data.Aeson.TH
   ( deriveJSON
   , defaultOptions
   )
+import Data.HexString (toText, fromBytes)
 
 
 share [mkPersist sqlSettings, mkMigrate "migrateTables"] [persistLowerCase|
@@ -66,6 +67,7 @@ PersistentUTXO
     keySetId Int
     value Int
     isSpent Bool
+    blockHash ByteString
 PersistentTransaction
     hash ByteString
 |]
@@ -73,6 +75,7 @@ PersistentTransaction
 data DisplayPersistentUTXO = DisplayPersistentUTXO { dispKeySetId :: Int
                                                    , dispValue :: Int
                                                    , dispIsSpent :: Bool
+                                                   , dispBlockHash :: Text
                                                    } deriving (Eq, Show)
 
 deriveJSON defaultOptions ''DisplayPersistentUTXO
@@ -81,6 +84,7 @@ displayUTXO :: Entity PersistentUTXO -> DisplayPersistentUTXO
 displayUTXO (Entity key utxo) = DisplayPersistentUTXO (persistentUTXOKeySetId utxo)
                                                       (persistentUTXOValue utxo)
                                                       (persistentUTXOIsSpent utxo)
+                                                      (toText . fromBytes . persistentUTXOBlockHash $ utxo)
 
 
 migrateSchema :: ConnectionPool -> IO ()

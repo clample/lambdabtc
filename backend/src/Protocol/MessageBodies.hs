@@ -255,7 +255,7 @@ getInvOrDataMessage constructor = do
    VarInt count <- get
    inventoryVectors <- replicateM (fromIntegral count) get
    return $ constructor inventoryVectors
-   
+
 -----------------------------
 
 data NotFoundMessage = NotFoundMessage

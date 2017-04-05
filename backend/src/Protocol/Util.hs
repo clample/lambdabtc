@@ -1,4 +1,4 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving, OverloadedStrings #-}
 
 module Protocol.Util where
 
@@ -128,13 +128,15 @@ isRelevantScript pubkeyHash (Script components) =
 
 getPersistentUTXO :: Transaction -> Int -> Script -> Int -> PersistentUTXO
 getPersistentUTXO tx outIndex script keySetId' = PersistentUTXO
-  hash' outIndex scriptBS keySetId' val' isSpent'
+  hash' outIndex scriptBS keySetId' val' isSpent' blockHash'
   where
     hash' = hash . hashTransaction $ tx
     scriptBS = toStrict . runPut $ putScript script
     Satoshis val' = ((tx^.outputs) !! outIndex)^.value
     isSpent' = False
       -- When creating a new UTXO, we assume it hasn't been spent yet
+    blockHash' = ""
+      -- Also don't initialize the block hash, assume it is not yet in a block
 
 instance Arbitrary CCode where
   arbitrary = elements . map fst $ ccodeTable

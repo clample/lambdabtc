@@ -134,6 +134,9 @@ getAllAddresses pool = do
 persistUTXOs :: ConnectionPool -> [PersistentUTXO] -> IO ()
 persistUTXOs pool utxos = runSqlPool (insertMany_ utxos) pool
 
+getAllUTXOs :: ConnectionPool -> IO [DB.Entity PersistentUTXO]
+getAllUTXOs pool = runSqlPool (selectList [] []) pool
+
 getUnspentUTXOs :: ConnectionPool -> IO [DB.Entity PersistentUTXO]
 getUnspentUTXOs pool = do
   let unspentUTXOFilter = [ PersistentUTXOIsSpent ==. False]
@@ -142,3 +145,10 @@ getUnspentUTXOs pool = do
 setUtxoSpent :: ConnectionPool -> DB.Key PersistentUTXO -> IO ()
 setUtxoSpent pool key =
   runSqlPool (update key [PersistentUTXOIsSpent =. True]) pool
+
+setUTXOBlockHash :: ConnectionPool 
+                 -> DB.Key PersistentUTXO 
+                 -> BlockHash 
+                 -> IO ()
+setUTXOBlockHash pool key (Hash hash') =
+  runSqlPool (update key [PersistentUTXOBlockHash =. hash']) pool

@@ -16,4 +16,3 @@ main = do
   migrateSchema (config^.pool)
   forkIO $ connectTestnet config
   runApplication config
-

@@ -7,6 +7,7 @@ module LamdaBTC.Handlers
   , getFundRequestsH
   , postTransactionsH
   , handleIncomingFunds
+  , handleUTXOUpdate
   , getStatusH
   , getUTXOsH
   ) where
@@ -100,6 +101,7 @@ getUTXOsH :: Action
 getUTXOsH = do
   config <- lift ask
   utxos <- runDB (selectList [] [])
+  sendInternalMessage $ RequestMerkleBlocks
   ScottyT.status Status.ok200
   ScottyT.json $ map displayUTXO (utxos :: [Entity PersistentUTXO])
 
@@ -202,6 +204,10 @@ handleIncomingFunds :: Connection -> TX.Value -> IO ()
 handleIncomingFunds connection val = do
   let valText = T.pack . show $ val
   sendTextData connection valText
+
+handleUTXOUpdate :: Connection -> IO ()
+handleUTXOUpdate connection = do
+  sendTextData connection ("utxos updated" :: T.Text)
   
 getStatusH :: Action
 getStatusH =

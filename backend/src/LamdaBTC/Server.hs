@@ -46,6 +46,7 @@ uiUpdater config wsConn = do
     Just uiUpdaterMessage -> 
       case uiUpdaterMessage of
         IncomingFunds v -> handleIncomingFunds wsConn v
+        UTXOsUpdated    -> handleUTXOUpdate wsConn
   uiUpdater config wsConn
   
 websocketConnection :: Config -> IO ()

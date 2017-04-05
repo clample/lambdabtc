@@ -45,13 +45,14 @@ import BitcoinCore.BloomFilter
   , defaultFilterWithElements
   )
 import BitcoinCore.Keys (addressToPubKeyHash, Address(..))
-import BitcoinCore.Inventory (InventoryVector(..), ObjectType(..))
+import BitcoinCore.Inventory (InventoryVector(..), ObjectType(..), objectHash)
 import BitcoinCore.Transaction.Transactions
   ( Value(..)
   , Transaction(..)
   , TxHash
   , hashTransaction
   )
+import BitcoinCore.MerkleTrees (MerkleHash(..))
 import General.Config
   ( Config(..)
   , HasAppChan(..)
@@ -91,9 +92,12 @@ import Control.Concurrent.STM (atomically)
 import Control.Concurrent (forkIO)
 import Data.Binary (Binary(..))
 import Data.ByteString.Base16 (decode)
+import qualified Data.ByteString as BS
 import Control.Lens ((^.), (%~), (.~))
 import Control.Monad.Free (Free(..), liftF)
 import Data.Maybe (catMaybes)
+import Data.List (intercalate)
+import qualified Database.Persist as DB
 
 connectTestnet :: Config -> IO () 
 connectTestnet config = do
@@ -203,6 +207,8 @@ data ConnectionInteraction next
   | GetTransactionFromHash TxHash (Maybe Integer -> next)
   | GetAllAddresses ([Address] -> next)
   | PersistUTXOs [PersistentUTXO] next
+  | GetAllUTXOs ([DB.Entity PersistentUTXO] -> next)
+  | SetUTXOBlockHash (DB.Key PersistentUTXO) BlockHash next
   | Log LogEntry next
 
 instance Functor ConnectionInteraction where
@@ -222,6 +228,8 @@ instance Functor ConnectionInteraction where
   fmap f (GetTransactionFromHash  h g) = GetTransactionFromHash  h (f . g)
   fmap f (GetAllAddresses           g) = GetAllAddresses           (f . g)
   fmap f (PersistUTXOs            u x) = PersistUTXOs            u (f x)
+  fmap f (GetAllUTXOs               g) = GetAllUTXOs               (f . g)
+  fmap f (SetUTXOBlockHash      k h x) = SetUTXOBlockHash      k h (f x)
   fmap f (Log                    le x) = Log                    le (f x)
 
 type Connection' = Free ConnectionInteraction
@@ -297,6 +305,12 @@ getAllAddresses' = liftF (GetAllAddresses id)
 persistUTXOs' :: [PersistentUTXO] -> Connection' ()
 persistUTXOs' persistentUTXOs = liftF (PersistUTXOs persistentUTXOs ())
 
+getAllUTXOs' :: Connection' [DB.Entity PersistentUTXO]
+getAllUTXOs' = liftF (GetAllUTXOs id)
+
+setUTXOBlockHash' :: (DB.Key PersistentUTXO) -> BlockHash -> Connection' ()
+setUTXOBlockHash' k h = liftF (SetUTXOBlockHash k h ())
+
 log' :: LogEntry -> Connection' ()
 log' le = liftF (Log le ())
 
@@ -313,6 +327,8 @@ setLastBlock' i = do
   context <- getContext'
   let newContext = mutableContext.lastBlock .~ i $ context
   setContext' $ newContext^.mutableContext
+
+
 
 interpretConnProd :: InterpreterContext -> Connection' r -> IO r
 interpretConnProd ic conn = case conn of
@@ -363,6 +379,12 @@ interpretConnProd ic conn = case conn of
   Free (PersistUTXOs utxos n) -> do
     Persistence.persistUTXOs (ic^.ioHandlers.pool) utxos
     interpretConnProd ic n
+  Free (GetAllUTXOs f) -> do
+    utxos <- Persistence.getAllUTXOs (ic^.ioHandlers.pool)
+    interpretConnProd ic (f utxos)
+  Free (SetUTXOBlockHash k h n) -> do
+    Persistence.setUTXOBlockHash (ic^.ioHandlers.pool) k h
+    interpretConnProd ic n
   Free (Log le n) -> do
     putStrLn $ displayLogs (ic^.logFilter) [le]
     interpretConnProd ic n
@@ -381,8 +403,9 @@ handleResponse' (Message (VersionMessageBody body) _) = do
 handleResponse' (Message (HeadersMessageBody (HeadersMessage headers)) _) =
   handleNewHeaders headers
 
-handleResponse' (Message (MerkleblockMessageBody message) _) =
+handleResponse' (Message (MerkleblockMessageBody message) _) = do
   handleNewHeaders [message^.blockHeader]
+  updateUTXOs message
 
 handleResponse' (Message (GetHeadersMessageBody message) _) = do
   match <- firstHeaderMatch' (message^.blockLocatorHashes)
@@ -430,6 +453,31 @@ handleResponse' (Message (TxMessageBody message) _) = do
 
 handleResponse' message = logError' $
   "We are not yet able to handle message" ++ show message
+
+-- | If any of our utxos are in the Merkle Block, update their blockHash in the
+-- DB.
+updateUTXOs :: MerkleblockMessage -> Connection' ()
+updateUTXOs merkleBlock = do
+  let getHash (DB.Entity _ x) = MerkleHash . BS.reverse . persistentUTXOOutTxHash $ x
+  utxos <- getAllUTXOs'
+  let hashes = merkleBlock^.merkleHashes
+      block = merkleBlock^.blockHeader
+      utxosInBlock = 
+        filter (\x -> getHash x `elem` hashes) utxos
+  if length utxosInBlock > 0 
+    then do
+      logDebug' $ "found a block for utxos " ++ 
+        (intercalate " " $ map (show . DB.entityKey) utxosInBlock)
+      mapM_ (\x -> setUTXOBlockHash' (DB.entityKey x) (hashBlock block))
+        utxosInBlock
+      writeUiUpdaterMessage' UTXOsUpdated
+    else return ()
+
+getDataMerkleBlock :: BlockHeader -> Connection' ()
+getDataMerkleBlock b = do
+  let inventoryObj = InventoryVector MSG_FILTERED_BLOCK . objectHash . hash . hashBlock $ b 
+      body = GetDataMessageBody $ GetDataMessage [inventoryObj]
+  writeMessageWithBody' body
 
 writeMessageWithBody' :: MessageBody -> Connection' ()
 writeMessageWithBody' body = do
@@ -651,6 +699,11 @@ handleInternalMessage' (AddAddress address) = do
       messageContext = MessageContext (context^.network)
       filterAddMessage = Message body messageContext
   writeMessage' filterAddMessage
+
+handleInternalMessage' RequestMerkleBlocks = do
+  top <- blockHeaderCount'
+  blocks <- fmap catMaybes $ mapM getBlockHeader' [top-5..top]
+  mapM_ getDataMerkleBlock blocks
 
 blockLocatorIndices :: BlockIndex -> [BlockIndex]
 blockLocatorIndices lastBlock' = reverse
