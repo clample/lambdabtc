@@ -28,11 +28,16 @@ import Database.Persist.Sql
   , runSqlPool
   , runSqlPersistMPool
   )
+import Database.Persist (Entity(..))
 import Control.Monad.IO.Class (liftIO, MonadIO)
 import Control.Monad.Trans.Class (MonadTrans, lift)
 import Control.Monad.Reader (ask)
 import Data.ByteString (ByteString)
 import Control.Lens ((^.))
+import Data.Aeson.TH
+  ( deriveJSON
+  , defaultOptions
+  )
 
 
 share [mkPersist sqlSettings, mkMigrate "migrateTables"] [persistLowerCase|
@@ -64,6 +69,18 @@ PersistentUTXO
 PersistentTransaction
     hash ByteString
 |]
+
+data DisplayPersistentUTXO = DisplayPersistentUTXO { dispKeySetId :: Int
+                                                   , dispValue :: Int
+                                                   , dispIsSpent :: Bool
+                                                   } deriving (Eq, Show)
+
+deriveJSON defaultOptions ''DisplayPersistentUTXO
+
+displayUTXO :: Entity PersistentUTXO -> DisplayPersistentUTXO
+displayUTXO (Entity key utxo) = DisplayPersistentUTXO (persistentUTXOKeySetId utxo)
+                                                      (persistentUTXOValue utxo)
+                                                      (persistentUTXOIsSpent utxo)
 
 
 migrateSchema :: ConnectionPool -> IO ()

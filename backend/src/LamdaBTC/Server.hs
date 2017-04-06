@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module LamdaBTC.Server (runApplication) where
 
-import LamdaBTC.Handlers 
+import LamdaBTC.Handlers
 import General.Config
 import General.InternalMessaging (UIUpdaterMessage(..))
 
@@ -36,6 +36,7 @@ application config = do
   get  "/fundrequests" getFundRequestsH
   post "/transactions" postTransactionsH
   get  "/status"       getStatusH
+  get  "/utxos"        getUTXOsH
 
 uiUpdater :: Config -> Connection -> IO ()
 uiUpdater config wsConn = do
@@ -51,4 +52,3 @@ websocketConnection :: Config -> IO ()
 websocketConnection config = runServer "127.0.0.1" (config^.websocketPort) acceptAndRun
   where
     acceptAndRun pendingConnection = acceptRequest pendingConnection >>= uiUpdater config
-

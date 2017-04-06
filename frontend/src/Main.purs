@@ -16,6 +16,7 @@ import Control.Monad.Eff.Class (liftEff)
 import Control.Monad.Eff.Var (($=))
 import Data.Const (Const)
 import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Array (cons)
 import Halogen.Aff.Util (runHalogenAff, awaitBody)
 import Halogen.Component.ChildPath (type (\/), type (<\/>))
 import Halogen.VDom.Driver (runUI)
@@ -38,12 +39,14 @@ messageListener (WS.Connection socket) query =
 
 type State =
   { requestFundsState :: Array FundRequest
+  , overviewState :: Array String
   , context :: Context
   }
 
 initialState :: Unit -> State
 initialState _ =
   { requestFundsState: []
+  , overviewState: []
   , context: OverviewContext }
 
 data Context =
@@ -79,7 +82,7 @@ ui = H.parentComponent { initialState, render, eval, receiver }
   render state = HH.div_
     [ nav
     , case state.context of
-          OverviewContext -> HH.slot' CP.cp1 OverviewSlot overviewComponent unit absurd
+          OverviewContext -> HH.slot' CP.cp1 OverviewSlot overviewComponent (state.overviewState) absurd
           RequestFundsContext -> HH.slot' CP.cp2 RequestFundsSlot requestFundsComponent (state.requestFundsState) absurd
           SendFundsContext -> HH.slot' CP.cp3 SendFundsSlot sendFundsComponent unit absurd
     ]
@@ -91,10 +94,15 @@ ui = H.parentComponent { initialState, render, eval, receiver }
       RequestFundsContext -> do
         fundRequests' <- H.query' CP.cp2 RequestFundsSlot (H.request GetRequestFundsState)
         H.modify (\s -> s {requestFundsState = fromMaybe [] fundRequests' })
+      -- OverviewContext     -> do
+      --   messages' <- H.query' CP.cp1 OverviewSlot (H.request Overview.GetOverviewState)
+      --   H.modify (\s -> s {overviewState = fromMaybe [] messages' })
       _                   -> pure unit
     H.modify (\s -> s {context = context})
     pure next
   eval (IncomingFunds msg next) = do
+    messages' <- H.gets (\s -> s.overviewState)
+    H.modify (\s -> s {overviewState = cons msg messages'})
     H.query' CP.cp1 OverviewSlot (H.action $ Overview.IncomingFunds msg)
     pure next
 

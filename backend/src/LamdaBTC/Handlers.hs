@@ -8,6 +8,7 @@ module LamdaBTC.Handlers
   , postTransactionsH
   , handleIncomingFunds
   , getStatusH
+  , getUTXOsH
   ) where
 
 import BitcoinCore.Keys
@@ -94,6 +95,13 @@ postFundRequestsH = do
       sendInternalMessage $ AddAddress address
       ScottyT.json fundRequest
       ScottyT.status Status.ok200
+
+getUTXOsH :: Action
+getUTXOsH = do
+  config <- lift ask
+  utxos <- runDB (selectList [] [])
+  ScottyT.status Status.ok200
+  ScottyT.json $ map displayUTXO (utxos :: [Entity PersistentUTXO])
 
 genKeySet :: Network -> IO KeySet
 genKeySet network' = do
