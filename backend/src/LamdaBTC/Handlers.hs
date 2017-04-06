@@ -46,8 +46,9 @@ import qualified Web.Scotty.Trans as ScottyT
 import GHC.Generics
 import Control.Monad.IO.Class (liftIO)
 import qualified Data.Text as T 
-import Database.Persist.Sql (insert_, selectList)
+import Database.Persist.Sql (insert_, selectList, fromSqlKey)
 import Database.Persist (Entity(..), get)
+import Database.Persist.Class (count)
 import Control.Monad.Reader (ask)
 import Control.Monad.Trans.Class (lift)
 import Control.Lens ((^.))
@@ -59,6 +60,7 @@ import GHC.Conc (atomically)
 import Data.Binary.Get (runGet)
 import Network.WebSockets (Connection, sendTextData)
 import qualified Database.Persist.Sql as DB
+import Data.List (elemIndex)
 
 defaultH :: Environment -> Error -> Action
 defaultH e x = do
@@ -99,11 +101,36 @@ postFundRequestsH = do
 
 getUTXOsH :: Action
 getUTXOsH = do
-  config <- lift ask
   utxos <- runDB (selectList [] [])
+--  blocks <- runDB (selectList [] [])
   sendInternalMessage $ RequestMerkleBlocks
+  nBlocks <- runDB $ count ([] :: [DB.Filter PersistentBlockHeader])
+  finalUTXOs <- mapM (upDateUTXOConfirm nBlocks) utxos
+  -- let pBlocks = map entityVal (blocks :: [Entity PersistentBlockHeader])
+  --     finalUTXOs = map (upDateUTXOConfirm pBlocks) (utxos :: [Entity PersistentUTXO])
   ScottyT.status Status.ok200
-  ScottyT.json $ map displayUTXO (utxos :: [Entity PersistentUTXO])
+  ScottyT.json finalUTXOs
+
+upDateUTXOConfirm :: Int -> Entity PersistentUTXO -> ActionT Error ConfigM DisplayPersistentUTXO
+upDateUTXOConfirm height (Entity key utxo) = do
+  let hash = persistentUTXOBlockHash utxo
+  n <- if hash == ""
+       then return 0
+       else do
+         blocks <- runDB (selectList [PersistentBlockHeaderHash DB.==. hash] []) 
+         case blocks of
+           [] -> return 0
+           (Entity key val:_) -> return $ height - (fromIntegral . fromSqlKey $ key)
+  return $ displayUTXO n utxo
+  -- displayUTXO n utxo
+  -- where
+  --   hash = persistentUTXOBlockHash utxo
+  --   noHash = hash == ""
+  --   minx = elemIndex hash (map persistentBlockHeaderHash bs)
+  --   n = case (noHash, minx) of
+  --     (True, _) -> 0
+  --     (False, Nothing) -> 0
+  --     (False, Just x) -> length bs - x
 
 genKeySet :: Network -> IO KeySet
 genKeySet network' = do

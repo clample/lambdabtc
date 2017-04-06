@@ -76,16 +76,17 @@ data DisplayPersistentUTXO = DisplayPersistentUTXO { dispKeySetId :: Int
                                                    , dispValue :: Int
                                                    , dispIsSpent :: Bool
                                                    , dispBlockHash :: Text
+                                                   , dispConfirmations :: Int
                                                    } deriving (Eq, Show)
 
 deriveJSON defaultOptions ''DisplayPersistentUTXO
 
-displayUTXO :: Entity PersistentUTXO -> DisplayPersistentUTXO
-displayUTXO (Entity key utxo) = DisplayPersistentUTXO (persistentUTXOKeySetId utxo)
-                                                      (persistentUTXOValue utxo)
-                                                      (persistentUTXOIsSpent utxo)
-                                                      (toText . fromBytes . persistentUTXOBlockHash $ utxo)
-
+displayUTXO :: Int -> PersistentUTXO -> DisplayPersistentUTXO
+displayUTXO confirms utxo = DisplayPersistentUTXO (persistentUTXOKeySetId utxo)
+                                                  (persistentUTXOValue utxo)
+                                                  (persistentUTXOIsSpent utxo)
+                                                  (toText . fromBytes . persistentUTXOBlockHash $ utxo)
+                                                  confirms
 
 migrateSchema :: ConnectionPool -> IO ()
 migrateSchema =

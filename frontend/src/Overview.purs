@@ -23,7 +23,7 @@ import Data.Argonaut ( jsonParser
 newtype UTXO = UTXO { keySetId :: Int
                     , value :: Int
                     , isSpent :: Boolean
-                    , blockHash :: String
+                    , confirmations :: Int
                     }
 
 instance decodeJsonUTXO :: DecodeJson UTXO where
@@ -32,11 +32,11 @@ instance decodeJsonUTXO :: DecodeJson UTXO where
     keySetId <- obj .? "dispKeySetId"
     value <- obj .? "dispValue"
     isSpent <- obj .? "dispIsSpent"
-    blockHash <- obj .? "dispBlockHash"
+    confirmations <- obj .? "dispConfirmations"
     pure $ UTXO { keySetId: keySetId
                 , value: value
                 , isSpent: isSpent
-                , blockHash: blockHash
+                , confirmations: confirmations
                 }
 
 type OverviewState = { totalFundsMessages :: Array String
@@ -76,7 +76,7 @@ overviewComponent = H.component { render, eval, initialState, receiver }
           [ HH.th_ [HH.text "Key Set"]
           , HH.th_ [HH.text "Value"]
           , HH.th_ [HH.text "Is Spent"]
-          , HH.th_ [HH.text "Block Hash"]
+          , HH.th_ [HH.text "Confirmations"]
           ]
         ]
       , HH.tbody_ (map renderUTXO state.utxoList)
@@ -106,7 +106,7 @@ renderUTXO (UTXO utxo) = HH.tr_
   [ HH.td_ [HH.text $ show utxo.keySetId]
   , HH.td_ [HH.text $ show utxo.value]
   , HH.td_ [HH.text $ show utxo.isSpent]
-  , HH.td_ [HH.text $ utxo.blockHash]
+  , HH.td_ [HH.text $ show utxo.confirmations]
   ] 
 
 getUTXOUpdate :: forall e b. (Respondable b) => Affjax e b
