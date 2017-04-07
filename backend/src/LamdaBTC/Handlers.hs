@@ -7,7 +7,6 @@ module LamdaBTC.Handlers
   , getFundRequestsH
   , postTransactionsH
   , handleIncomingFunds
-  , handleUTXOUpdate
   , getStatusH
   , getUTXOsH
   ) where
@@ -102,12 +101,8 @@ postFundRequestsH = do
 getUTXOsH :: Action
 getUTXOsH = do
   utxos <- runDB (selectList [] [])
---  blocks <- runDB (selectList [] [])
-  sendInternalMessage $ RequestMerkleBlocks
   nBlocks <- runDB $ count ([] :: [DB.Filter PersistentBlockHeader])
   finalUTXOs <- mapM (upDateUTXOConfirm nBlocks) utxos
-  -- let pBlocks = map entityVal (blocks :: [Entity PersistentBlockHeader])
-  --     finalUTXOs = map (upDateUTXOConfirm pBlocks) (utxos :: [Entity PersistentUTXO])
   ScottyT.status Status.ok200
   ScottyT.json finalUTXOs
 
@@ -122,15 +117,6 @@ upDateUTXOConfirm height (Entity key utxo) = do
            [] -> return 0
            (Entity key val:_) -> return $ height - (fromIntegral . fromSqlKey $ key)
   return $ displayUTXO n utxo
-  -- displayUTXO n utxo
-  -- where
-  --   hash = persistentUTXOBlockHash utxo
-  --   noHash = hash == ""
-  --   minx = elemIndex hash (map persistentBlockHeaderHash bs)
-  --   n = case (noHash, minx) of
-  --     (True, _) -> 0
-  --     (False, Nothing) -> 0
-  --     (False, Just x) -> length bs - x
 
 genKeySet :: Network -> IO KeySet
 genKeySet network' = do
@@ -231,10 +217,6 @@ handleIncomingFunds :: Connection -> TX.Value -> IO ()
 handleIncomingFunds connection val = do
   let valText = T.pack . show $ val
   sendTextData connection valText
-
-handleUTXOUpdate :: Connection -> IO ()
-handleUTXOUpdate connection = do
-  sendTextData connection ("utxos updated" :: T.Text)
   
 getStatusH :: Action
 getStatusH =

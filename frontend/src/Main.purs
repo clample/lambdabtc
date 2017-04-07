@@ -10,6 +10,7 @@ import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Overview as Overview
 import WebSocket as WS
+import Data.Tuple (Tuple(..))
 import Control.Monad.Aff (Aff)
 import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Class (liftEff)
@@ -22,7 +23,7 @@ import Halogen.Component.ChildPath (type (\/), type (<\/>))
 import Halogen.VDom.Driver (runUI)
 import Network.HTTP.Affjax (AffjaxResponse, get)
 import Network.HTTP.StatusCode (StatusCode(..))
-import Overview (OverviewSlot(..), overviewComponent)
+import Overview (OverviewSlot(..), overviewComponent, UTXO)
 import RequestFunds (RequestFundsQuery(..), RequestFundsSlot(..), requestFundsComponent, FundRequest)
 import Requests (Effects, server)
 import SendFunds (SendFundsQuery, SendFundsSlot(..), sendFundsComponent)
@@ -35,18 +36,20 @@ messageListener :: forall eff
 messageListener (WS.Connection socket) query =
   socket.onmessage $= \event -> do
     let msg = WS.runMessage <<< WS.runMessageEvent $ event
-    HA.runHalogenAff <<< query <<< H.action <<< IncomingFunds $ msg
+    if msg == "NewBlock" || msg == "UTXOsUpdated" 
+      then HA.runHalogenAff <<< query <<< H.action $ UpdateUTXOs
+      else HA.runHalogenAff <<< query <<< H.action <<< IncomingFunds $ msg
 
 type State =
   { requestFundsState :: Array FundRequest
-  , overviewState :: Array String
+  , overviewState :: Tuple (Array String) (Array UTXO)
   , context :: Context
   }
 
 initialState :: Unit -> State
 initialState _ =
   { requestFundsState: []
-  , overviewState: []
+  , overviewState: Tuple [] []
   , context: OverviewContext }
 
 data Context =
@@ -57,6 +60,7 @@ data Context =
 data Query a
   = ToggleContext Context a
   | IncomingFunds String a
+  | UpdateUTXOs a
 
 type ChildQuery = Overview.OverviewQuery <\/> RequestFundsQuery <\/> SendFundsQuery <\/> Const Void
 type ChildSlot = OverviewSlot \/ RequestFundsSlot \/ SendFundsSlot \/ Void
@@ -94,16 +98,19 @@ ui = H.parentComponent { initialState, render, eval, receiver }
       RequestFundsContext -> do
         fundRequests' <- H.query' CP.cp2 RequestFundsSlot (H.request GetRequestFundsState)
         H.modify (\s -> s {requestFundsState = fromMaybe [] fundRequests' })
-      -- OverviewContext     -> do
-      --   messages' <- H.query' CP.cp1 OverviewSlot (H.request Overview.GetOverviewState)
-      --   H.modify (\s -> s {overviewState = fromMaybe [] messages' })
+      OverviewContext -> do
+        ovSt <- H.query' CP.cp1 OverviewSlot (H.request Overview.GetOverviewState)
+        H.modify (\s -> s {overviewState = fromMaybe (Tuple [] []) ovSt })
       _                   -> pure unit
     H.modify (\s -> s {context = context})
     pure next
   eval (IncomingFunds msg next) = do
-    messages' <- H.gets (\s -> s.overviewState)
-    H.modify (\s -> s {overviewState = cons msg messages'})
+    Tuple messages' utxos <- H.gets (\s -> s.overviewState)
+    H.modify (\s -> s {overviewState = Tuple (cons msg messages') utxos})
     H.query' CP.cp1 OverviewSlot (H.action $ Overview.IncomingFunds msg)
+    pure next
+  eval (UpdateUTXOs next) = do
+    H.query' CP.cp1 OverviewSlot (H.action $ Overview.UpdateUTXOs)
     pure next
 
 waitForServer :: Aff (HA.HalogenEffects (Effects ())) Unit
@@ -113,7 +120,6 @@ waitForServer =  do
     then waitForServer
     else pure unit
 
-
 main :: Eff (HA.HalogenEffects (Effects ())) Unit
 main = do
   runHalogenAff waitForServer
@@ -121,4 +127,5 @@ main = do
   runHalogenAff do
     body <- awaitBody
     io <- runUI ui unit body
+    liftEff $ HA.runHalogenAff <<< io.query <<< H.action $ UpdateUTXOs
     liftEff $ messageListener connection io.query

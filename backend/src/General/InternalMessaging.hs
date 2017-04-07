@@ -6,10 +6,10 @@ import BitcoinCore.Keys (Address)
 data InternalMessage
   = SendTX Transaction
   | AddAddress Address
-  | RequestMerkleBlocks
   deriving (Show, Eq)
 
 data UIUpdaterMessage
   = IncomingFunds Value
   | UTXOsUpdated
+  | NewBlock
   deriving (Show, Eq)

@@ -207,7 +207,7 @@ data ConnectionInteraction next
   | GetTransactionFromHash TxHash (Maybe Integer -> next)
   | GetAllAddresses ([Address] -> next)
   | PersistUTXOs [PersistentUTXO] next
-  | GetAllUTXOs ([DB.Entity PersistentUTXO] -> next)
+  | GetUnspentUTXOs ([DB.Entity PersistentUTXO] -> next)
   | SetUTXOBlockHash (DB.Key PersistentUTXO) BlockHash next
   | Log LogEntry next
 
@@ -228,7 +228,7 @@ instance Functor ConnectionInteraction where
   fmap f (GetTransactionFromHash  h g) = GetTransactionFromHash  h (f . g)
   fmap f (GetAllAddresses           g) = GetAllAddresses           (f . g)
   fmap f (PersistUTXOs            u x) = PersistUTXOs            u (f x)
-  fmap f (GetAllUTXOs               g) = GetAllUTXOs               (f . g)
+  fmap f (GetUnspentUTXOs           g) = GetUnspentUTXOs           (f . g)
   fmap f (SetUTXOBlockHash      k h x) = SetUTXOBlockHash      k h (f x)
   fmap f (Log                    le x) = Log                    le (f x)
 
@@ -305,8 +305,8 @@ getAllAddresses' = liftF (GetAllAddresses id)
 persistUTXOs' :: [PersistentUTXO] -> Connection' ()
 persistUTXOs' persistentUTXOs = liftF (PersistUTXOs persistentUTXOs ())
 
-getAllUTXOs' :: Connection' [DB.Entity PersistentUTXO]
-getAllUTXOs' = liftF (GetAllUTXOs id)
+getUnspentUTXOs' :: Connection' [DB.Entity PersistentUTXO]
+getUnspentUTXOs' = liftF (GetUnspentUTXOs id)
 
 setUTXOBlockHash' :: (DB.Key PersistentUTXO) -> BlockHash -> Connection' ()
 setUTXOBlockHash' k h = liftF (SetUTXOBlockHash k h ())
@@ -327,7 +327,6 @@ setLastBlock' i = do
   context <- getContext'
   let newContext = mutableContext.lastBlock .~ i $ context
   setContext' $ newContext^.mutableContext
-
 
 
 interpretConnProd :: InterpreterContext -> Connection' r -> IO r
@@ -379,8 +378,8 @@ interpretConnProd ic conn = case conn of
   Free (PersistUTXOs utxos n) -> do
     Persistence.persistUTXOs (ic^.ioHandlers.pool) utxos
     interpretConnProd ic n
-  Free (GetAllUTXOs f) -> do
-    utxos <- Persistence.getAllUTXOs (ic^.ioHandlers.pool)
+  Free (GetUnspentUTXOs f) -> do
+    utxos <- Persistence.getUnspentUTXOs (ic^.ioHandlers.pool)
     interpretConnProd ic (f utxos)
   Free (SetUTXOBlockHash k h n) -> do
     Persistence.setUTXOBlockHash (ic^.ioHandlers.pool) k h
@@ -400,8 +399,9 @@ handleResponse' (Message (VersionMessageBody body) _) = do
   let lastBlockPeer = body^.lastBlock
   synchronizeHeaders' lastBlockPeer
 
-handleResponse' (Message (HeadersMessageBody (HeadersMessage headers)) _) =
+handleResponse' (Message (HeadersMessageBody (HeadersMessage headers)) _) = do
   handleNewHeaders headers
+  getDataMerkleBlock headers
 
 handleResponse' (Message (MerkleblockMessageBody message) _) = do
   handleNewHeaders [message^.blockHeader]
@@ -434,7 +434,11 @@ handleResponse' (Message (TxMessageBody message) _) = do
     persistentUTXOs <- retrieveUTXOs
     addUTXOs persistentUTXOs
     let val = sum $ map (persistentUTXOValue) persistentUTXOs
-    if val > 0 then writeUiUpdaterMessage' . IncomingFunds . Satoshis $ val else return ()
+    if val > 0 then writeUiUpdaterMessage'
+                  . IncomingFunds
+                  . Satoshis
+                  $ val
+               else return ()
     persistTransaction' (message^.transaction)
   where
     retrieveUTXOs = do
@@ -458,8 +462,11 @@ handleResponse' message = logError' $
 -- DB.
 updateUTXOs :: MerkleblockMessage -> Connection' ()
 updateUTXOs merkleBlock = do
-  let getHash (DB.Entity _ x) = MerkleHash . BS.reverse . persistentUTXOOutTxHash $ x
-  utxos <- getAllUTXOs'
+  let getHash (DB.Entity _ x) = MerkleHash
+                              . BS.reverse
+                              . persistentUTXOOutTxHash $ x
+    -- ^ note that the hash seems to be reversed
+  utxos <- getUnspentUTXOs'
   let hashes = merkleBlock^.merkleHashes
       block = merkleBlock^.blockHeader
       utxosInBlock = 
@@ -473,10 +480,13 @@ updateUTXOs merkleBlock = do
       writeUiUpdaterMessage' UTXOsUpdated
     else return ()
 
-getDataMerkleBlock :: BlockHeader -> Connection' ()
-getDataMerkleBlock b = do
-  let inventoryObj = InventoryVector MSG_FILTERED_BLOCK . objectHash . hash . hashBlock $ b 
-      body = GetDataMessageBody $ GetDataMessage [inventoryObj]
+getDataMerkleBlock :: [BlockHeader] -> Connection' ()
+getDataMerkleBlock bs = do
+  let inventoryObj = map ( InventoryVector MSG_FILTERED_BLOCK
+                         . objectHash
+                         . hash
+                         . hashBlock) bs
+      body = GetDataMessageBody $ GetDataMessage inventoryObj
   writeMessageWithBody' body
 
 writeMessageWithBody' :: MessageBody -> Connection' ()
@@ -492,6 +502,7 @@ handleNewHeaders newHeaders = do
   if isValid
     then persistHeaders' newHeaders
     else constructChain newHeaders
+  writeUiUpdaterMessage' NewBlock
 
 -- Try to construct a new blockchain using `headers`
 -- if we can construct a new blockchain and it's longer than the active chain,
@@ -699,11 +710,6 @@ handleInternalMessage' (AddAddress address) = do
       messageContext = MessageContext (context^.network)
       filterAddMessage = Message body messageContext
   writeMessage' filterAddMessage
-
-handleInternalMessage' RequestMerkleBlocks = do
-  top <- blockHeaderCount'
-  blocks <- fmap catMaybes $ mapM getBlockHeader' [top-5..top]
-  mapM_ getDataMerkleBlock blocks
 
 blockLocatorIndices :: BlockIndex -> [BlockIndex]
 blockLocatorIndices lastBlock' = reverse
