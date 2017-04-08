@@ -72,6 +72,8 @@ PersistentTransaction
     hash ByteString
 |]
 
+-- | How data on utxos will be exposed via the HTTP API
+--
 data DisplayPersistentUTXO = DisplayPersistentUTXO { dispKeySetId :: Int
                                                    , dispValue :: Int
                                                    , dispIsSpent :: Bool
@@ -81,11 +83,17 @@ data DisplayPersistentUTXO = DisplayPersistentUTXO { dispKeySetId :: Int
 
 deriveJSON defaultOptions ''DisplayPersistentUTXO
 
+-- | Generate a UTXO for display from the persistent utxo and the number of
+-- confirmations it has.
+--
 displayUTXO :: Int -> PersistentUTXO -> DisplayPersistentUTXO
 displayUTXO confirms utxo = DisplayPersistentUTXO (persistentUTXOKeySetId utxo)
                                                   (persistentUTXOValue utxo)
                                                   (persistentUTXOIsSpent utxo)
-                                                  (toText . fromBytes . persistentUTXOBlockHash $ utxo)
+                                                  (toText
+                                                   . fromBytes
+                                                   . persistentUTXOBlockHash
+                                                   $ utxo)
                                                   confirms
 
 migrateSchema :: ConnectionPool -> IO ()

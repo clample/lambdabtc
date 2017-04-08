@@ -401,11 +401,11 @@ handleResponse' (Message (VersionMessageBody body) _) = do
 
 handleResponse' (Message (HeadersMessageBody (HeadersMessage headers)) _) = do
   handleNewHeaders headers
-  getDataMerkleBlock headers
+  getDataMerkleBlock headers -- request merkle blocks to look for our utxos
 
 handleResponse' (Message (MerkleblockMessageBody message) _) = do
   handleNewHeaders [message^.blockHeader]
-  updateUTXOs message
+  updateUTXOs message -- update utxos with this block header in the db
 
 handleResponse' (Message (GetHeadersMessageBody message) _) = do
   match <- firstHeaderMatch' (message^.blockLocatorHashes)
@@ -431,10 +431,10 @@ handleResponse' (Message (TxMessageBody message) _) = do
   isHandled <- isTransactionHandled'
   unless isHandled $ do
     logDebug' $ "Transaction was not previously handled. Handling now."
-    persistentUTXOs <- retrieveUTXOs
-    addUTXOs persistentUTXOs
+    persistentUTXOs <- retrieveUTXOs -- utxos to us in this tx
+    persistUTXOs' persistentUTXOs
     let val = sum $ map (persistentUTXOValue) persistentUTXOs
-    if val > 0 then writeUiUpdaterMessage'
+    if val > 0 then writeUiUpdaterMessage' -- notify frontend of new utxo
                   . IncomingFunds
                   . Satoshis
                   $ val
@@ -446,8 +446,6 @@ handleResponse' (Message (TxMessageBody message) _) = do
       let indexedPubkeyHashes = zip [1..] pubKeyHashes
           persistentUTXOs = getUTXOS indexedPubkeyHashes (message^.transaction)
       return persistentUTXOs
-    addUTXOs persistentUTXOs = do
-      persistUTXOs' persistentUTXOs
     isTransactionHandled' = do
       let txHash = hashTransaction $ message^.transaction
       mTx <- getTransactionFromHash' txHash
@@ -469,14 +467,15 @@ updateUTXOs merkleBlock = do
   utxos <- getUnspentUTXOs'
   let hashes = merkleBlock^.merkleHashes
       block = merkleBlock^.blockHeader
-      utxosInBlock = 
+      utxosInBlock =
         filter (\x -> getHash x `elem` hashes) utxos
-  if length utxosInBlock > 0 
+  if length utxosInBlock > 0
     then do
-      logDebug' $ "found a block for utxos " ++ 
+      logDebug' $ "found a block for utxos " ++
         (intercalate " " $ map (show . DB.entityKey) utxosInBlock)
       mapM_ (\x -> setUTXOBlockHash' (DB.entityKey x) (hashBlock block))
         utxosInBlock
+        -- ^ set the block hash for each utxo in this block
       writeUiUpdaterMessage' UTXOsUpdated
     else return ()
 

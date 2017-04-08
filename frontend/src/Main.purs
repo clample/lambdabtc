@@ -36,13 +36,14 @@ messageListener :: forall eff
 messageListener (WS.Connection socket) query =
   socket.onmessage $= \event -> do
     let msg = WS.runMessage <<< WS.runMessageEvent $ event
-    if msg == "NewBlock" || msg == "UTXOsUpdated" 
+    if msg == "NewBlock" || msg == "UTXOsUpdated"
       then HA.runHalogenAff <<< query <<< H.action $ UpdateUTXOs
       else HA.runHalogenAff <<< query <<< H.action <<< IncomingFunds $ msg
 
 type State =
   { requestFundsState :: Array FundRequest
   , overviewState :: Tuple (Array String) (Array UTXO)
+    -- ^ state is a list of messages and a list of utxos
   , context :: Context
   }
 
@@ -128,4 +129,5 @@ main = do
     body <- awaitBody
     io <- runUI ui unit body
     liftEff $ HA.runHalogenAff <<< io.query <<< H.action $ UpdateUTXOs
+    -- ^ when opening, call UpdateUTXOs to intialize data
     liftEff $ messageListener connection io.query

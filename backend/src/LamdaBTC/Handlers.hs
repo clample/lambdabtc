@@ -98,24 +98,34 @@ postFundRequestsH = do
       ScottyT.json fundRequest
       ScottyT.status Status.ok200
 
+-- | return a list of utxos in JSON format
+--
 getUTXOsH :: Action
 getUTXOsH = do
   utxos <- runDB (selectList [] [])
   nBlocks <- runDB $ count ([] :: [DB.Filter PersistentBlockHeader])
+   -- ^ current number of headers
   finalUTXOs <- mapM (upDateUTXOConfirm nBlocks) utxos
   ScottyT.status Status.ok200
   ScottyT.json finalUTXOs
 
-upDateUTXOConfirm :: Int -> Entity PersistentUTXO -> ActionT Error ConfigM DisplayPersistentUTXO
+-- | Given the current number of headers and a persistent utxo this calculates
+-- the number of confirmations and generates a utxo for display.
+--
+upDateUTXOConfirm :: Int
+                  -> Entity PersistentUTXO
+                  -> ActionT Error ConfigM DisplayPersistentUTXO
 upDateUTXOConfirm height (Entity key utxo) = do
   let hash = persistentUTXOBlockHash utxo
-  n <- if hash == ""
+  n <- if hash == "" -- utxo hasn't appeared in a block yet
        then return 0
        else do
          blocks <- runDB (selectList [PersistentBlockHeaderHash DB.==. hash] []) 
          case blocks of
-           [] -> return 0
-           (Entity key val:_) -> return $ height - (fromIntegral . fromSqlKey $ key)
+           [] -> return 0 -- that block isn't in our chain
+           (Entity key val:_) -> return $ height - (fromIntegral
+                                                    . fromSqlKey
+                                                    $ key)
   return $ displayUTXO n utxo
 
 genKeySet :: Network -> IO KeySet

@@ -102,13 +102,15 @@ renderMessages xs = concatMap renderMessage xs
 renderMessage :: String -> Array (H.ComponentHTML OverviewQuery)
 renderMessage str = [HH.text str, HH.br_]
 
+-- | Render single utxo as a table row
+--
 renderUTXO :: UTXO -> H.ComponentHTML OverviewQuery
 renderUTXO (UTXO utxo) = HH.tr_
   [ HH.td_ [HH.text $ show utxo.keySetId]
   , HH.td_ [HH.text $ show utxo.value]
   , HH.td_ [HH.text $ show utxo.isSpent]
   , HH.td_ [HH.text $ show utxo.confirmations]
-  ] 
+  ]
 
 getUTXOUpdate :: forall e b. (Respondable b) => Affjax e b
 getUTXOUpdate = get (server <> "/utxos")
