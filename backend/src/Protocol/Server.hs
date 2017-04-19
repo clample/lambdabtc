@@ -267,12 +267,18 @@ persistHeaders' headers = do
     ++ "\n\t`lastBlock` changed from "
     ++ show (contextOld^.mutableContext.lastBlock)
     ++ " to " ++ show (contextNew^.mutableContext.lastBlock)
-  
 
 persistHeader' :: BlockHeader -> Connection' ()
 persistHeader' header = do
+  contextOld <- getContext'
   liftF (PersistBlockHeader header ())
   incrementLastBlock' 1
+  contextNew <- getContext'
+  logDebug' $
+    "Adding single block to main chain: " ++ showBlocks [header]
+    ++ "\n\t`lastBlock` changed from "
+    ++ show (contextOld^.mutableContext.lastBlock)
+    ++ " to " ++ show (contextNew^.mutableContext.lastBlock)
 
 getBlockHeaderFromHash' :: BlockHash
                         -> Connection' (Maybe (BlockIndex, BlockHeader))
@@ -328,60 +334,77 @@ setLastBlock' i = do
   let newContext = mutableContext.lastBlock .~ i $ context
   setContext' $ newContext^.mutableContext
 
-
 interpretConnProd :: InterpreterContext -> Connection' r -> IO r
 interpretConnProd ic conn = case conn of
-  Free (GetContext f) -> 
+  Free (GetContext f) -> do
+    putStrLn "Action GetContext"
     interpretConnProd ic (f $ ic^.context)
   Free (SetContext mc n) -> do
+    putStrLn "Action SetContext"
     let newIC = context.mutableContext .~ mc $ ic
     interpretConnProd newIC n
   Free (ReadMessage f) -> do
+    putStrLn "\n\tAction ReadMessage"
     mMessage <- liftIO . atomically . readTBMChan $ (ic^.ioHandlers.listenChan)
     interpretConnProd ic (f mMessage)
   Free (WriteMessage m n) -> do
+    putStrLn "\n\tAction WriteMessage"
     writeMessage (ic^.ioHandlers.writerChan) m 
     interpretConnProd ic n
   Free (WriteUIUpdaterMessage m n) -> do
+    putStrLn "\n\tAction WriteUIUpdaterMessage"
     writeUiUpdaterMessage (ic^.ioHandlers.uiUpdaterChan) m
     interpretConnProd ic n
   Free (GetBlockHeader i f) -> do
+    putStrLn "\n\tAction getBlockHeader"
     mBlock <- Persistence.getBlockWithIndex (ic^.ioHandlers.pool) i
     interpretConnProd ic (f mBlock)
   Free (BlockHeaderCount f) -> do
+    putStrLn "\n\tAction BlockHeaderCount"
     blockHeaderCount <- Persistence.getLastBlock $ ic^.ioHandlers.pool
     interpretConnProd ic (f blockHeaderCount)
   Free (PersistBlockHeaders headers n) -> do
+    putStrLn "\n\tAction PersistBlockHeaders"
     Persistence.persistHeaders (ic^.ioHandlers.pool) headers
     interpretConnProd ic n
   Free (PersistBlockHeader header n) -> do
+    putStrLn "\n\tAction PersistBlockHeader"
     Persistence.persistHeader (ic^.ioHandlers.pool) header
     interpretConnProd ic n
   Free (GetBlockHeaderFromHash hash f) -> do
+    putStrLn "\n\tAction GetBlockHeaderFromHash"
     mBlock <- Persistence.getBlockHeaderFromHash (ic^.ioHandlers.pool) hash
     interpretConnProd ic (f mBlock)
   Free (DeleteBlockHeaders inx n) -> do
+    putStrLn "\n\tAction DeleteBlockHeaders"
     Persistence.deleteHeaders (ic^.ioHandlers.pool) inx
     interpretConnProd ic n
   Free (NHeadersSinceKey n keyId f) -> do
+    putStrLn "\n\tAction NHeadersSinceKey"
     headers <- Persistence.nHeadersSinceKey (ic^.ioHandlers.pool) n keyId
     interpretConnProd ic (f headers)
   Free (PersistTransaction tx n) -> do
+    putStrLn "\n\tAction PersistTransaction"
     Persistence.persistTransaction (ic^.ioHandlers.pool) tx
     interpretConnProd ic n
   Free (GetTransactionFromHash hash f) -> do
+    putStrLn "\n\tAction GetTransactionFromHash"
     mTx <- Persistence.getTransactionFromHash (ic^.ioHandlers.pool) hash
     interpretConnProd ic (f mTx)
   Free (GetAllAddresses f) -> do
+    putStrLn "\n\tAction GetAllAddresses"
     addresses <- Persistence.getAllAddresses (ic^.ioHandlers.pool)
     interpretConnProd ic (f addresses)
   Free (PersistUTXOs utxos n) -> do
+    putStrLn "\n\tAction PersistUTXOs"
     Persistence.persistUTXOs (ic^.ioHandlers.pool) utxos
     interpretConnProd ic n
   Free (GetUnspentUTXOs f) -> do
+    putStrLn "\n\tAction GetUnspentUTXOs"
     utxos <- Persistence.getUnspentUTXOs (ic^.ioHandlers.pool)
     interpretConnProd ic (f utxos)
   Free (SetUTXOBlockHash k h n) -> do
+    putStrLn "\n\tAction SetUTXOBlockHash"
     Persistence.setUTXOBlockHash (ic^.ioHandlers.pool) k h
     interpretConnProd ic n
   Free (Log le n) -> do

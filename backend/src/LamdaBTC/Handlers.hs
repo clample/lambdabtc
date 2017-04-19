@@ -102,7 +102,7 @@ postFundRequestsH = do
 --
 getUTXOsH :: Action
 getUTXOsH = do
-  utxos <- runDB (selectList [] [])
+  utxos <- runDB (selectList [PersistentUTXOIsSpent DB.==. False] [])
   nBlocks <- runDB $ count ([] :: [DB.Filter PersistentBlockHeader])
    -- ^ current number of headers
   finalUTXOs <- mapM (upDateUTXOConfirm nBlocks) utxos
