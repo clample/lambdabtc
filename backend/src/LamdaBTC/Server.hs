@@ -19,6 +19,8 @@ import Network.WebSockets ( acceptRequest
 import Control.Concurrent.STM (atomically)
 import Data.Conduit.TMChan (readTBMChan)
 import Control.Concurrent (forkIO)
+import Network.WebSockets (sendTextData)
+import Data.Text as T
 
 runApplication :: Config -> IO ()
 runApplication c = do
@@ -46,6 +48,9 @@ uiUpdater config wsConn = do
     Just uiUpdaterMessage -> 
       case uiUpdaterMessage of
         IncomingFunds v -> handleIncomingFunds wsConn v
+        UTXOsUpdated    -> sendTextData wsConn ("UTXOsUpdated" :: T.Text)
+        NewBlock        -> sendTextData wsConn ("NewBlock" :: T.Text)
+
   uiUpdater config wsConn
   
 websocketConnection :: Config -> IO ()

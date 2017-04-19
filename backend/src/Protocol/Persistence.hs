@@ -142,3 +142,10 @@ getUnspentUTXOs pool = do
 setUtxoSpent :: ConnectionPool -> DB.Key PersistentUTXO -> IO ()
 setUtxoSpent pool key =
   runSqlPool (update key [PersistentUTXOIsSpent =. True]) pool
+
+setUTXOBlockHash :: ConnectionPool
+                 -> DB.Key PersistentUTXO
+                 -> BlockHash
+                 -> IO ()
+setUTXOBlockHash pool key (Hash hash') =
+  runSqlPool (update key [PersistentUTXOBlockHash =. hash']) pool

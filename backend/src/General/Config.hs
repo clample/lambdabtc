@@ -65,8 +65,8 @@ instance HasAppChan Config where
 developmentConfig :: IO Config
 developmentConfig = do
   let env = Development
-      network' = MainNet
-      -- network' = TestNet3 -- switch with previous 
+      -- network' = MainNet
+      network' = TestNet3 -- switch with previous 
   pool' <- runStdoutLoggingT $
     createSqlitePool (dbFile network') (getConnectionSize env)
   chan <- atomically $ newTBMChan 16

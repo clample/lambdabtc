@@ -8,5 +8,8 @@ data InternalMessage
   | AddAddress Address
   deriving (Show, Eq)
 
-newtype UIUpdaterMessage
+data UIUpdaterMessage
   = IncomingFunds Value
+  | UTXOsUpdated
+  | NewBlock
+  deriving (Show, Eq)

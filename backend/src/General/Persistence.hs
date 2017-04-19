@@ -38,6 +38,7 @@ import Data.Aeson.TH
   ( deriveJSON
   , defaultOptions
   )
+import Data.HexString (toText, fromBytes)
 
 
 share [mkPersist sqlSettings, mkMigrate "migrateTables"] [persistLowerCase|
@@ -66,22 +67,34 @@ PersistentUTXO
     keySetId Int
     value Int
     isSpent Bool
+    blockHash ByteString
 PersistentTransaction
     hash ByteString
 |]
 
+-- | How data on utxos will be exposed via the HTTP API
+--
 data DisplayPersistentUTXO = DisplayPersistentUTXO { dispKeySetId :: Int
                                                    , dispValue :: Int
                                                    , dispIsSpent :: Bool
+                                                   , dispBlockHash :: Text
+                                                   , dispConfirmations :: Int
                                                    } deriving (Eq, Show)
 
 deriveJSON defaultOptions ''DisplayPersistentUTXO
 
-displayUTXO :: Entity PersistentUTXO -> DisplayPersistentUTXO
-displayUTXO (Entity key utxo) = DisplayPersistentUTXO (persistentUTXOKeySetId utxo)
-                                                      (persistentUTXOValue utxo)
-                                                      (persistentUTXOIsSpent utxo)
-
+-- | Generate a UTXO for display from the persistent utxo and the number of
+-- confirmations it has.
+--
+displayUTXO :: Int -> PersistentUTXO -> DisplayPersistentUTXO
+displayUTXO confirms utxo = DisplayPersistentUTXO (persistentUTXOKeySetId utxo)
+                                                  (persistentUTXOValue utxo)
+                                                  (persistentUTXOIsSpent utxo)
+                                                  (toText
+                                                   . fromBytes
+                                                   . persistentUTXOBlockHash
+                                                   $ utxo)
+                                                  confirms
 
 migrateSchema :: ConnectionPool -> IO ()
 migrateSchema =

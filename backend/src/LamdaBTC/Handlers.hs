@@ -45,8 +45,9 @@ import qualified Web.Scotty.Trans as ScottyT
 import GHC.Generics
 import Control.Monad.IO.Class (liftIO)
 import qualified Data.Text as T 
-import Database.Persist.Sql (insert_, selectList)
+import Database.Persist.Sql (insert_, selectList, fromSqlKey)
 import Database.Persist (Entity(..), get)
+import Database.Persist.Class (count)
 import Control.Monad.Reader (ask)
 import Control.Monad.Trans.Class (lift)
 import Control.Lens ((^.))
@@ -58,6 +59,7 @@ import GHC.Conc (atomically)
 import Data.Binary.Get (runGet)
 import Network.WebSockets (Connection, sendTextData)
 import qualified Database.Persist.Sql as DB
+import Data.List (elemIndex)
 
 defaultH :: Environment -> Error -> Action
 defaultH e x = do
@@ -96,12 +98,35 @@ postFundRequestsH = do
       ScottyT.json fundRequest
       ScottyT.status Status.ok200
 
+-- | return a list of utxos in JSON format
+--
 getUTXOsH :: Action
 getUTXOsH = do
-  config <- lift ask
-  utxos <- runDB (selectList [] [])
+  utxos <- runDB (selectList [PersistentUTXOIsSpent DB.==. False] [])
+  nBlocks <- runDB $ count ([] :: [DB.Filter PersistentBlockHeader])
+   -- ^ current number of headers
+  finalUTXOs <- mapM (upDateUTXOConfirm nBlocks) utxos
   ScottyT.status Status.ok200
-  ScottyT.json $ map displayUTXO (utxos :: [Entity PersistentUTXO])
+  ScottyT.json finalUTXOs
+
+-- | Given the current number of headers and a persistent utxo this calculates
+-- the number of confirmations and generates a utxo for display.
+--
+upDateUTXOConfirm :: Int
+                  -> Entity PersistentUTXO
+                  -> ActionT Error ConfigM DisplayPersistentUTXO
+upDateUTXOConfirm height (Entity key utxo) = do
+  let hash = persistentUTXOBlockHash utxo
+  n <- if hash == "" -- utxo hasn't appeared in a block yet
+       then return 0
+       else do
+         blocks <- runDB (selectList [PersistentBlockHeaderHash DB.==. hash] []) 
+         case blocks of
+           [] -> return 0 -- that block isn't in our chain
+           (Entity key val:_) -> return $ height - (fromIntegral
+                                                    . fromSqlKey
+                                                    $ key)
+  return $ displayUTXO n utxo
 
 genKeySet :: Network -> IO KeySet
 genKeySet network' = do

@@ -45,13 +45,14 @@ import BitcoinCore.BloomFilter
   , defaultFilterWithElements
   )
 import BitcoinCore.Keys (addressToPubKeyHash, Address(..))
-import BitcoinCore.Inventory (InventoryVector(..), ObjectType(..))
+import BitcoinCore.Inventory (InventoryVector(..), ObjectType(..), objectHash)
 import BitcoinCore.Transaction.Transactions
   ( Value(..)
   , Transaction(..)
   , TxHash
   , hashTransaction
   )
+import BitcoinCore.MerkleTrees (MerkleHash(..))
 import General.Config
   ( Config(..)
   , HasAppChan(..)
@@ -91,9 +92,12 @@ import Control.Concurrent.STM (atomically)
 import Control.Concurrent (forkIO)
 import Data.Binary (Binary(..))
 import Data.ByteString.Base16 (decode)
+import qualified Data.ByteString as BS
 import Control.Lens ((^.), (%~), (.~))
 import Control.Monad.Free (Free(..), liftF)
 import Data.Maybe (catMaybes)
+import Data.List (intercalate)
+import qualified Database.Persist as DB
 
 connectTestnet :: Config -> IO () 
 connectTestnet config = do
@@ -203,6 +207,8 @@ data ConnectionInteraction next
   | GetTransactionFromHash TxHash (Maybe Integer -> next)
   | GetAllAddresses ([Address] -> next)
   | PersistUTXOs [PersistentUTXO] next
+  | GetUnspentUTXOs ([DB.Entity PersistentUTXO] -> next)
+  | SetUTXOBlockHash (DB.Key PersistentUTXO) BlockHash next
   | Log LogEntry next
 
 instance Functor ConnectionInteraction where
@@ -222,6 +228,8 @@ instance Functor ConnectionInteraction where
   fmap f (GetTransactionFromHash  h g) = GetTransactionFromHash  h (f . g)
   fmap f (GetAllAddresses           g) = GetAllAddresses           (f . g)
   fmap f (PersistUTXOs            u x) = PersistUTXOs            u (f x)
+  fmap f (GetUnspentUTXOs           g) = GetUnspentUTXOs           (f . g)
+  fmap f (SetUTXOBlockHash      k h x) = SetUTXOBlockHash      k h (f x)
   fmap f (Log                    le x) = Log                    le (f x)
 
 type Connection' = Free ConnectionInteraction
@@ -259,12 +267,18 @@ persistHeaders' headers = do
     ++ "\n\t`lastBlock` changed from "
     ++ show (contextOld^.mutableContext.lastBlock)
     ++ " to " ++ show (contextNew^.mutableContext.lastBlock)
-  
 
 persistHeader' :: BlockHeader -> Connection' ()
 persistHeader' header = do
+  contextOld <- getContext'
   liftF (PersistBlockHeader header ())
   incrementLastBlock' 1
+  contextNew <- getContext'
+  logDebug' $
+    "Adding single block to main chain: " ++ showBlocks [header]
+    ++ "\n\t`lastBlock` changed from "
+    ++ show (contextOld^.mutableContext.lastBlock)
+    ++ " to " ++ show (contextNew^.mutableContext.lastBlock)
 
 getBlockHeaderFromHash' :: BlockHash
                         -> Connection' (Maybe (BlockIndex, BlockHeader))
@@ -297,6 +311,12 @@ getAllAddresses' = liftF (GetAllAddresses id)
 persistUTXOs' :: [PersistentUTXO] -> Connection' ()
 persistUTXOs' persistentUTXOs = liftF (PersistUTXOs persistentUTXOs ())
 
+getUnspentUTXOs' :: Connection' [DB.Entity PersistentUTXO]
+getUnspentUTXOs' = liftF (GetUnspentUTXOs id)
+
+setUTXOBlockHash' :: (DB.Key PersistentUTXO) -> BlockHash -> Connection' ()
+setUTXOBlockHash' k h = liftF (SetUTXOBlockHash k h ())
+
 log' :: LogEntry -> Connection' ()
 log' le = liftF (Log le ())
 
@@ -316,52 +336,76 @@ setLastBlock' i = do
 
 interpretConnProd :: InterpreterContext -> Connection' r -> IO r
 interpretConnProd ic conn = case conn of
-  Free (GetContext f) -> 
+  Free (GetContext f) -> do
+    putStrLn "Action GetContext"
     interpretConnProd ic (f $ ic^.context)
   Free (SetContext mc n) -> do
+    putStrLn "Action SetContext"
     let newIC = context.mutableContext .~ mc $ ic
     interpretConnProd newIC n
   Free (ReadMessage f) -> do
+    putStrLn "\n\tAction ReadMessage"
     mMessage <- liftIO . atomically . readTBMChan $ (ic^.ioHandlers.listenChan)
     interpretConnProd ic (f mMessage)
   Free (WriteMessage m n) -> do
+    putStrLn "\n\tAction WriteMessage"
     writeMessage (ic^.ioHandlers.writerChan) m 
     interpretConnProd ic n
   Free (WriteUIUpdaterMessage m n) -> do
+    putStrLn "\n\tAction WriteUIUpdaterMessage"
     writeUiUpdaterMessage (ic^.ioHandlers.uiUpdaterChan) m
     interpretConnProd ic n
   Free (GetBlockHeader i f) -> do
+    putStrLn "\n\tAction getBlockHeader"
     mBlock <- Persistence.getBlockWithIndex (ic^.ioHandlers.pool) i
     interpretConnProd ic (f mBlock)
   Free (BlockHeaderCount f) -> do
+    putStrLn "\n\tAction BlockHeaderCount"
     blockHeaderCount <- Persistence.getLastBlock $ ic^.ioHandlers.pool
     interpretConnProd ic (f blockHeaderCount)
   Free (PersistBlockHeaders headers n) -> do
+    putStrLn "\n\tAction PersistBlockHeaders"
     Persistence.persistHeaders (ic^.ioHandlers.pool) headers
     interpretConnProd ic n
   Free (PersistBlockHeader header n) -> do
+    putStrLn "\n\tAction PersistBlockHeader"
     Persistence.persistHeader (ic^.ioHandlers.pool) header
     interpretConnProd ic n
   Free (GetBlockHeaderFromHash hash f) -> do
+    putStrLn "\n\tAction GetBlockHeaderFromHash"
     mBlock <- Persistence.getBlockHeaderFromHash (ic^.ioHandlers.pool) hash
     interpretConnProd ic (f mBlock)
   Free (DeleteBlockHeaders inx n) -> do
+    putStrLn "\n\tAction DeleteBlockHeaders"
     Persistence.deleteHeaders (ic^.ioHandlers.pool) inx
     interpretConnProd ic n
   Free (NHeadersSinceKey n keyId f) -> do
+    putStrLn "\n\tAction NHeadersSinceKey"
     headers <- Persistence.nHeadersSinceKey (ic^.ioHandlers.pool) n keyId
     interpretConnProd ic (f headers)
   Free (PersistTransaction tx n) -> do
+    putStrLn "\n\tAction PersistTransaction"
     Persistence.persistTransaction (ic^.ioHandlers.pool) tx
     interpretConnProd ic n
   Free (GetTransactionFromHash hash f) -> do
+    putStrLn "\n\tAction GetTransactionFromHash"
     mTx <- Persistence.getTransactionFromHash (ic^.ioHandlers.pool) hash
     interpretConnProd ic (f mTx)
   Free (GetAllAddresses f) -> do
+    putStrLn "\n\tAction GetAllAddresses"
     addresses <- Persistence.getAllAddresses (ic^.ioHandlers.pool)
     interpretConnProd ic (f addresses)
   Free (PersistUTXOs utxos n) -> do
+    putStrLn "\n\tAction PersistUTXOs"
     Persistence.persistUTXOs (ic^.ioHandlers.pool) utxos
+    interpretConnProd ic n
+  Free (GetUnspentUTXOs f) -> do
+    putStrLn "\n\tAction GetUnspentUTXOs"
+    utxos <- Persistence.getUnspentUTXOs (ic^.ioHandlers.pool)
+    interpretConnProd ic (f utxos)
+  Free (SetUTXOBlockHash k h n) -> do
+    putStrLn "\n\tAction SetUTXOBlockHash"
+    Persistence.setUTXOBlockHash (ic^.ioHandlers.pool) k h
     interpretConnProd ic n
   Free (Log le n) -> do
     putStrLn $ displayLogs (ic^.logFilter) [le]
@@ -378,11 +422,13 @@ handleResponse' (Message (VersionMessageBody body) _) = do
   let lastBlockPeer = body^.lastBlock
   synchronizeHeaders' lastBlockPeer
 
-handleResponse' (Message (HeadersMessageBody (HeadersMessage headers)) _) =
+handleResponse' (Message (HeadersMessageBody (HeadersMessage headers)) _) = do
   handleNewHeaders headers
+  getDataMerkleBlock headers -- request merkle blocks to look for our utxos
 
-handleResponse' (Message (MerkleblockMessageBody message) _) =
+handleResponse' (Message (MerkleblockMessageBody message) _) = do
   handleNewHeaders [message^.blockHeader]
+  updateUTXOs message -- update utxos with this block header in the db
 
 handleResponse' (Message (GetHeadersMessageBody message) _) = do
   match <- firstHeaderMatch' (message^.blockLocatorHashes)
@@ -408,10 +454,14 @@ handleResponse' (Message (TxMessageBody message) _) = do
   isHandled <- isTransactionHandled'
   unless isHandled $ do
     logDebug' $ "Transaction was not previously handled. Handling now."
-    persistentUTXOs <- retrieveUTXOs
-    addUTXOs persistentUTXOs
+    persistentUTXOs <- retrieveUTXOs -- utxos to us in this tx
+    persistUTXOs' persistentUTXOs
     let val = sum $ map (persistentUTXOValue) persistentUTXOs
-    if val > 0 then writeUiUpdaterMessage' . IncomingFunds . Satoshis $ val else return ()
+    if val > 0 then writeUiUpdaterMessage' -- notify frontend of new utxo
+                  . IncomingFunds
+                  . Satoshis
+                  $ val
+               else return ()
     persistTransaction' (message^.transaction)
   where
     retrieveUTXOs = do
@@ -419,8 +469,6 @@ handleResponse' (Message (TxMessageBody message) _) = do
       let indexedPubkeyHashes = zip [1..] pubKeyHashes
           persistentUTXOs = getUTXOS indexedPubkeyHashes (message^.transaction)
       return persistentUTXOs
-    addUTXOs persistentUTXOs = do
-      persistUTXOs' persistentUTXOs
     isTransactionHandled' = do
       let txHash = hashTransaction $ message^.transaction
       mTx <- getTransactionFromHash' txHash
@@ -430,6 +478,38 @@ handleResponse' (Message (TxMessageBody message) _) = do
 
 handleResponse' message = logError' $
   "We are not yet able to handle message" ++ show message
+
+-- | If any of our utxos are in the Merkle Block, update their blockHash in the
+-- DB.
+updateUTXOs :: MerkleblockMessage -> Connection' ()
+updateUTXOs merkleBlock = do
+  let getHash (DB.Entity _ x) = MerkleHash
+                              . BS.reverse
+                              . persistentUTXOOutTxHash $ x
+    -- ^ note that the hash seems to be reversed
+  utxos <- getUnspentUTXOs'
+  let hashes = merkleBlock^.merkleHashes
+      block = merkleBlock^.blockHeader
+      utxosInBlock =
+        filter (\x -> getHash x `elem` hashes) utxos
+  if length utxosInBlock > 0
+    then do
+      logDebug' $ "found a block for utxos " ++
+        (intercalate " " $ map (show . DB.entityKey) utxosInBlock)
+      mapM_ (\x -> setUTXOBlockHash' (DB.entityKey x) (hashBlock block))
+        utxosInBlock
+        -- ^ set the block hash for each utxo in this block
+      writeUiUpdaterMessage' UTXOsUpdated
+    else return ()
+
+getDataMerkleBlock :: [BlockHeader] -> Connection' ()
+getDataMerkleBlock bs = do
+  let inventoryObj = map ( InventoryVector MSG_FILTERED_BLOCK
+                         . objectHash
+                         . hash
+                         . hashBlock) bs
+      body = GetDataMessageBody $ GetDataMessage inventoryObj
+  writeMessageWithBody' body
 
 writeMessageWithBody' :: MessageBody -> Connection' ()
 writeMessageWithBody' body = do
@@ -444,6 +524,7 @@ handleNewHeaders newHeaders = do
   if isValid
     then persistHeaders' newHeaders
     else constructChain newHeaders
+  writeUiUpdaterMessage' NewBlock
 
 -- Try to construct a new blockchain using `headers`
 -- if we can construct a new blockchain and it's longer than the active chain,
