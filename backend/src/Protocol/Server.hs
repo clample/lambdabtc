@@ -98,6 +98,8 @@ import Control.Monad.Free (Free(..), liftF)
 import Data.Maybe (catMaybes)
 import Data.List (intercalate)
 import qualified Database.Persist as DB
+import Control.Monad.Trans.State (StateT(..), execStateT)
+import qualified Control.Monad.Trans.State as ST
 
 connectTestnet :: Config -> IO () 
 connectTestnet config = do
@@ -170,25 +172,25 @@ logMessages context =
 
 connection :: InterpreterContext -> IO ()
 connection ic = do
-  interpretConnProd ic sendVersion'
-  interpretConnProd ic setFilter'
-  connectionLoop ic
+  newIC <- execStateT (interpretConnProd sendVersion') ic
+  newIC' <- execStateT (interpretConnProd setFilter') newIC
+  connectionLoop newIC'
   
 connectionLoop :: InterpreterContext -> IO ()
 connectionLoop ic = do
-  let readChan = liftIO . atomically . tryReadTBMChan
+  let readChan = atomically . tryReadTBMChan
   mmResponse <-  readChan $ (ic^.ioHandlers.listenChan)
-  case mmResponse of
+  newIC <- case mmResponse of
     Nothing -> fail "listenChan is closed and empty"
-    Just Nothing -> return () -- chan is empty
-    Just (Just response) -> interpretConnProd ic (handleResponse' response)
-  mmInternalMessage <- readChan $ (ic^.ioHandlers.appChan)
-  case mmInternalMessage of
+    Just Nothing -> return ic -- chan is empty
+    Just (Just response) -> execStateT (interpretConnProd (handleResponse' response)) ic
+  mmInternalMessage <- readChan $ (newIC^.ioHandlers.appChan)
+  newIC' <- case mmInternalMessage of
     Nothing -> fail "appChan is closed and empty"
-    Just Nothing -> return () -- chan is empty
+    Just Nothing -> return newIC -- chan is empty
     Just (Just internalMessage) ->
-      interpretConnProd ic (handleInternalMessage' internalMessage)
-  connectionLoop ic
+      execStateT (interpretConnProd (handleInternalMessage' internalMessage)) newIC
+  connectionLoop newIC'
 
 data ConnectionInteraction next
   = GetContext (ConnectionContext -> next)
@@ -334,83 +336,67 @@ setLastBlock' i = do
   let newContext = mutableContext.lastBlock .~ i $ context
   setContext' $ newContext^.mutableContext
 
-interpretConnProd :: InterpreterContext -> Connection' r -> IO r
-interpretConnProd ic conn = case conn of
-  Free (GetContext f) -> do
-    putStrLn "Action GetContext"
-    interpretConnProd ic (f $ ic^.context)
-  Free (SetContext mc n) -> do
-    putStrLn "Action SetContext"
-    let newIC = context.mutableContext .~ mc $ ic
-    interpretConnProd newIC n
-  Free (ReadMessage f) -> do
-    putStrLn "\n\tAction ReadMessage"
-    mMessage <- liftIO . atomically . readTBMChan $ (ic^.ioHandlers.listenChan)
-    interpretConnProd ic (f mMessage)
-  Free (WriteMessage m n) -> do
-    putStrLn "\n\tAction WriteMessage"
-    writeMessage (ic^.ioHandlers.writerChan) m 
-    interpretConnProd ic n
-  Free (WriteUIUpdaterMessage m n) -> do
-    putStrLn "\n\tAction WriteUIUpdaterMessage"
-    writeUiUpdaterMessage (ic^.ioHandlers.uiUpdaterChan) m
-    interpretConnProd ic n
-  Free (GetBlockHeader i f) -> do
-    putStrLn "\n\tAction getBlockHeader"
-    mBlock <- Persistence.getBlockWithIndex (ic^.ioHandlers.pool) i
-    interpretConnProd ic (f mBlock)
-  Free (BlockHeaderCount f) -> do
-    putStrLn "\n\tAction BlockHeaderCount"
-    blockHeaderCount <- Persistence.getLastBlock $ ic^.ioHandlers.pool
-    interpretConnProd ic (f blockHeaderCount)
-  Free (PersistBlockHeaders headers n) -> do
-    putStrLn "\n\tAction PersistBlockHeaders"
-    Persistence.persistHeaders (ic^.ioHandlers.pool) headers
-    interpretConnProd ic n
-  Free (PersistBlockHeader header n) -> do
-    putStrLn "\n\tAction PersistBlockHeader"
-    Persistence.persistHeader (ic^.ioHandlers.pool) header
-    interpretConnProd ic n
-  Free (GetBlockHeaderFromHash hash f) -> do
-    putStrLn "\n\tAction GetBlockHeaderFromHash"
-    mBlock <- Persistence.getBlockHeaderFromHash (ic^.ioHandlers.pool) hash
-    interpretConnProd ic (f mBlock)
-  Free (DeleteBlockHeaders inx n) -> do
-    putStrLn "\n\tAction DeleteBlockHeaders"
-    Persistence.deleteHeaders (ic^.ioHandlers.pool) inx
-    interpretConnProd ic n
-  Free (NHeadersSinceKey n keyId f) -> do
-    putStrLn "\n\tAction NHeadersSinceKey"
-    headers <- Persistence.nHeadersSinceKey (ic^.ioHandlers.pool) n keyId
-    interpretConnProd ic (f headers)
-  Free (PersistTransaction tx n) -> do
-    putStrLn "\n\tAction PersistTransaction"
-    Persistence.persistTransaction (ic^.ioHandlers.pool) tx
-    interpretConnProd ic n
-  Free (GetTransactionFromHash hash f) -> do
-    putStrLn "\n\tAction GetTransactionFromHash"
-    mTx <- Persistence.getTransactionFromHash (ic^.ioHandlers.pool) hash
-    interpretConnProd ic (f mTx)
-  Free (GetAllAddresses f) -> do
-    putStrLn "\n\tAction GetAllAddresses"
-    addresses <- Persistence.getAllAddresses (ic^.ioHandlers.pool)
-    interpretConnProd ic (f addresses)
-  Free (PersistUTXOs utxos n) -> do
-    putStrLn "\n\tAction PersistUTXOs"
-    Persistence.persistUTXOs (ic^.ioHandlers.pool) utxos
-    interpretConnProd ic n
-  Free (GetUnspentUTXOs f) -> do
-    putStrLn "\n\tAction GetUnspentUTXOs"
-    utxos <- Persistence.getUnspentUTXOs (ic^.ioHandlers.pool)
-    interpretConnProd ic (f utxos)
-  Free (SetUTXOBlockHash k h n) -> do
-    putStrLn "\n\tAction SetUTXOBlockHash"
-    Persistence.setUTXOBlockHash (ic^.ioHandlers.pool) k h
-    interpretConnProd ic n
-  Free (Log le n) -> do
-    putStrLn $ displayLogs (ic^.logFilter) [le]
-    interpretConnProd ic n
-  Pure r -> return r
+interpretConnProd :: Connection' r -> StateT InterpreterContext IO r
+interpretConnProd conn = do
+  ic <- ST.get
+  case conn of
+    Free (GetContext f) ->
+      interpretConnProd (f $ ic^.context)
+    Free (SetContext mc n) -> do
+      ST.put $ context.mutableContext .~ mc $ ic
+      interpretConnProd n
+    Free (ReadMessage f) -> do
+      mMessage <- liftIO . atomically . readTBMChan $ (ic^.ioHandlers.listenChan)
+      interpretConnProd (f mMessage)
+    Free (WriteMessage m n) -> do
+      liftIO $ writeMessage (ic^.ioHandlers.writerChan) m 
+      interpretConnProd n
+    Free (WriteUIUpdaterMessage m n) -> do
+      liftIO $ writeUiUpdaterMessage (ic^.ioHandlers.uiUpdaterChan) m
+      interpretConnProd n
+    Free (GetBlockHeader i f) -> do
+      mBlock <- liftIO $ Persistence.getBlockWithIndex (ic^.ioHandlers.pool) i
+      interpretConnProd (f mBlock)
+    Free (BlockHeaderCount f) -> do
+      blockHeaderCount <- liftIO $ Persistence.getLastBlock $ ic^.ioHandlers.pool
+      interpretConnProd (f blockHeaderCount)
+    Free (PersistBlockHeaders headers n) -> do
+      liftIO $ Persistence.persistHeaders (ic^.ioHandlers.pool) headers
+      interpretConnProd n
+    Free (PersistBlockHeader header n) -> do
+      liftIO $ Persistence.persistHeader (ic^.ioHandlers.pool) header
+      interpretConnProd n
+    Free (GetBlockHeaderFromHash hash f) -> do
+      mBlock <- liftIO $ Persistence.getBlockHeaderFromHash (ic^.ioHandlers.pool) hash
+      interpretConnProd (f mBlock)
+    Free (DeleteBlockHeaders inx n) -> do
+      liftIO $ Persistence.deleteHeaders (ic^.ioHandlers.pool) inx
+      interpretConnProd n
+    Free (NHeadersSinceKey n keyId f) -> do
+      headers <- liftIO $ Persistence.nHeadersSinceKey (ic^.ioHandlers.pool) n keyId
+      interpretConnProd (f headers)
+    Free (PersistTransaction tx n) -> do
+      liftIO $ Persistence.persistTransaction (ic^.ioHandlers.pool) tx
+      interpretConnProd n
+    Free (GetTransactionFromHash hash f) -> do
+      mTx <- liftIO $ Persistence.getTransactionFromHash (ic^.ioHandlers.pool) hash
+      interpretConnProd (f mTx)
+    Free (GetAllAddresses f) -> do
+      addresses <- liftIO $ Persistence.getAllAddresses (ic^.ioHandlers.pool)
+      interpretConnProd (f addresses)
+    Free (PersistUTXOs utxos n) -> do
+      liftIO $ Persistence.persistUTXOs (ic^.ioHandlers.pool) utxos
+      interpretConnProd n
+    Free (GetUnspentUTXOs f) -> do
+      utxos <- liftIO $ Persistence.getUnspentUTXOs (ic^.ioHandlers.pool)
+      interpretConnProd (f utxos)
+    Free (SetUTXOBlockHash k h n) -> do
+      liftIO $ Persistence.setUTXOBlockHash (ic^.ioHandlers.pool) k h
+      interpretConnProd n
+    Free (Log le n) -> do
+      liftIO $ putStrLn $ displayLogs (ic^.logFilter) [le]
+      interpretConnProd n
+    Pure r -> return r
 
 -- Logic for handling response in free monad
 handleResponse' :: Message -> Connection' ()
@@ -756,11 +742,11 @@ blockLocatorIndicesStep _ _ [] = error
 
 writeMessage :: TBMChan Message -> Message -> IO ()
 writeMessage chan message = 
-  liftIO . atomically $ writeTBMChan chan message
+  atomically $ writeTBMChan chan message
 
 writeUiUpdaterMessage :: TBMChan UIUpdaterMessage -> UIUpdaterMessage -> IO ()
 writeUiUpdaterMessage chan message =
-  liftIO . atomically $ writeTBMChan chan message
+  atomically $ writeTBMChan chan message
 
 logDebug' :: String -> Connection' ()
 logDebug' = log' . LogEntry Debug
