@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, DeriveFunctor #-}
 module Protocol.Server where
 
 import Protocol.Messages
@@ -94,7 +94,7 @@ import Data.Binary (Binary(..))
 import Data.ByteString.Base16 (decode)
 import qualified Data.ByteString as BS
 import Control.Lens ((^.), (%~), (.~))
-import Control.Monad.Free (Free(..), liftF)
+import Control.Monad.Free (Free(..), liftF, iterM)
 import Data.Maybe (catMaybes)
 import Data.List (intercalate)
 import qualified Database.Persist as DB
@@ -192,13 +192,19 @@ connectionLoop ic = do
       execStateT (interpretConnProd (handleInternalMessage' internalMessage)) newIC
   connectionLoop newIC'
 
-data ConnectionInteraction next
-  = GetContext (ConnectionContext -> next)
+data ContextEff next =
+    GetContext (ConnectionContext -> next)
   | SetContext MutableConnectionContext next
-  | ReadMessage (Maybe Message -> next)
+    deriving Functor
+
+data NetworkEff next =
+    ReadMessage (Maybe Message -> next)
   | WriteMessage Message next
   | WriteUIUpdaterMessage UIUpdaterMessage next
-  | GetBlockHeader BlockIndex (Maybe BlockHeader -> next)
+    deriving Functor
+
+data DataEff next =
+    GetBlockHeader BlockIndex (Maybe BlockHeader -> next)
   | BlockHeaderCount (BlockIndex -> next)
   | PersistBlockHeaders [BlockHeader] next
   | PersistBlockHeader BlockHeader next
@@ -211,57 +217,46 @@ data ConnectionInteraction next
   | PersistUTXOs [PersistentUTXO] next
   | GetUnspentUTXOs ([DB.Entity PersistentUTXO] -> next)
   | SetUTXOBlockHash (DB.Key PersistentUTXO) BlockHash next
-  | Log LogEntry next
+    deriving Functor
 
-instance Functor ConnectionInteraction where
-  fmap f (GetContext                g) = GetContext                (f . g)
-  fmap f (SetContext              c x) = SetContext              c (f x)
-  fmap f (ReadMessage               g) = ReadMessage               (f . g)
-  fmap f (WriteMessage            m x) = WriteMessage            m (f x)
-  fmap f (WriteUIUpdaterMessage   m x) = WriteUIUpdaterMessage   m (f x)
-  fmap f (GetBlockHeader          i g) = GetBlockHeader          i (f . g)
-  fmap f (BlockHeaderCount          g) = BlockHeaderCount          (f . g)
-  fmap f (PersistBlockHeaders     h x) = PersistBlockHeaders     h (f x)
-  fmap f (PersistBlockHeader      h x) = PersistBlockHeader      h (f x)
-  fmap f (GetBlockHeaderFromHash  h g) = GetBlockHeaderFromHash  h (f . g)
-  fmap f (DeleteBlockHeaders      i x) = DeleteBlockHeaders      i (f x)
-  fmap f (PersistTransaction      t x) = PersistTransaction      t (f x)
-  fmap f (NHeadersSinceKey        n i g) = NHeadersSinceKey    n i (f . g)
-  fmap f (GetTransactionFromHash  h g) = GetTransactionFromHash  h (f . g)
-  fmap f (GetAllAddresses           g) = GetAllAddresses           (f . g)
-  fmap f (PersistUTXOs            u x) = PersistUTXOs            u (f x)
-  fmap f (GetUnspentUTXOs           g) = GetUnspentUTXOs           (f . g)
-  fmap f (SetUTXOBlockHash      k h x) = SetUTXOBlockHash      k h (f x)
-  fmap f (Log                    le x) = Log                    le (f x)
+data LogEff next = WriteLog LogEntry next
+  deriving Functor
+
+data ConnectionInteraction next =
+    Data (DataEff next)
+  | Net (NetworkEff next)
+  | Context (ContextEff next)
+  | Log (LogEff next)
+    deriving Functor
 
 type Connection' = Free ConnectionInteraction
 
 -- syntactic sugar to enable `do` notation
 getContext' :: Connection' ConnectionContext
-getContext' = liftF (GetContext id)
+getContext' = liftF (Context $ GetContext id)
 
 setContext' :: MutableConnectionContext -> Connection' ()
-setContext' mc = liftF (SetContext mc ())
+setContext' mc = liftF (Context $ SetContext mc ())
 
 readMessage' :: Connection' (Maybe Message)
-readMessage' = liftF (ReadMessage id)
+readMessage' = liftF (Net $ ReadMessage id)
 
 writeMessage' :: Message -> Connection' ()
-writeMessage' message = liftF (WriteMessage message ())
+writeMessage' message = liftF (Net $ WriteMessage message ())
 
 writeUiUpdaterMessage' :: UIUpdaterMessage -> Connection' ()
-writeUiUpdaterMessage' message = liftF (WriteUIUpdaterMessage message ())
+writeUiUpdaterMessage' message = liftF (Net $ WriteUIUpdaterMessage message ())
 
 getBlockHeader' :: BlockIndex -> Connection' (Maybe BlockHeader)
-getBlockHeader' index = liftF (GetBlockHeader index id)
+getBlockHeader' index = liftF (Data $ GetBlockHeader index id)
 
 blockHeaderCount' :: Connection' BlockIndex
-blockHeaderCount' = liftF (BlockHeaderCount id)
+blockHeaderCount' = liftF (Data $ BlockHeaderCount id)
 
 persistHeaders' :: [BlockHeader] -> Connection' ()
 persistHeaders' headers = do
   contextOld <- getContext'
-  liftF (PersistBlockHeaders headers ())
+  liftF (Data $ PersistBlockHeaders headers ())
   incrementLastBlock' $ length headers
   contextNew <- getContext'
   logDebug' $
@@ -273,7 +268,7 @@ persistHeaders' headers = do
 persistHeader' :: BlockHeader -> Connection' ()
 persistHeader' header = do
   contextOld <- getContext'
-  liftF (PersistBlockHeader header ())
+  liftF (Data $ PersistBlockHeader header ())
   incrementLastBlock' 1
   contextNew <- getContext'
   logDebug' $
@@ -284,12 +279,12 @@ persistHeader' header = do
 
 getBlockHeaderFromHash' :: BlockHash
                         -> Connection' (Maybe (BlockIndex, BlockHeader))
-getBlockHeaderFromHash' hash = liftF (GetBlockHeaderFromHash hash id)
+getBlockHeaderFromHash' hash = liftF (Data $ GetBlockHeaderFromHash hash id)
 
 deleteBlockHeaders' :: BlockIndex -> Connection' ()
 deleteBlockHeaders' inx = do
   contextOld <- getContext'
-  liftF (DeleteBlockHeaders inx ())
+  liftF (Data $ DeleteBlockHeaders inx ())
   setLastBlock' (inx - 1)
   contextNew <- getContext'
   logDebug' $
@@ -299,28 +294,28 @@ deleteBlockHeaders' inx = do
     ++ " to " ++ show (contextNew^.mutableContext.lastBlock)
 
 persistTransaction' :: Transaction -> Connection' ()
-persistTransaction' tx = liftF (PersistTransaction tx ())
+persistTransaction' tx = liftF (Data $ PersistTransaction tx ())
 
 nHeadersSinceKey' :: Int -> BlockIndex -> Connection' [BlockHeader]
-nHeadersSinceKey' n keyId = liftF (NHeadersSinceKey n keyId id)
+nHeadersSinceKey' n keyId = liftF (Data $ NHeadersSinceKey n keyId id)
 
 getTransactionFromHash' :: TxHash -> Connection' (Maybe Integer)
-getTransactionFromHash' hash = liftF (GetTransactionFromHash hash id)
+getTransactionFromHash' hash = liftF (Data $ GetTransactionFromHash hash id)
 
 getAllAddresses' :: Connection' [Address]
-getAllAddresses' = liftF (GetAllAddresses id)
+getAllAddresses' = liftF (Data $ GetAllAddresses id)
 
 persistUTXOs' :: [PersistentUTXO] -> Connection' ()
-persistUTXOs' persistentUTXOs = liftF (PersistUTXOs persistentUTXOs ())
+persistUTXOs' persistentUTXOs = liftF (Data $ PersistUTXOs persistentUTXOs ())
 
 getUnspentUTXOs' :: Connection' [DB.Entity PersistentUTXO]
-getUnspentUTXOs' = liftF (GetUnspentUTXOs id)
+getUnspentUTXOs' = liftF (Data $ GetUnspentUTXOs id)
 
 setUTXOBlockHash' :: (DB.Key PersistentUTXO) -> BlockHash -> Connection' ()
-setUTXOBlockHash' k h = liftF (SetUTXOBlockHash k h ())
+setUTXOBlockHash' k h = liftF (Data $ SetUTXOBlockHash k h ())
 
 log' :: LogEntry -> Connection' ()
-log' le = liftF (Log le ())
+log' le = liftF (Log $ WriteLog le ())
 
 incrementLastBlock' :: Int -> Connection' ()
 incrementLastBlock' i = do
@@ -336,67 +331,89 @@ setLastBlock' i = do
   let newContext = mutableContext.lastBlock .~ i $ context
   setContext' $ newContext^.mutableContext
 
-interpretConnProd :: Connection' r -> StateT InterpreterContext IO r
-interpretConnProd conn = do
+execContext :: ContextEff (StateT InterpreterContext IO r) -> StateT InterpreterContext IO r
+execContext c = do
+  ic <- ST.get
+  case c of
+    GetContext f -> f $ ic^.context
+    SetContext mc n -> do
+      ST.put $ context.mutableContext .~ mc $ ic
+      n
+
+execNet :: NetworkEff (StateT InterpreterContext IO r) -> StateT InterpreterContext IO r
+execNet c = do
+  ic <- ST.get
+  case c of
+    ReadMessage f -> do
+      mMessage <- liftIO . atomically . readTBMChan $ (ic^.ioHandlers.listenChan)
+      f mMessage
+    WriteMessage m n -> do
+      liftIO $ writeMessage (ic^.ioHandlers.writerChan) m 
+      n
+    WriteUIUpdaterMessage m n -> do
+      liftIO $ writeUiUpdaterMessage (ic^.ioHandlers.uiUpdaterChan) m
+      n
+
+execData :: DataEff (StateT InterpreterContext IO r) -> StateT InterpreterContext IO r
+execData conn = do
   ic <- ST.get
   case conn of
-    Free (GetContext f) ->
-      interpretConnProd (f $ ic^.context)
-    Free (SetContext mc n) -> do
-      ST.put $ context.mutableContext .~ mc $ ic
-      interpretConnProd n
-    Free (ReadMessage f) -> do
-      mMessage <- liftIO . atomically . readTBMChan $ (ic^.ioHandlers.listenChan)
-      interpretConnProd (f mMessage)
-    Free (WriteMessage m n) -> do
-      liftIO $ writeMessage (ic^.ioHandlers.writerChan) m 
-      interpretConnProd n
-    Free (WriteUIUpdaterMessage m n) -> do
-      liftIO $ writeUiUpdaterMessage (ic^.ioHandlers.uiUpdaterChan) m
-      interpretConnProd n
-    Free (GetBlockHeader i f) -> do
+    GetBlockHeader i f -> do
       mBlock <- liftIO $ Persistence.getBlockWithIndex (ic^.ioHandlers.pool) i
-      interpretConnProd (f mBlock)
-    Free (BlockHeaderCount f) -> do
+      f mBlock
+    BlockHeaderCount f -> do
       blockHeaderCount <- liftIO $ Persistence.getLastBlock $ ic^.ioHandlers.pool
-      interpretConnProd (f blockHeaderCount)
-    Free (PersistBlockHeaders headers n) -> do
+      f blockHeaderCount
+    PersistBlockHeaders headers n -> do
       liftIO $ Persistence.persistHeaders (ic^.ioHandlers.pool) headers
-      interpretConnProd n
-    Free (PersistBlockHeader header n) -> do
+      n
+    PersistBlockHeader header n -> do
       liftIO $ Persistence.persistHeader (ic^.ioHandlers.pool) header
-      interpretConnProd n
-    Free (GetBlockHeaderFromHash hash f) -> do
+      n
+    GetBlockHeaderFromHash hash f -> do
       mBlock <- liftIO $ Persistence.getBlockHeaderFromHash (ic^.ioHandlers.pool) hash
-      interpretConnProd (f mBlock)
-    Free (DeleteBlockHeaders inx n) -> do
+      f mBlock
+    DeleteBlockHeaders inx n -> do
       liftIO $ Persistence.deleteHeaders (ic^.ioHandlers.pool) inx
-      interpretConnProd n
-    Free (NHeadersSinceKey n keyId f) -> do
+      n
+    NHeadersSinceKey n keyId f -> do
       headers <- liftIO $ Persistence.nHeadersSinceKey (ic^.ioHandlers.pool) n keyId
-      interpretConnProd (f headers)
-    Free (PersistTransaction tx n) -> do
+      f headers
+    PersistTransaction tx n -> do
       liftIO $ Persistence.persistTransaction (ic^.ioHandlers.pool) tx
-      interpretConnProd n
-    Free (GetTransactionFromHash hash f) -> do
+      n
+    GetTransactionFromHash hash f -> do
       mTx <- liftIO $ Persistence.getTransactionFromHash (ic^.ioHandlers.pool) hash
-      interpretConnProd (f mTx)
-    Free (GetAllAddresses f) -> do
+      f mTx
+    GetAllAddresses f -> do
       addresses <- liftIO $ Persistence.getAllAddresses (ic^.ioHandlers.pool)
-      interpretConnProd (f addresses)
-    Free (PersistUTXOs utxos n) -> do
+      f addresses
+    PersistUTXOs utxos n -> do
       liftIO $ Persistence.persistUTXOs (ic^.ioHandlers.pool) utxos
-      interpretConnProd n
-    Free (GetUnspentUTXOs f) -> do
+      n
+    GetUnspentUTXOs f -> do
       utxos <- liftIO $ Persistence.getUnspentUTXOs (ic^.ioHandlers.pool)
-      interpretConnProd (f utxos)
-    Free (SetUTXOBlockHash k h n) -> do
+      f utxos
+    SetUTXOBlockHash k h n -> do
       liftIO $ Persistence.setUTXOBlockHash (ic^.ioHandlers.pool) k h
-      interpretConnProd n
-    Free (Log le n) -> do
+      n
+
+execLog :: LogEff (StateT InterpreterContext IO r) -> StateT InterpreterContext IO r
+execLog conn = do
+  ic <- ST.get
+  case conn of
+    WriteLog le n -> do
       liftIO $ putStrLn $ displayLogs (ic^.logFilter) [le]
-      interpretConnProd n
-    Pure r -> return r
+      n
+
+execConnProd :: ConnectionInteraction (StateT InterpreterContext IO r) -> StateT InterpreterContext IO r
+execConnProd (Data d) = execData d
+execConnProd (Net n) = execNet n
+execConnProd (Context c) = execContext c
+execConnProd (Log l) = execLog l
+
+interpretConnProd :: Connection' r -> StateT InterpreterContext IO r
+interpretConnProd = iterM execConnProd
 
 -- Logic for handling response in free monad
 handleResponse' :: Message -> Connection' ()
