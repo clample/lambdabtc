@@ -100,25 +100,25 @@ interpretConnTest :: TestInterpreterContext
                   -> Connection' r
                   -> Identity (TestInterpreterContext, r)
 interpretConnTest ic conn =  case conn of
-  Free (GetContext f) -> do
+  Free (Context (GetContext f)) -> do
     interpretConnTest ic (f $ ic^.context)
-  Free (SetContext mc n) -> do
+  Free (Context (SetContext mc n)) -> do
     let newIC = context.mutableContext .~ mc $ ic
     interpretConnTest newIC n 
-  Free (ReadMessage f) -> do
+  Free (Net (ReadMessage f)) -> do
     case ic^.handlers.incomingMessageList of
       [] ->
         interpretConnTest ic (f Nothing)
       m:ms -> do
         let newIC = handlers.incomingMessageList .~ ms $ ic
         interpretConnTest newIC (f (Just m))
-  Free (WriteMessage m n) -> do
+  Free (Net (WriteMessage m n)) -> do
     let newIC = handlers.outgoingMessageList %~ (m:) $ ic
     interpretConnTest newIC n
-  Free (WriteUIUpdaterMessage m n) -> do
+  Free (Net (WriteUIUpdaterMessage m n)) -> do
     let newIC = handlers.outgoingUIUpdaterMessages %~ (m:) $ ic
     interpretConnTest newIC n
-  Free (GetBlockHeader i f) -> do
+  Free (Data (GetBlockHeader i f)) -> do
     if (blockHeaderCount < i)
       then
         interpretConnTest ic (f Nothing)
@@ -126,42 +126,42 @@ interpretConnTest ic conn =  case conn of
         let (BlockIndex i') = i
             blockHeader = Just $ (ic^.handlers.mockDB.blockHeaders) !! i'
         interpretConnTest ic (f blockHeader)
-  Free (BlockHeaderCount f) -> do
+  Free (Data (BlockHeaderCount f)) -> do
     interpretConnTest ic (f blockHeaderCount)
-  Free (PersistBlockHeaders headers n) -> do
+  Free (Data (PersistBlockHeaders headers n)) -> do
     let newIC = handlers.mockDB.blockHeaders %~ (++ headers) $ ic
     interpretConnTest newIC n
-  Free (PersistBlockHeader header n) -> do
+  Free (Data (PersistBlockHeader header n)) -> do
     let newIC = handlers.mockDB.blockHeaders %~ (++ [header]) $ ic
     interpretConnTest newIC n
-  Free (GetBlockHeaderFromHash hash f) -> do
+  Free (Data (GetBlockHeaderFromHash hash f)) -> do
     let headers = ic^.handlers.mockDB.blockHeaders
         mIndex = findIndex (\header -> hashBlock header == hash) headers
         mBlockHeader = case mIndex of
           Nothing -> Nothing
           Just i -> Just (BlockIndex i, headers !! i)
     interpretConnTest ic (f mBlockHeader)
-  Free (DeleteBlockHeaders bi@(BlockIndex inx) n) -> do
+  Free (Data (DeleteBlockHeaders (BlockIndex inx) n)) -> do
     let newIC  = handlers.mockDB.blockHeaders %~ (take inx) $ ic
     interpretConnTest newIC n
-  Free (NHeadersSinceKey n (BlockIndex i) f) -> do
+  Free (Data (NHeadersSinceKey n (BlockIndex i) f)) -> do
     let headers = ic^.handlers.mockDB.blockHeaders
         nHeaders = (drop i . take n) $ headers
     interpretConnTest ic (f nHeaders)
-  Free (PersistTransaction tx n) -> do
+  Free (Data (PersistTransaction tx n)) -> do
     let newIC = handlers.mockDB.transactions %~ (++ [hashTransaction tx]) $ ic
     interpretConnTest newIC n
-  Free (GetTransactionFromHash hash f) -> do
+  Free (Data (GetTransactionFromHash hash f)) -> do
     let txs = ic^.handlers.mockDB.transactions
         mIndex = (fromIntegral . (1 +)) <$> findIndex (== hash) txs
     interpretConnTest ic (f mIndex)
-  Free (GetAllAddresses f) -> do
+  Free (Data (GetAllAddresses f)) -> do
     let allAddresses = ic^.handlers.mockDB.addresses
     interpretConnTest ic (f allAddresses)
-  Free (PersistUTXOs newUtxos n) -> do
+  Free (Data (PersistUTXOs newUtxos n)) -> do
     let newIC = handlers.mockDB.utxos %~ (++ newUtxos) $ ic
     interpretConnTest newIC n
-  Free (Log le n) -> do
+  Free (Log (WriteLog le n)) -> do
     let newIC = logs %~ (++ [le]) $ ic
     interpretConnTest newIC n
   Pure r -> return (ic, r)
