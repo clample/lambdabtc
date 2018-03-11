@@ -9,7 +9,7 @@ stack build
 stack install
 ```
 
-in haskell-app:
+in frontend:
 
 ```
 npm install
